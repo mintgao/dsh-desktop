@@ -4,18 +4,39 @@ import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  shell,
+  type MenuItemConstructorOptions,
+  type MessageBoxOptions,
+  type MessageBoxReturnValue,
+} from 'electron'
 import { BackendSupervisor, type BackendExit } from './backend.ts'
+import { ElectronUpdateDriver } from './electron-updates.ts'
 import { externalWebUrl, isAllowedAppNavigation } from './navigation.ts'
+import {
+  DesktopUpdateController,
+  type DesktopUpdateInfo,
+  type DesktopUpdatePresentation,
+  type DesktopUpdateStatus,
+} from './updates.ts'
 
 const APPLICATION_NAME = 'DSH Desktop'
+const UPDATE_MENU_ITEM_ID = 'check-for-updates'
+const RELEASES_URL = 'https://github.com/mintgao/dsh-desktop/releases'
 
 let backend: BackendSupervisor | undefined
 let backendStopped = false
 let cleanupPromise: Promise<void> | undefined
+let installUpdateOnQuit = false
 let mainWindow: BrowserWindow | undefined
 let logStream: WriteStream | undefined
 let logPath: string | undefined
+let updateController: DesktopUpdateController | undefined
+let updateDriver: ElectronUpdateDriver | undefined
 
 app.setName(APPLICATION_NAME)
 app.setAboutPanelOptions({
@@ -38,11 +59,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', (event) => {
     if (backend === undefined || backendStopped) return
     event.preventDefault()
-    cleanupPromise ??= backend.stop().finally(() => {
-      backendStopped = true
-      logStream?.end()
-      app.quit()
-    })
+    void stopApplicationBackend().then(finishApplicationQuit)
   })
   app.on('window-all-closed', () => {
     app.quit()
@@ -59,6 +76,7 @@ async function startApplication(): Promise<void> {
   logStream.on('error', (error) => {
     console.error(`desktop log: ${error.message}`)
   })
+  installApplicationMenu()
   mainWindow = createMainWindow()
   await mainWindow.loadFile(fileURLToPath(new URL('../resources/startup.html', import.meta.url)))
 
@@ -78,6 +96,223 @@ async function startApplication(): Promise<void> {
   const backendUrl = await backend.start()
   installNavigationPolicy(mainWindow, backendUrl)
   await mainWindow.loadURL(backendUrl)
+  initializeUpdates()
+}
+
+/** Install the standard macOS application menu and the native update command. */
+function installApplicationMenu(): void {
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: APPLICATION_NAME,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        {
+          id: UPDATE_MENU_ITEM_ID,
+          label: 'Check for Updates…',
+          enabled: false,
+          click: () => {
+            void updateController?.check(true)
+          },
+        },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+/** Start stable-channel update checks after the application backend is usable. */
+function initializeUpdates(): void {
+  updateDriver = new ElectronUpdateDriver((level, message) => {
+    logStream?.write(`[desktop update ${level}] ${message}\n`)
+  })
+  updateController = new DesktopUpdateController({
+    enabled: app.isPackaged && process.platform === 'darwin',
+    currentVersion: app.getVersion(),
+    driver: updateDriver,
+    presentation: createUpdatePresentation(),
+    restartAndInstall: async () => {
+      installUpdateOnQuit = true
+      await stopApplicationBackend()
+      updateDriver?.quitAndInstall()
+    },
+    installOnQuit: () => {
+      installUpdateOnQuit = true
+    },
+  })
+  updateController.start()
+}
+
+/** Map update state and decisions to macOS-native presentation. */
+function createUpdatePresentation(): DesktopUpdatePresentation {
+  return {
+    updateStatus: renderUpdateStatus,
+    chooseDownload: async info => chooseUpdateDownload(info),
+    chooseInstall: async info => chooseUpdateInstall(info),
+    showUpToDate: async (currentVersion) => {
+      await showMessageBox({
+        type: 'info',
+        title: 'DSH Desktop Is Up to Date',
+        message: `You’re using the latest version of DSH Desktop (${currentVersion}).`,
+        buttons: ['OK'],
+      })
+    },
+    showUnavailable: async () => {
+      await showMessageBox({
+        type: 'info',
+        title: 'Updates Are Unavailable',
+        message: 'Automatic updates are available in signed macOS releases of DSH Desktop.',
+        detail: 'Source builds and unpackaged development builds do not use the public update feed.',
+        buttons: ['OK'],
+      })
+    },
+    showBusy: async (status) => {
+      const action = status.kind === 'checking' ? 'checking for an update' : 'downloading the update'
+      await showMessageBox({
+        type: 'info',
+        title: 'Update in Progress',
+        message: `DSH Desktop is already ${action}.`,
+        buttons: ['OK'],
+      })
+    },
+    showError: async (message, interactive) => {
+      logStream?.write(`[desktop update error] ${message}\n`)
+      if (!interactive) return
+      await showMessageBox({
+        type: 'error',
+        title: 'Could Not Update DSH Desktop',
+        message: 'DSH Desktop could not complete the update operation.',
+        detail: `${message}\n\nYou can still download the latest signed release from GitHub.`,
+        buttons: ['Open Releases', 'OK'],
+        defaultId: 0,
+        cancelId: 1,
+      }).then(async (result) => {
+        if (result.response === 0) await openExternalPage(RELEASES_URL)
+      })
+    },
+    openReleaseNotes: async (version) => {
+      await openExternalPage(`${RELEASES_URL}/tag/desktop-v${encodeURIComponent(version)}`)
+    },
+  }
+}
+
+/** Open an update page without allowing shell failures to escape an event listener. */
+async function openExternalPage(url: string): Promise<void> {
+  try {
+    await shell.openExternal(url)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    logStream?.write(`[desktop update error] could not open ${url}: ${reason}\n`)
+    await showMessageBox({
+      type: 'error',
+      title: 'Could Not Open the Release Page',
+      message: 'DSH Desktop could not open the release page in your browser.',
+      detail: `${reason}\n\n${url}`,
+      buttons: ['OK'],
+    })
+  }
+}
+
+/** Ask whether the available signed release should be downloaded. */
+async function chooseUpdateDownload(info: DesktopUpdateInfo): Promise<'download' | 'later' | 'notes'> {
+  const result = await showMessageBox({
+    type: 'info',
+    title: 'A DSH Desktop Update Is Available',
+    message: `DSH Desktop ${info.version} is available.`,
+    detail: `You’re currently using ${app.getVersion()}. The update includes its own tested DSH runtime.`,
+    buttons: ['Download Update', 'Later', 'View Release Notes'],
+    defaultId: 0,
+    cancelId: 1,
+  })
+  if (result.response === 0) return 'download'
+  if (result.response === 2) return 'notes'
+  return 'later'
+}
+
+/** Ask when the cached release should replace the running application. */
+async function chooseUpdateInstall(info: DesktopUpdateInfo): Promise<'restart' | 'on-quit' | 'later'> {
+  const result = await showMessageBox({
+    type: 'info',
+    title: 'DSH Desktop Is Ready to Update',
+    message: `DSH Desktop ${info.version} has been downloaded.`,
+    detail: 'Restarting closes the local DSH backend before installing. You can also keep working and install on your next normal quit.',
+    buttons: ['Restart and Install', 'Install on Quit', 'Later'],
+    defaultId: 0,
+    cancelId: 2,
+  })
+  if (result.response === 0) return 'restart'
+  if (result.response === 1) return 'on-quit'
+  return 'later'
+}
+
+/** Render current update state in the application menu, Dock, and window. */
+function renderUpdateStatus(status: DesktopUpdateStatus): void {
+  const menuItem = Menu.getApplicationMenu()?.getMenuItemById(UPDATE_MENU_ITEM_ID)
+  if (menuItem != null) {
+    menuItem.label = updateMenuLabel(status)
+    menuItem.enabled = status.kind !== 'checking' && status.kind !== 'downloading'
+  }
+  if (status.kind === 'checking') {
+    mainWindow?.setProgressBar(2, { mode: 'indeterminate' })
+  } else if (status.kind === 'downloading') {
+    mainWindow?.setProgressBar(status.percent / 100, { mode: 'normal' })
+  } else {
+    mainWindow?.setProgressBar(-1)
+  }
+  if (process.platform === 'darwin') app.dock?.setBadge(status.kind === 'downloaded' ? '↓' : '')
+}
+
+/** Produce the action label for one update state. */
+function updateMenuLabel(status: DesktopUpdateStatus): string {
+  switch (status.kind) {
+    case 'checking':
+      return 'Checking for Updates…'
+    case 'available':
+      return `Download Update ${status.version}…`
+    case 'downloading':
+      return `Downloading Update ${status.version} (${Math.round(status.percent)}%)`
+    case 'downloaded':
+      return status.installOnQuit ? `Update ${status.version} Will Install on Quit` : `Restart to Install ${status.version}…`
+    case 'idle':
+    case 'error':
+      return 'Check for Updates…'
+  }
+}
+
+/** Use the application window as dialog parent when it is still available. */
+function showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
+  return mainWindow === undefined ? dialog.showMessageBox(options) : dialog.showMessageBox(mainWindow, options)
+}
+
+/** Stop update scheduling, close the backend process tree, and finish log output. */
+function stopApplicationBackend(): Promise<void> {
+  if (backendStopped) return Promise.resolve()
+  cleanupPromise ??= (backend?.stop() ?? Promise.resolve()).finally(() => {
+    backendStopped = true
+    updateController?.dispose()
+    logStream?.end()
+  })
+  return cleanupPromise
+}
+
+/** Continue a normal quit or delegate a cached release to Squirrel.Mac. */
+function finishApplicationQuit(): void {
+  if (installUpdateOnQuit && updateDriver !== undefined) {
+    updateDriver.quitAndInstall()
+    return
+  }
+  app.quit()
 }
 
 /** Resolve the source-build or packaged CLI entry without changing dsh's data directory. */

@@ -52,7 +52,9 @@ The checkout is ready when both desktop commands succeed. A real backend launch 
 
 ## Upstream sync
 
-Sync upstream through a dedicated branch so desktop changes and workflow guards remain reviewable:
+[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) checks the latest upstream `dsh-v*` release each day and can also be dispatched with a specific upstream ref. When the selected release is not yet present, it merges that commit on a dedicated `chore/sync-upstream-*` branch and opens a tracking issue with a prefilled PR comparison. This keeps the repository-wide Actions default read-only and leaves pull-request creation with the maintainer. The workflow never resolves conflicts, merges a pull request, changes a desktop version, or publishes a release.
+
+For a manual sync, use the same dedicated-branch model so desktop changes and workflow guards remain reviewable:
 
 ```sh
 git fetch upstream
@@ -62,10 +64,10 @@ git switch -c chore/sync-upstream-YYYY-MM-DD
 git merge --no-ff upstream/master
 ```
 
-Resolve conflicts on the sync branch, run checks matched to the changed files, and merge it through a pull request. Do not force-push `main` or rewrite published `desktop-v*` tags.
+Resolve conflicts on the sync branch, run checks matched to the changed files, and merge it through a pull request. Review upstream source changes separately from the later desktop release decision. Do not force-push `main` or rewrite published `desktop-v*` tags.
 
 ## Pull requests and releases
 
 - State the user-visible result, list only checks actually run, and mark the affected Mac architectures in the pull request template.
 - Keep unrelated changes in separate pull requests. Update the owning documentation and Agent Note for every non-trivial code, process, or release decision.
-- Follow the [desktop application reference](apps/desktop/README.md) for local packages and signed releases. Public artifacts come only from the tag-driven release workflow and remain draft until a maintainer reviews both notarized DMGs and their checksums.
+- Follow the [desktop application reference](apps/desktop/README.md) for local packages, signed releases, and installed-client updates. Public artifacts come only from the tag-driven release workflow and remain draft until a maintainer reviews the notarized DMGs, architecture update ZIPs, metadata, and checksums.

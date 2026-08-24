@@ -42,9 +42,9 @@ function workspace(entries: Record<string, Manifest>): { manifests: Map<string, 
 }
 
 describe('tierExternalDeps', () => {
-  it('tiers by declaring area, not by the declaring section name', () => {
+  it('tiers root runtime sections separately from development-only areas', () => {
     const { manifests, names } = workspace({
-      // Root tooling and test infrastructure never ship, whichever section declares them.
+      // Root runtime dependencies can ship with the desktop; root development tools cannot.
       'package.json': { dependencies: { 'root-runtime-looking': '^1' }, devDependencies: { 'lint-tool': '^1' } },
       'packages/test-support/loader-smoke/package.json': { name: '@deepseek-ai/dsh-loader-smoke', dependencies: { 'smoke-helper': '^1' } },
       'packages/test-support/client-runtime/package.json': { name: '@deepseek-ai/dsh-client-test-runtime', dependencies: { 'test-lib': '^1' } },
@@ -56,7 +56,7 @@ describe('tierExternalDeps', () => {
 
     expect(tierExternalDeps(manifests, names)).toEqual(new Map([
       ['tsx', true],
-      ['root-runtime-looking', false],
+      ['root-runtime-looking', true],
       ['lint-tool', false],
       ['smoke-helper', false],
       ['test-lib', false],

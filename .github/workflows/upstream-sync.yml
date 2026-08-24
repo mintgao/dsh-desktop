@@ -1,0 +1,119 @@
+name: Propose upstream DSH update
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: Optional deepseek-harness tag or commit to propose
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    if: github.repository == 'mintgao/dsh-desktop'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve upstream release
+        id: upstream
+        shell: bash
+        env:
+          REQUESTED_REF: ${{ inputs.upstream_ref }}
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
+          git fetch --force upstream master 'refs/tags/dsh-v*:refs/tags/dsh-v*'
+          ref="$REQUESTED_REF"
+          if [[ -z "$ref" ]]; then
+            ref="$(git tag --list 'dsh-v*' --sort=-version:refname | head -n 1)"
+          fi
+          if [[ -z "$ref" ]]; then
+            echo 'No upstream dsh-v* release tag was found.' >&2
+            exit 1
+          fi
+          commit="$(git rev-parse --verify "${ref}^{commit}")"
+          branch_ref="${ref//\//-}"
+          if [[ ! "$branch_ref" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "Upstream ref cannot form a safe branch name: $ref" >&2
+            exit 1
+          fi
+          branch="chore/sync-upstream-${branch_ref}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Check current downstream state
+        id: state
+        shell: bash
+        env:
+          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
+          BRANCH: ${{ steps.upstream.outputs.branch }}
+        run: |
+          set -euo pipefail
+          if git merge-base --is-ancestor "$UPSTREAM_COMMIT" HEAD; then
+            echo 'needed=false' >> "$GITHUB_OUTPUT"
+            echo 'The selected upstream release is already included.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          existing_pr="$(gh pr list --state open --head "$BRANCH" --json url --jq '.[0].url // empty')"
+          if [[ -n "$existing_pr" ]]; then
+            echo 'needed=false' >> "$GITHUB_OUTPUT"
+            echo "An upstream sync PR is already open: $existing_pr" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo 'needed=false' >> "$GITHUB_OUTPUT"
+            echo "Review branch already exists: https://github.com/${GITHUB_REPOSITORY}/compare/main...${BRANCH}?expand=1" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo 'needed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Merge upstream release
+        if: steps.state.outputs.needed == 'true'
+        shell: bash
+        env:
+          UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
+          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
+          BRANCH: ${{ steps.upstream.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git switch --create "$BRANCH"
+          if ! git merge --no-ff --no-edit "$UPSTREAM_COMMIT"; then
+            git status --short
+            echo "Upstream $UPSTREAM_REF requires a manual conflict resolution." >&2
+            exit 1
+          fi
+          git push --set-upstream origin "$BRANCH"
+
+      - name: Open review request
+        if: steps.state.outputs.needed == 'true'
+        shell: bash
+        env:
+          UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
+          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
+          BRANCH: ${{ steps.upstream.outputs.branch }}
+        run: |
+          set -euo pipefail
+          compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/main...${BRANCH}?expand=1"
+          url="$(gh issue create \
+            --title "Review DeepSeek Harness ${UPSTREAM_REF}" \
+            --body "Upstream DeepSeek Harness **${UPSTREAM_REF}** at \`${UPSTREAM_COMMIT}\` is available on branch \`${BRANCH}\`. Review the source diff and open its pull request from [the prefilled comparison](${compare_url}). This workflow does not merge the branch, bump the desktop version, or publish a desktop release.")"
+          echo "Opened review request: $url" >> "$GITHUB_STEP_SUMMARY"
