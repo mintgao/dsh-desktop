@@ -1,79 +1,164 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-  background: #f6f8fb;
-  color: #18212f;
+  background: #f8fafb;
+  color: #0e2038;
 }
 
 body {
-  align-items: center;
-  display: flex;
-  justify-content: center;
   margin: 0;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 main {
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
   text-align: center;
-  width: min(320px, calc(100vw - 48px));
 }
 
-.mark {
-  align-items: center;
-  background: linear-gradient(145deg, #155eef, #713bdb);
-  border-radius: 22px;
-  box-shadow: 0 18px 40px rgb(45 68 130 / 22%);
-  color: white;
-  display: inline-flex;
-  font-size: 24px;
-  font-weight: 720;
-  height: 80px;
-  justify-content: center;
-  letter-spacing: -1px;
-  width: 80px;
+.ocean-scene {
+  inset: 0;
+  overflow: hidden;
+  position: absolute;
+}
+
+.ocean {
+  animation: ocean-drift 7s ease-in-out infinite alternate;
+  height: 100%;
+  inset: 0 auto auto -4%;
+  object-fit: cover;
+  position: absolute;
+  transform: scale(1.08);
+  width: 108%;
+}
+
+.whale-route {
+  animation: whale-crossing 6.8s linear infinite;
+  left: 7vw;
+  opacity: 0;
+  position: absolute;
+  top: 20%;
+  width: clamp(220px, 28vw, 360px);
+  will-change: opacity, transform;
+}
+
+.whale {
+  animation: whale-bob 1.8s ease-in-out infinite;
+  display: block;
+  filter: brightness(0) invert(1) drop-shadow(0 18px 20px rgb(55 91 158 / 17%));
+  transform-origin: 64% 70%;
+  width: 100%;
+}
+
+.bubbles {
+  animation: bubbles-rise 2.5s ease-out infinite;
+  display: block;
+  filter: brightness(1.9) saturate(0.78);
+  left: 74%;
+  mix-blend-mode: screen;
+  opacity: 0;
+  position: absolute;
+  top: 2%;
+  width: 58%;
+}
+
+.status {
+  left: 50%;
+  position: absolute;
+  top: 64%;
+  transform: translateX(-50%);
+  width: min(620px, calc(100vw - 48px));
 }
 
 h1 {
-  font-size: 24px;
-  letter-spacing: -0.4px;
-  margin: 28px 0 8px;
+  font-size: clamp(28px, 3vw, 38px);
+  font-weight: 720;
+  letter-spacing: -1.1px;
+  line-height: 1.15;
+  margin: 0 0 14px;
 }
 
 p {
-  color: #667085;
-  font-size: 14px;
+  color: #61708a;
+  font-size: clamp(15px, 1.65vw, 19px);
+  line-height: 1.4;
   margin: 0;
 }
 
 .progress {
-  background: #e5e9f1;
+  background: rgb(84 190 171 / 16%);
   border-radius: 999px;
   height: 4px;
-  margin: 28px auto 0;
+  margin: 42px auto 0;
   overflow: hidden;
-  width: 180px;
+  width: min(400px, 66vw);
 }
 
 .progress span {
-  animation: loading 1.3s ease-in-out infinite;
-  background: #316fea;
+  animation: loading-current 1.65s ease-in-out infinite;
+  background: #435ef2;
   border-radius: inherit;
   display: block;
   height: 100%;
-  width: 42%;
+  width: 34%;
 }
 
-@keyframes loading {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(340%); }
+.brand {
+  display: block;
+  height: 38px;
+  margin: 50px auto 0;
+  width: 38px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root { background: #111722; color: #f3f5f8; }
-  p { color: #9aa4b2; }
-  .progress { background: #263142; }
+@keyframes ocean-drift {
+  from { transform: scale(1.08) translate3d(-1.4%, -0.35%, 0); }
+  to { transform: scale(1.08) translate3d(1.4%, 0.35%, 0); }
+}
+
+@keyframes whale-crossing {
+  0% { opacity: 0; transform: translate3d(-8vw, 0, 0); }
+  4% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(104vw, -2.4vh, 0); }
+}
+
+@keyframes whale-bob {
+  0%, 100% { transform: translate3d(0, 8px, 0) rotate(-2deg); }
+  50% { transform: translate3d(0, -8px, 0) rotate(2deg); }
+}
+
+@keyframes bubbles-rise {
+  0% { opacity: 0; transform: translate3d(0, 20px, 0) scale(0.76); }
+  22% { opacity: 0.3; }
+  74% { opacity: 0.2; }
+  100% { opacity: 0; transform: translate3d(12px, -38px, 0) scale(1); }
+}
+
+@keyframes loading-current {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(305%); }
+}
+
+@media (max-height: 700px) {
+  .whale-route { top: 17%; }
+  .status { top: 62%; }
+  .progress { margin-top: 28px; }
+  .brand { margin-top: 32px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .progress span { animation: none; width: 100%; }
+  .ocean,
+  .bubbles,
+  .progress span,
+  .whale,
+  .whale-route {
+    animation: none;
+  }
+
+  .ocean { left: 0; transform: none; width: 100%; }
+  .bubbles { display: none; }
+  .whale-route { left: 38%; opacity: 1; transform: none; }
+  .progress span { margin-left: 33%; transform: none; }
 }

@@ -20,6 +20,8 @@ Status: implemented
 
 BrowserWindow 启用上下文隔离、renderer 沙箱与 Web 安全，不启用 Node 集成，也没有 preload bridge。导航只能留在就绪 URL 的精确同源范围。外部 HTTP 与 HTTPS 地址交给系统浏览器；popup、其他 scheme 与跨源窗口内导航均被拒绝。
 
+监管器等待就绪期间，由 asar 持有的启动页会展示 Mint 海洋场景，并分别运行鲸鱼横游、身体起伏、气泡、海面漂移和进度水流时间线。该页面的内容安全策略只允许应用内本地资源。减少动态效果偏好会停止这些时间线、隐藏气泡，并以静态状态保留鲸鱼与进度指示器。
+
 ### 由源码构建的应用内运行时
 
 macOS 暂存流程先运行官方客户端构建，再从当前 checkout 打包两个发布族，读取打包后的 manifest，并选择从 `@deepseek-ai/dsh` 可达的本地 dependency、optional dependency 与 peer 闭包。npm 把这些 tarball 与外部依赖安装到 `apps/desktop/backend`。版本冒烟测试会运行已安装 CLI，递归链接检查则拒绝任何解析目标离开暂存根的符号链接。electron-builder 把这棵隔离目录复制为应用外部资源，而不是装入 asar；Electron 主 bundle 与静态启动页仍位于 asar 内。
@@ -40,7 +42,7 @@ macOS 暂存流程先运行官方客户端构建，再从当前 checkout 打包�
 
 ## 验证
 
-聚焦测试使用真实子进程覆盖分片就绪输出、早期失败诊断、干净停止与意外退出，纯测试覆盖精确同源导航与外部 URL 过滤。官方源码构建、桌面 TypeScript bundle 与运行时暂存均完成。应用内 CLI 报告仓库版本，每条暂存链接都解析在后端根内，生成的 arm64 `.app` 包含预期 CLI 资源。真实应用包启动会到达随机 loopback 就绪 URL，从该地址返回构建后的 DSH HTML，并在应用退出时关闭监听端口。
+聚焦测试使用真实子进程覆盖分片就绪输出、早期失败诊断、干净停止与意外退出，纯测试覆盖精确同源导航、外部 URL 过滤，以及启动页的可见文案、应用内资源清单、动态时间线和减少动态效果状态。官方源码构建、桌面 TypeScript bundle 与运行时暂存均完成。应用内 CLI 报告仓库版本，每条暂存链接都解析在后端根内，生成的 arm64 `.app` 包含预期 CLI 资源。真实应用包启动会到达随机 loopback 就绪 URL，从该地址返回构建后的 DSH HTML，并在应用退出时关闭监听端口。
 
 ## 后果
 

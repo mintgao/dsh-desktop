@@ -2,17 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>DSH Desktop</title>
     <link rel="stylesheet" href="startup.css">
   </head>
   <body>
-    <main aria-live="polite">
-      <div class="mark" aria-hidden="true">DSH</div>
-      <h1>Starting DSH</h1>
-      <p>Preparing your local agent workspace…</p>
-      <div class="progress" aria-hidden="true"><span></span></div>
+    <main aria-live="polite" aria-labelledby="startup-title">
+      <div class="ocean-scene" aria-hidden="true">
+        <img class="ocean" src="startup-ocean.png" alt="">
+        <div class="whale-route">
+          <img class="whale" src="startup-whale.svg" alt="">
+          <img class="bubbles" src="startup-bubbles.png" alt="">
+        </div>
+      </div>
+      <section class="status">
+        <h1 id="startup-title">Starting DSH Desktop</h1>
+        <p>Preparing your local agent workspace…</p>
+        <div class="progress" aria-hidden="true"><span></span></div>
+        <img class="brand" src="startup-icon.svg" alt="">
+      </section>
     </main>
   </body>
 </html>
