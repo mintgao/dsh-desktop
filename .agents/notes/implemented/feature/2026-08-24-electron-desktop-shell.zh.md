@@ -24,7 +24,7 @@ BrowserWindow 启用上下文隔离、renderer 沙箱与 Web 安全，不启用 
 
 macOS 暂存流程先运行官方客户端构建，再从当前 checkout 打包两个发布族，读取打包后的 manifest，并选择从 `@deepseek-ai/dsh` 可达的本地 dependency、optional dependency 与 peer 闭包。npm 把这些 tarball 与外部依赖安装到 `apps/desktop/backend`。版本冒烟测试会运行已安装 CLI，递归链接检查则拒绝任何解析目标离开暂存根的符号链接。electron-builder 把这棵隔离目录复制为应用外部资源，而不是装入 asar；Electron 主 bundle 与静态启动页仍位于 asar 内。
 
-本地目标是名为 DSH Desktop、带 Mint 浪花图标与 `io.github.mintgao.dsh-desktop` bundle 标识符的未签名 macOS arm64 和 x64 应用。它们适合源码构建与用户级安装。[Mint 桌面下游开发](../process/2026-08-24-mint-desktop-downstream-development.zh.md)持有 Developer ID 签名、hardened runtime、公证、原生架构 DMG 与公开产物发布。当前没有通用二进制与自动更新。
+本地目标是名为 DSH Desktop、带 Mint 浪花图标与 `io.github.mintgao.dsh-desktop` bundle 标识符的未签名 macOS arm64 和 x64 应用。它们适合源码构建与用户级安装。[Mint 桌面下游开发](../process/2026-08-24-mint-desktop-downstream-development.zh.md)持有 Developer ID 签名、hardened runtime、公证、原生架构产物与公开发布。[由用户控制的桌面版签名更新](2026-08-24-desktop-signed-auto-update.zh.md)持有更新源与安装行为。当前没有通用二进制。
 
 ## 考虑过的替代方案
 

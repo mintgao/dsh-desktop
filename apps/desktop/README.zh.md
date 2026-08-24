@@ -42,6 +42,14 @@ Electron 主进程以 Node 模式运行自己的可执行文件，带上应用�
 
 后端日志位于 `~/Library/Logs/DSH Desktop/backend.log`。外部 HTTP 与 HTTPS 链接会在系统浏览器中打开。同源应用导航留在 DSH 窗口内；新窗口与其他所有 scheme 均被拒绝。
 
+## 更新
+
+经过签名和打包的 macOS 版本会在启动十秒后检查公开的稳定更新源，之后每六小时检查一次。**DSH Desktop > Check for Updates…** 可以随时执行同一检查。源码构建与未打包的开发构建仍保留该命令，但会说明它们没有签名更新源。
+
+发现新版本后绝不会静默下载。原生对话框提供 **Download Update**、**Later** 与 **View Release Notes**，应用菜单、Dock 和窗口会显示下载状态。通过签名校验的下载完成后，用户可以选择 **Restart and Install**、**Install on Quit** 或 **Later**。立即安装会先停止本地 DSH 后端，任何更新都不会强制应用重启。后台网络错误只写入后端日志，手工检查或用户已选择的下载若失败，则会显示原生错误并提供 GitHub Releases 链接。
+
+每次桌面更新都会替换整个应用，包括经过配套测试的 DSH 运行时。上游 Harness 发布不会直接修改已安装应用：定时上游工作流会先推送审查分支，并创建带预填 PR 链接的跟踪 Issue；维护者审查该 PR 后，才会创建并发布单独编号的桌面版本。
+
 ## 安全与本地数据
 
 renderer（渲染进程）启用沙箱、上下文隔离与 Web 安全，不启用 Node 集成，也没有 preload bridge。后端绑定随机 loopback 端口，壳不会启用 LAN host。应用标识符是 `io.github.mintgao.dsh-desktop`。
@@ -72,12 +80,10 @@ git tag -s desktop-v0.1.0 -m "DSH Desktop Mint 0.1.0"
 git push origin desktop-v0.1.0
 ```
 
-[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) 会在每种架构的原生 runner 上构建，强制执行代码签名，提交应用公证，验证已装订的公证票据，再把两份 DMG 与 SHA-256 校验和上传至 GitHub Release 草稿。维护者测试两个产物后手动发布草稿；未签名输出不会进入公开发布路径。
-
-当前没有实现自动更新。用户需要手工安装新版已公证 DMG，发布说明必须列出迁移或兼容性要求。
+[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) 会在每种架构的原生 runner 上构建，强制执行代码签名，提交应用公证，验证已装订的公证票据，再把两份 DMG、分架构 ZIP 与 blockmap、一份合并后的 `latest-mac.yml` 和 SHA-256 校验和上传至 GitHub Release 草稿。已安装客户端看不到草稿。维护者测试两种架构后手工发布草稿；发布动作会让稳定版本对自动检查可见。未签名输出不会进入公开发布路径，发布说明必须列出内置 Harness 版本以及迁移或兼容性要求。
 
 ## 开发职责
 
-[`src/backend.ts`](src/backend.ts) 持有就绪解析与有界进程关闭。[`src/navigation.ts`](src/navigation.ts) 是纯 URL 策略。[`src/main.ts`](src/main.ts) 持有 Electron 生命周期与沙箱窗口。[`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) 暂存由源码构建的运行时闭包，[`electron-builder.yml`](electron-builder.yml) 持有 macOS bundle 布局。运行 `pnpm run test:desktop` 可执行聚焦的进程与导航测试。
+[`src/backend.ts`](src/backend.ts) 持有就绪解析与有界进程关闭。[`src/navigation.ts`](src/navigation.ts) 是纯 URL 策略。[`src/updates.ts`](src/updates.ts) 在不导入 Electron 的情况下持有更新调度与决策，[`src/electron-updates.ts`](src/electron-updates.ts) 适配签名传输。[`src/main.ts`](src/main.ts) 持有 Electron 生命周期、沙箱窗口与原生更新展示。[`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) 暂存由源码构建的运行时闭包；[`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) 校验并合并分架构发布元数据；[`electron-builder.yml`](electron-builder.yml) 持有 macOS bundle 布局与公开更新源身份。运行 `pnpm run test:desktop` 可执行聚焦的桌面测试。
 
-运行时决策与备选方案记录在 [Electron 桌面壳](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.zh.md)。下游仓库、跨设备与发布决策记录在 [Mint 桌面下游开发](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.zh.md)。
+运行时决策与备选方案记录在 [Electron 桌面壳](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.zh.md)。更新生命周期记录在[由用户控制的桌面版签名更新](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.zh.md)。下游仓库、跨设备与发布决策记录在 [Mint 桌面下游开发](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.zh.md)。

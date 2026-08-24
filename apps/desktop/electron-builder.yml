@@ -8,6 +8,7 @@ files:
   - apps/desktop/resources/**/*
   - package.json
 extraMetadata:
+  name: dsh-desktop-mint
   main: apps/desktop/lib/main.js
   description: Unofficial macOS desktop distribution built on DeepSeek Harness and maintained by Mint.
   author: Mint
@@ -19,6 +20,10 @@ extraResources:
     filter:
       - backend/**/*
 asar: true
+publish:
+  provider: github
+  owner: mintgao
+  repo: dsh-desktop
 mac:
   category: public.app-category.developer-tools
   icon: apps/desktop/build/icon.png
@@ -27,4 +32,7 @@ mac:
   entitlements: apps/desktop/build/entitlements.mac.plist
   entitlementsInherit: apps/desktop/build/entitlements.mac.plist
   notarize: false
+  target:
+    - dmg
+    - zip
 artifactName: DSH-Desktop-Mint-${version}-${arch}.${ext}

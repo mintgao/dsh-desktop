@@ -52,7 +52,9 @@ pnpm run build:desktop
 
 ## 同步上游
 
-请通过独立分支同步上游，使桌面改动与工作流保护保持可审查：
+[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) 每天检查最新的上游 `dsh-v*` 发布，也可以用指定上游 ref 手工触发。若下游尚未包含该版本，工作流会把对应提交合并到专用 `chore/sync-upstream-*` 分支，并创建带预填 PR 对比链接的跟踪 Issue。这样可以让仓库级 Actions 默认权限保持只读，同时把 Pull Request 创建动作留给维护者。工作流绝不会解决冲突、合并 Pull Request、修改桌面版本或发布版本。
+
+手工同步也要使用相同的专用分支模式，使桌面改动与工作流保护保持可审查：
 
 ```sh
 git fetch upstream
@@ -62,10 +64,10 @@ git switch -c chore/sync-upstream-YYYY-MM-DD
 git merge --no-ff upstream/master
 ```
 
-在同步分支解决冲突，按变更文件运行匹配的检查，再通过 Pull Request 合入。不得强推 `main`，也不得改写已发布的 `desktop-v*` 标签。
+在同步分支解决冲突，按变更文件运行匹配的检查，再通过 Pull Request 合入。应分别审查上游源码变更与后续的桌面发布决策。不得强推 `main`，也不得改写已发布的 `desktop-v*` 标签。
 
 ## Pull Request 与发布
 
 - 在 Pull Request 模板中说明用户可见结果，只列出实际运行的检查，并标记受影响的 Mac 架构。
 - 无关变更应拆成不同 Pull Request。每项非平凡的代码、流程或发布决策都要更新其所属文档与 Agent Note。
-- 本地打包与签名发布流程见[桌面应用参考](apps/desktop/README.zh.md)。公开产物只能由标签驱动的发布工作流生成，并在维护者审查两份已公证 DMG 及其校验和之前保持草稿状态。
+- 本地打包、签名发布与已安装客户端更新流程见[桌面应用参考](apps/desktop/README.zh.md)。公开产物只能由标签驱动的发布工作流生成，并在维护者审查已公证 DMG、分架构更新 ZIP、元数据及校验和之前保持草稿状态。

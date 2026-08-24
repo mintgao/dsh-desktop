@@ -17,7 +17,7 @@ env:
 
 jobs:
   build:
-    name: Signed DMG / ${{ matrix.arch }}
+    name: Signed macOS artifacts / ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -79,14 +79,14 @@ jobs:
       - name: Stage source-built DSH runtime
         run: pnpm run desktop:stage
 
-      - name: Build, sign, and notarize DMG
+      - name: Build, sign, and notarize DMG and update ZIP
         run: >-
           pnpm exec electron-builder
           --config apps/desktop/electron-builder.yml
           --config.extraMetadata.version=${{ steps.release.outputs.version }}
           --config.forceCodeSigning=true
           --config.mac.notarize=true
-          --mac dmg
+          --mac dmg zip
           --${{ matrix.arch }}
           --publish never
 
@@ -99,10 +99,23 @@ jobs:
           xcrun stapler validate "$dmg_path"
           spctl --assess --verbose=2 --type open "$dmg_path"
 
+      - name: Preserve architecture update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f apps/desktop/dist/latest-mac.yml
+          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ steps.release.outputs.version }}-${{ matrix.arch }}.zip"
+          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ steps.release.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
+          mv apps/desktop/dist/latest-mac.yml "apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml"
+
       - uses: actions/upload-artifact@v4
         with:
           name: dsh-desktop-${{ matrix.arch }}
-          path: apps/desktop/dist/*.dmg
+          path: |
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.zip
+            apps/desktop/dist/*.blockmap
+            apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml
           if-no-files-found: error
 
   draft-release:
@@ -112,23 +125,52 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile
+
       - uses: actions/download-artifact@v5
         with:
           pattern: dsh-desktop-*
           path: release-assets
           merge-multiple: true
 
+      - name: Merge architecture update metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#desktop-v}"
+          pnpm exec tsx scripts/merge-desktop-update-metadata.ts \
+            --version "$version" \
+            --output release-assets/latest-mac.yml \
+            release-assets/latest-mac-arm64.yml \
+            release-assets/latest-mac-x64.yml
+
       - name: Write checksums
-        run: sha256sum release-assets/*.dmg > release-assets/SHA256SUMS.txt
+        run: sha256sum release-assets/*.dmg release-assets/*.zip > release-assets/SHA256SUMS.txt
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release create "$GITHUB_REF_NAME"
-          release-assets/*
+          release-assets/*.dmg
+          release-assets/*.zip
+          release-assets/*.blockmap
+          release-assets/latest-mac.yml
+          release-assets/SHA256SUMS.txt
           --repo "$GITHUB_REPOSITORY"
           --verify-tag
           --draft
           --title "DSH Desktop Mint ${GITHUB_REF_NAME#desktop-v}"
-          --notes "Unofficial DSH Desktop distribution maintained by Mint. Built on DeepSeek Harness without official endorsement. Review both notarized DMGs and SHA256SUMS.txt before publishing this draft."
+          --notes "Unofficial DSH Desktop distribution maintained by Mint. Built on DeepSeek Harness without official endorsement. Review both notarized DMGs, update ZIPs, latest-mac.yml, and SHA256SUMS.txt before publishing this draft. Publishing this draft makes the version visible to installed clients."

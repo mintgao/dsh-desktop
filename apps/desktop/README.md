@@ -42,6 +42,14 @@ The Electron main process runs its own executable in Node mode with the packaged
 
 The backend log is `~/Library/Logs/DSH Desktop/backend.log`. External HTTP and HTTPS links open in the system browser. Same-origin application navigation stays inside the DSH window; new windows and all other schemes are denied.
 
+## Updates
+
+A signed, packaged macOS release checks the public stable update feed ten seconds after startup and every six hours thereafter. **DSH Desktop > Check for Updates…** runs the same check on demand. Source and unpackaged development builds keep the command available but explain that they have no signed update feed.
+
+An available version is never downloaded silently. The native dialog offers **Download Update**, **Later**, or **View Release Notes**; the application menu, Dock, and window show download state. After signature-verified download, the user chooses **Restart and Install**, **Install on Quit**, or **Later**. An immediate installation first stops the local DSH backend, and no update forces the application to restart. Background network failures go only to the backend log, while a failed manual check or selected download produces a native error with a link to GitHub Releases.
+
+Each desktop update replaces the complete application, including its tested DSH runtime. Upstream Harness releases do not modify an installed application directly: the scheduled upstream workflow first pushes a review branch and opens a tracking issue with a prefilled PR link, and a maintainer later reviews that PR before creating and publishing a separately versioned desktop release.
+
 ## Security and local data
 
 The renderer is sandboxed with context isolation, Web security, and no Node integration or preload bridge. The backend binds a random loopback port, and the shell never enables a LAN host. The application identifier is `io.github.mintgao.dsh-desktop`.
@@ -72,12 +80,10 @@ git tag -s desktop-v0.1.0 -m "DSH Desktop Mint 0.1.0"
 git push origin desktop-v0.1.0
 ```
 
-[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) builds on a native runner for each architecture, requires code signing, submits the application for notarization, validates the stapled ticket, and uploads both DMGs with SHA-256 checksums to a draft GitHub Release. A maintainer tests both artifacts and manually publishes the draft; unsigned output never enters the public release path.
-
-Automatic updates are not implemented. Users install a newer notarized DMG manually, and release notes must state any migration or compatibility requirement.
+[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) builds on a native runner for each architecture, requires code signing, submits the application for notarization, validates the stapled ticket, and uploads both DMGs, architecture ZIPs and blockmaps, one combined `latest-mac.yml`, and SHA-256 checksums to a draft GitHub Release. Drafts are invisible to installed clients. A maintainer tests both architectures and manually publishes the draft; publication is the action that makes the stable version visible to automatic checks. Unsigned output never enters the public release path, and release notes must state the embedded Harness version plus any migration or compatibility requirement.
 
 ## Development ownership
 
-[`src/backend.ts`](src/backend.ts) owns readiness parsing and bounded process shutdown. [`src/navigation.ts`](src/navigation.ts) is the pure URL policy. [`src/main.ts`](src/main.ts) owns the Electron lifecycle and sandboxed window. [`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) stages the source-built runtime closure, while [`electron-builder.yml`](electron-builder.yml) owns the macOS bundle layout. Run `pnpm run test:desktop` for the focused process and navigation tests.
+[`src/backend.ts`](src/backend.ts) owns readiness parsing and bounded process shutdown. [`src/navigation.ts`](src/navigation.ts) is the pure URL policy. [`src/updates.ts`](src/updates.ts) owns update scheduling and decisions without importing Electron, while [`src/electron-updates.ts`](src/electron-updates.ts) adapts the signed transport. [`src/main.ts`](src/main.ts) owns the Electron lifecycle, sandboxed window, and native update presentation. [`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) stages the source-built runtime closure; [`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) validates and combines per-architecture release metadata; [`electron-builder.yml`](electron-builder.yml) owns the macOS bundle layout and public feed identity. Run `pnpm run test:desktop` for the focused desktop tests.
 
-The runtime decision and alternatives are recorded in [Electron desktop shell](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.md). The downstream repository, cross-device, and release decision is recorded in [Mint desktop downstream development](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md).
+The runtime decision and alternatives are recorded in [Electron desktop shell](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.md). The update lifecycle is recorded in [User-controlled signed desktop updates](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.md). The downstream repository, cross-device, and release decision is recorded in [Mint desktop downstream development](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md).
