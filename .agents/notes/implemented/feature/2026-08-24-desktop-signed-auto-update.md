@@ -10,7 +10,7 @@ A self-contained DSH Desktop application cannot inherit a globally installed Har
 
 ## Decision
 
-Signed packaged macOS builds use `electron-updater` against public GitHub Releases in `mintgao/dsh-desktop`. The updater accepts stable releases only, never downloads automatically, and never installs automatically on ordinary application quit unless the user selected that behavior. Source and unpackaged builds have no feed and explain that state when the manual command is used.
+Signed stable macOS builds use `electron-updater` against public GitHub Releases in `mintgao/dsh-desktop`. The updater accepts stable releases only, never downloads automatically, and never installs automatically on ordinary application quit unless the user selected that behavior. Source and unpackaged builds have no feed and explain that state when the manual command is used. Unsigned prereleases use the separate [manual preview release awareness](2026-08-24-desktop-manual-preview-updates.md) lifecycle.
 
 ### Checks and user decisions
 
@@ -20,7 +20,7 @@ Automatic network failures are written to the persistent desktop log without int
 
 ### Release feed
 
-Each `desktop-vX.Y.Z` build emits a signed and notarized DMG plus a ZIP and blockmap for arm64 and x64. The release workflow preserves electron-builder's architecture-specific metadata, validates its version and required architecture-labelled ZIPs, and merges it into one `latest-mac.yml`. The combined feed retains both file hashes so MacUpdater selects the running architecture. Draft releases remain invisible; manually publishing the reviewed draft is the update-feed activation step. The application contains only the public repository identity and no GitHub token.
+Each stable `desktop-vX.Y.Z` build emits a signed and notarized DMG plus a ZIP and blockmap for arm64 and x64. The release workflow preserves electron-builder's architecture-specific metadata, validates its version and required architecture-labelled ZIPs, and merges it into one `latest-mac.yml`. The combined feed retains both file hashes so MacUpdater selects the running architecture. Draft releases remain invisible; manually publishing the reviewed draft is the stable update-feed activation step. The application contains only the public repository identity and no GitHub token.
 
 The desktop and embedded DSH runtime update as one tested application unit. A scheduled workflow observes upstream `dsh-v*` tags, pushes a downstream review branch, and opens a tracking issue with a prefilled PR link; it does not create or merge the PR, bump the desktop version, create a tag, or publish an update. Repository-wide Actions permissions remain read-only, and the workflow receives only scoped branch and issue write permissions. This separates awareness of an upstream version from the maintainer's compatibility and release decision.
 

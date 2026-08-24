@@ -44,9 +44,13 @@ The backend log is `~/Library/Logs/DSH Desktop/backend.log`. External HTTP and H
 
 ## Updates
 
-A signed, packaged macOS release checks the public stable update feed ten seconds after startup and every six hours thereafter. **DSH Desktop > Check for Updates…** runs the same check on demand. Source and unpackaged development builds keep the command available but explain that they have no signed update feed.
+A packaged prerelease such as `0.2.0-preview.1` checks public `mintgao/dsh-desktop` GitHub Releases thirty seconds after startup and every six hours thereafter. It uses an anonymous conditional request, selects the greatest semantic desktop version that contains a DMG for the running Mac architecture, and never downloads code. **DSH Desktop > Check for Updates…** runs the same check on demand.
 
-An available version is never downloaded silently. The native dialog offers **Download Update**, **Later**, or **View Release Notes**; the application menu, Dock, and window show download state. After signature-verified download, the user chooses **Restart and Install**, **Install on Quit**, or **Later**. An immediate installation first stops the local DSH backend, and no update forces the application to restart. Background network failures go only to the backend log, while a failed manual check or selected download produces a native error with a link to GitHub Releases.
+The first background discovery for a version creates one native notification and an attention badge. Choosing the notification or **Open Release** opens the exact validated release page and names the recommended arm64 or x64 DMG. **Remind Me Tomorrow** defers one reminder for 24 hours, while **Skip this version** suppresses that version without hiding a later release. These choices and the GitHub ETag live in the application user-data directory; no GitHub credential is stored. Background failures go only to the desktop log, while a manual failure offers the public Releases page.
+
+Preview releases are unsigned, so the user quits DSH Desktop, replaces the application from the downloaded DMG, and follows the current macOS **Privacy & Security** confirmation when Gatekeeper blocks the first launch. Settings, credentials, workspaces, and sessions remain in the ordinary DSH home and are not replaced. A preview client can discover the first later signed stable release through this same manual path. Once that stable application is installed, subsequent updates use the signed automatic channel described below.
+
+A signed stable application checks the public stable update feed ten seconds after startup and every six hours thereafter. An available version is never downloaded silently. The native dialog offers **Download Update**, **Later**, or **View Release Notes**; the application menu, Dock, and window show download state. After signature-verified download, the user chooses **Restart and Install**, **Install on Quit**, or **Later**. An immediate installation first stops the local DSH backend, and no update forces the application to restart. Source and unpackaged development builds keep the menu command available but explain that public update checks are unavailable.
 
 Each desktop update replaces the complete application, including its tested DSH runtime. Upstream Harness releases do not modify an installed application directly: the scheduled upstream workflow first pushes a review branch and opens a tracking issue with a prefilled PR link, and a maintainer later reviews that PR before creating and publishing a separately versioned desktop release.
 
@@ -62,16 +66,27 @@ The root [contributor guide](../../CONTRIBUTING.md) defines remotes, branches, c
 
 [`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) runs desktop tests, the desktop build, repository type checking, and documentation checks on pull requests and `main`. Its manual package smoke uses native GitHub macOS runners for both arm64 and x64. Official DeepSeek Harness workflows retain repository guards and do not allocate their organization-specific jobs in this downstream repository.
 
-## Signed releases
+## Preview and signed releases
 
-Desktop versions use semantic tags named `desktop-vX.Y.Z`. The tag version becomes the application's release version independently of the root Harness package version.
+Desktop versions use semantic tags independently of the root Harness package version. A prerelease tag such as `desktop-v0.2.0-preview.1` selects the unsigned preview channel; a stable tag such as `desktop-v0.2.0` selects the signed and notarized channel. Both paths build native arm64 and x64 DMGs from a reviewed `main` commit and create a draft Release so a maintainer remains the publishing authority.
 
-The repository requires these encrypted GitHub Actions secrets before its first release:
+To share an early preview before Apple credentials are available:
+
+```sh
+git switch main
+git pull --ff-only origin main
+git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
+git push origin desktop-v0.2.0-preview.1
+```
+
+The workflow needs no Apple secret for a prerelease tag. It disables signing-identity discovery, creates only the two unsigned DMGs and their SHA-256 checksums, and marks the GitHub Release draft as a prerelease. Before publishing, replace every placeholder in its release notes, record the embedded Harness tag or commit, verify both downloads and checksums, and test the Gatekeeper instructions on a clean user account. Published preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
+
+Stable releases require the following encrypted GitHub Actions secrets:
 
 - `MACOS_CERTIFICATE_P12_BASE64` and `MACOS_CERTIFICATE_PASSWORD` for the Developer ID Application certificate.
 - `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` for App Store Connect notarization.
 
-Create a release only from a reviewed `main` commit:
+Create the stable tag only after those credentials are configured:
 
 ```sh
 git switch main
@@ -80,10 +95,10 @@ git tag -s desktop-v0.1.0 -m "DSH Desktop Mint 0.1.0"
 git push origin desktop-v0.1.0
 ```
 
-[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) builds on a native runner for each architecture, requires code signing, submits the application for notarization, validates the stapled ticket, and uploads both DMGs, architecture ZIPs and blockmaps, one combined `latest-mac.yml`, and SHA-256 checksums to a draft GitHub Release. Drafts are invisible to installed clients. A maintainer tests both architectures and manually publishes the draft; publication is the action that makes the stable version visible to automatic checks. Unsigned output never enters the public release path, and release notes must state the embedded Harness version plus any migration or compatibility requirement.
+For a stable tag, [`desktop-release.yml`](../../.github/workflows/desktop-release.yml) requires code signing, submits each architecture for notarization, validates the stapled ticket, and uploads both DMGs, architecture ZIPs and blockmaps, one combined `latest-mac.yml`, and SHA-256 checksums to a draft GitHub Release. Drafts are invisible to installed clients. A maintainer tests both architectures and manually publishes the draft; publication is the action that activates signed automatic updates. Stable release notes must state the embedded Harness version plus any migration or compatibility requirement.
 
 ## Development ownership
 
-[`src/backend.ts`](src/backend.ts) owns readiness parsing and bounded process shutdown. [`src/navigation.ts`](src/navigation.ts) is the pure URL policy. [`src/updates.ts`](src/updates.ts) owns update scheduling and decisions without importing Electron, while [`src/electron-updates.ts`](src/electron-updates.ts) adapts the signed transport. [`src/main.ts`](src/main.ts) owns the Electron lifecycle, sandboxed window, and native update presentation. [`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) stages the source-built runtime closure; [`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) validates and combines per-architecture release metadata; [`electron-builder.yml`](electron-builder.yml) owns the macOS bundle layout and public feed identity. Run `pnpm run test:desktop` for the focused desktop tests.
+[`src/backend.ts`](src/backend.ts) owns readiness parsing and bounded process shutdown. [`src/navigation.ts`](src/navigation.ts) is the pure URL policy. [`src/updates.ts`](src/updates.ts) owns signed update decisions, while [`src/electron-updates.ts`](src/electron-updates.ts) adapts the signed transport. [`src/manual-updates.ts`](src/manual-updates.ts) owns prerelease reminders, [`src/github-releases.ts`](src/github-releases.ts) validates the public Release API, and [`src/manual-update-preferences.ts`](src/manual-update-preferences.ts) stores those choices atomically. [`src/main.ts`](src/main.ts) selects the channel from the application version and owns native presentation. [`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) stages the source-built runtime closure; [`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) validates and combines signed per-architecture metadata; [`electron-builder.yml`](electron-builder.yml) owns the macOS bundle layout and public feed identity. Run `pnpm run test:desktop` for the focused desktop tests.
 
-The runtime decision and alternatives are recorded in [Electron desktop shell](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.md). The update lifecycle is recorded in [User-controlled signed desktop updates](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.md). The downstream repository, cross-device, and release decision is recorded in [Mint desktop downstream development](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md).
+The runtime decision and alternatives are recorded in [Electron desktop shell](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.md). The update lifecycles are recorded in [Manual preview release awareness](../../.agents/notes/implemented/feature/2026-08-24-desktop-manual-preview-updates.md) and [User-controlled signed desktop updates](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.md). The downstream repository, cross-device, and release decision is recorded in [Mint desktop downstream development](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md).
