@@ -1,0 +1,30 @@
+appId: io.github.mintgao.dsh-desktop
+productName: DSH Desktop
+directories:
+  output: apps/desktop/dist
+  buildResources: apps/desktop/build
+files:
+  - apps/desktop/lib/**/*
+  - apps/desktop/resources/**/*
+  - package.json
+extraMetadata:
+  main: apps/desktop/lib/main.js
+  description: Unofficial macOS desktop distribution built on DeepSeek Harness and maintained by Mint.
+  author: Mint
+extraResources:
+  # Keep node_modules below the FileSet root: electron-builder deliberately
+  # excludes a root-level node_modules directory from generic resource copies.
+  - from: apps/desktop
+    to: .
+    filter:
+      - backend/**/*
+asar: true
+mac:
+  category: public.app-category.developer-tools
+  icon: apps/desktop/build/icon.png
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: apps/desktop/build/entitlements.mac.plist
+  entitlementsInherit: apps/desktop/build/entitlements.mac.plist
+  notarize: false
+artifactName: DSH-Desktop-Mint-${version}-${arch}.${ext}

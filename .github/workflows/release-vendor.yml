@@ -29,6 +29,7 @@ env:
 jobs:
   pack:
     name: Pack npm tarballs
+    if: github.repository == 'deepseek-ai/deepseek-harness'
     runs-on: ubuntu-24.04
     steps:
       # Complete history: the release scripts read tags.

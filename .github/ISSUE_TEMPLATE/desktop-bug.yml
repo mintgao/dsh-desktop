@@ -1,0 +1,41 @@
+name: Desktop bug
+description: Report a reproducible DSH Desktop problem.
+title: "[Desktop bug] "
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste API keys, credentials, session transcripts, or other private data.
+  - type: input
+    id: version
+    attributes:
+      label: DSH Desktop version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: architecture
+    attributes:
+      label: Mac architecture
+      options:
+        - Apple Silicon (arm64)
+        - Intel (x64)
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest sequence that reproduces the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Remove secrets and private workspace content before attaching backend.log excerpts.

@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a focused improvement for DSH Desktop.
+title: "[Desktop feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user problem independently of a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: textarea
+    id: upstream
+    attributes:
+      label: Upstream relationship
+      description: State whether this belongs only in the desktop shell or also changes DeepSeek Harness behavior.

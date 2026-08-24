@@ -1,13 +1,16 @@
-<!-- 写 Fixes #NN 表示解决并自动关闭；写 Related to #NN 仅关联。 -->
-<!-- 进入评审的非 Draft 人类 PR 至少引用一个同仓库 Issue。 -->
-<!-- 解决型 PR 与 Issue 同步 Priority；解决多个 Issue 时取最高值。 -->
+## Change / 变更
 
-关联 Issue：
+<!-- Describe the user-visible or maintainer-visible result. / 说明用户或维护者能观察到的结果。 -->
 
-<details>
-<summary>变更与验证</summary>
+## Verification / 验证
 
-- 变更：
-- 验证：
+<!-- List only commands actually run and relevant manual checks. / 只列出实际执行的命令与相关手工检查。 -->
 
-</details>
+## Release impact / 发布影响
+
+- [ ] No desktop release impact / 不影响桌面版发布
+- [ ] Requires arm64 validation / 需要验证 arm64
+- [ ] Requires x64 validation / 需要验证 x64
+- [ ] Requires signing or notarization review / 需要检查签名或公证
+
+Related issue / 关联 Issue：

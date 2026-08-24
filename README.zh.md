@@ -2,6 +2,8 @@
 
 [English](README.md) | 中文
 
+> 此下游检出目录包含由 Mint 维护的非官方 macOS 发行版 [DSH Desktop Mint](apps/desktop/README.zh.md)。该发行版未获得 DeepSeek 的背书、合作或授权。
+
 DeepSeek Harness（`dsh`）是由 [DeepSeek AI](https://deepseek.com) 开发的开源 agent harness（智能体框架）。
 
 它采用**一切皆插件**的架构，并由 [Cordis](https://github.com/cordiverse/cordis) 驱动，其设计参见论文 [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper)。

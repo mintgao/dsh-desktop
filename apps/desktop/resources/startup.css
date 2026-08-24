@@ -1,0 +1,79 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  background: #f6f8fb;
+  color: #18212f;
+}
+
+body {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  min-height: 100vh;
+}
+
+main {
+  text-align: center;
+  width: min(320px, calc(100vw - 48px));
+}
+
+.mark {
+  align-items: center;
+  background: linear-gradient(145deg, #155eef, #713bdb);
+  border-radius: 22px;
+  box-shadow: 0 18px 40px rgb(45 68 130 / 22%);
+  color: white;
+  display: inline-flex;
+  font-size: 24px;
+  font-weight: 720;
+  height: 80px;
+  justify-content: center;
+  letter-spacing: -1px;
+  width: 80px;
+}
+
+h1 {
+  font-size: 24px;
+  letter-spacing: -0.4px;
+  margin: 28px 0 8px;
+}
+
+p {
+  color: #667085;
+  font-size: 14px;
+  margin: 0;
+}
+
+.progress {
+  background: #e5e9f1;
+  border-radius: 999px;
+  height: 4px;
+  margin: 28px auto 0;
+  overflow: hidden;
+  width: 180px;
+}
+
+.progress span {
+  animation: loading 1.3s ease-in-out infinite;
+  background: #316fea;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  width: 42%;
+}
+
+@keyframes loading {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(340%); }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { background: #111722; color: #f3f5f8; }
+  p { color: #9aa4b2; }
+  .progress { background: #263142; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress span { animation: none; width: 100%; }
+}

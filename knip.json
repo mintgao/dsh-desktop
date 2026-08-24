@@ -24,6 +24,8 @@
   "workspaces": {
     ".": {
       "entry": [
+        "apps/desktop/src/main.ts",
+        "apps/desktop/tests/fixtures/*.mjs",
         "scripts/**/*.mjs",
         "scripts/**/*.cjs",
         "scripts/types/client-build-environment/index.d.ts"
@@ -32,6 +34,9 @@
         "client-build-environment"
       ],
       "project": [
+        "apps/desktop/src/**/*.ts",
+        "apps/desktop/tests/**/*.ts",
+        "apps/desktop/tests/**/*.mjs",
         "scripts/**/*.ts",
         "scripts/**/*.mjs",
         "scripts/**/*.cjs"

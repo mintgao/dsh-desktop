@@ -2,6 +2,8 @@
 
 English | [中文](README.zh.md)
 
+> This downstream checkout includes [DSH Desktop Mint](apps/desktop/README.md), an unofficial macOS distribution maintained by Mint. DeepSeek does not endorse, cooperate with, or authorize this distribution.
+
 DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 
 It uses an architecture where **everything is a plugin**, and is powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://github.com/cordiverse/paper).

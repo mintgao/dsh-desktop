@@ -1,0 +1,134 @@
+name: Release DSH Desktop
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  build:
+    name: Signed DMG / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    env:
+      CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Validate tag and signing secrets
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#desktop-v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag must be desktop-v followed by a semantic version." >&2
+            exit 1
+          fi
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required release secret: $name" >&2
+              exit 1
+            fi
+          done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Materialize App Store Connect API key
+        shell: bash
+        run: |
+          set -euo pipefail
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 -D > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
+
+      - name: Stage source-built DSH runtime
+        run: pnpm run desktop:stage
+
+      - name: Build, sign, and notarize DMG
+        run: >-
+          pnpm exec electron-builder
+          --config apps/desktop/electron-builder.yml
+          --config.extraMetadata.version=${{ steps.release.outputs.version }}
+          --config.forceCodeSigning=true
+          --config.mac.notarize=true
+          --mac dmg
+          --${{ matrix.arch }}
+          --publish never
+
+      - name: Verify notarization ticket
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_path="$(find apps/desktop/dist -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+          test -n "$dmg_path"
+          xcrun stapler validate "$dmg_path"
+          spctl --assess --verbose=2 --type open "$dmg_path"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-desktop-${{ matrix.arch }}
+          path: apps/desktop/dist/*.dmg
+          if-no-files-found: error
+
+  draft-release:
+    name: Create draft GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: dsh-desktop-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Write checksums
+        run: sha256sum release-assets/*.dmg > release-assets/SHA256SUMS.txt
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          release-assets/*
+          --repo "$GITHUB_REPOSITORY"
+          --verify-tag
+          --draft
+          --title "DSH Desktop Mint ${GITHUB_REF_NAME#desktop-v}"
+          --notes "Unofficial DSH Desktop distribution maintained by Mint. Built on DeepSeek Harness without official endorsement. Review both notarized DMGs and SHA256SUMS.txt before publishing this draft."
