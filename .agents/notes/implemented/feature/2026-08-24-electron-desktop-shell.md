@@ -20,6 +20,8 @@ The supervisor accepts only a complete official readiness line whose URL is HTTP
 
 The BrowserWindow uses context isolation, renderer sandboxing, Web security, no Node integration, and no preload bridge. Navigation stays on the exact ready origin. External HTTP and HTTPS destinations go to the system browser; popups, other schemes, and cross-origin in-window navigation are denied.
 
+While the supervisor waits for readiness, the asar-owned startup page presents the Mint ocean scene with separate whale-crossing, bobbing, bubble, water-drift, and progress-current timelines. The page uses only packaged local assets under its content security policy. A reduced-motion preference stops those timelines, hides the bubbles, and keeps the whale and progress indicator visible in a static state.
+
 ### Source-built packaged runtime
 
 The macOS stage runs the official client build, packs both release families from the current checkout, reads the packed manifests, and selects the local dependency, optional-dependency, and peer closure reachable from `@deepseek-ai/dsh`. npm installs those tarballs and external dependencies into `apps/desktop/backend`. A version smoke check drives the installed CLI, and a recursive link check rejects any symlink whose resolved destination leaves that staging root. electron-builder copies this isolated tree as an external application resource rather than packing it into asar; the Electron main bundle and static startup page stay in asar.
@@ -40,7 +42,7 @@ The local targets are unsigned macOS arm64 and x64 applications named DSH Deskto
 
 ## Verification
 
-Focused tests use real child processes to cover split readiness output, early failure diagnostics, clean stop, and unexpected exit, while pure tests cover exact-origin navigation and external URL filtering. The official source build, desktop TypeScript bundle, and runtime staging complete. The packaged CLI reports the repository version, every staged link resolves within the backend root, and the generated arm64 `.app` contains the expected CLI resource. A real packaged launch reaches a random loopback readiness URL, returns the built DSH HTML from that address, and closes the listener when the application exits.
+Focused tests use real child processes to cover split readiness output, early failure diagnostics, clean stop, and unexpected exit, while pure tests cover exact-origin navigation, external URL filtering, and the startup page's visible copy, packaged asset roster, motion timelines, and reduced-motion state. The official source build, desktop TypeScript bundle, and runtime staging complete. The packaged CLI reports the repository version, every staged link resolves within the backend root, and the generated arm64 `.app` contains the expected CLI resource. A real packaged launch reaches a random loopback readiness URL, returns the built DSH HTML from that address, and closes the listener when the application exits.
 
 ## Consequences
 
