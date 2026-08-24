@@ -12,10 +12,30 @@ describe('desktop release workflow', () => {
     const draft = workflowJob(workflow, 'draft-release')
     const buildSteps = workflowSteps(build)
     const draftSteps = workflowSteps(draft)
+    const secretStep = namedStep(buildSteps, 'Validate signing secrets')
+    const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
     const packageStep = namedStep(buildSteps, 'Build, sign, and notarize DMG and update ZIP')
     const metadataStep = namedStep(draftSteps, 'Merge architecture update metadata')
     const releaseStep = namedStep(draftSteps, 'Create signed draft release')
 
+    expect(build.env).toBeUndefined()
+    expect(secretStep.env).toEqual({
+      CSC_LINK: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
+      CSC_KEY_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
+      APPLE_API_KEY_P8_BASE64: '${{ secrets.APPLE_API_KEY_P8_BASE64 }}',
+      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
+      APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
+    })
+    expect(keyStep.env).toEqual({
+      APPLE_API_KEY_P8_BASE64: '${{ secrets.APPLE_API_KEY_P8_BASE64 }}',
+      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
+    })
+    expect(packageStep.env).toEqual({
+      CSC_LINK: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
+      CSC_KEY_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
+      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
+      APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
+    })
     expect(packageStep.run).toContain('--mac dmg zip')
     expect(String(metadataStep.run)).toContain('latest-mac-arm64.yml')
     expect(String(metadataStep.run)).toContain('latest-mac-x64.yml')
@@ -26,13 +46,15 @@ describe('desktop release workflow', () => {
   it('builds prerelease tags without Apple credentials and creates an unsigned preview draft', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release.yml')
     const prepareSteps = workflowSteps(workflowJob(workflow, 'prepare'))
-    const buildSteps = workflowSteps(workflowJob(workflow, 'build'))
+    const build = workflowJob(workflow, 'build')
+    const buildSteps = workflowSteps(build)
     const draftSteps = workflowSteps(workflowJob(workflow, 'draft-release'))
     const channelStep = namedStep(prepareSteps, 'Validate desktop tag')
     const secretStep = namedStep(buildSteps, 'Validate signing secrets')
     const previewBuild = namedStep(buildSteps, 'Build unsigned preview DMG')
     const previewRelease = namedStep(draftSteps, 'Create preview draft release')
 
+    expect(build.env).toBeUndefined()
     expect(String(channelStep.run)).toContain('mode=preview')
     expect(secretStep.if).toBe("needs.prepare.outputs.mode == 'signed'")
     expect(previewBuild.if).toBe("needs.prepare.outputs.mode == 'preview'")

@@ -52,12 +52,6 @@ jobs:
             runner: macos-15
           - arch: x64
             runner: macos-15-intel
-    env:
-      CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-      APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -73,6 +67,12 @@ jobs:
 
       - name: Validate signing secrets
         if: needs.prepare.outputs.mode == 'signed'
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         shell: bash
         run: |
           set -euo pipefail
@@ -88,6 +88,9 @@ jobs:
 
       - name: Materialize App Store Connect API key
         if: needs.prepare.outputs.mode == 'signed'
+        env:
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -101,6 +104,11 @@ jobs:
 
       - name: Build, sign, and notarize DMG and update ZIP
         if: needs.prepare.outputs.mode == 'signed'
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: >-
           pnpm exec electron-builder
           --config apps/desktop/electron-builder.yml

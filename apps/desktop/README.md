@@ -79,7 +79,7 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-The workflow needs no Apple secret for a prerelease tag. It disables signing-identity discovery, creates only the two unsigned DMGs and their SHA-256 checksums, and marks the GitHub Release draft as a prerelease. Before publishing, replace every placeholder in its release notes, record the embedded Harness tag or commit, verify both downloads and checksums, and test the Gatekeeper instructions on a clean user account. Published preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
+The workflow needs no Apple secret for a prerelease tag. Signing credentials are scoped only to signed-channel steps, so a preview build inherits no CSC or App Store Connect environment variable. It disables signing-identity discovery, creates only the two unsigned DMGs and their SHA-256 checksums, and marks the GitHub Release draft as a prerelease. Before publishing, replace every placeholder in its release notes, record the embedded Harness tag or commit, verify both downloads and checksums, and test the Gatekeeper instructions on a clean user account. Published preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
 
 Stable releases require the following encrypted GitHub Actions secrets:
 

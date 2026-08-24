@@ -79,7 +79,7 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-预发布标签不需要 Apple Secret。工作流会关闭签名身份发现，只生成两份未签名 DMG 与 SHA-256 校验和，并把 GitHub Release 草稿标为 Pre-release。发布前必须替换说明中的所有占位内容，记录内置 Harness 标签或提交，核对两份下载与校验和，并在干净用户账号中验证 Gatekeeper 指引。已发布的预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
+预发布标签不需要 Apple Secret。签名凭据只作用于签名通道的步骤，因此预览构建不会继承任何 CSC 或 App Store Connect 环境变量。工作流会关闭签名身份发现，只生成两份未签名 DMG 与 SHA-256 校验和，并把 GitHub Release 草稿标为 Pre-release。发布前必须替换说明中的所有占位内容，记录内置 Harness 标签或提交，核对两份下载与校验和，并在干净用户账号中验证 Gatekeeper 指引。已发布的预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
 
 稳定版需要以下加密 GitHub Actions Secrets：
 
