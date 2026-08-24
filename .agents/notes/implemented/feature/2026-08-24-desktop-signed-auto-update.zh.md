@@ -10,7 +10,7 @@
 
 ## 决策
 
-经过签名和打包的 macOS 版本使用 `electron-updater` 读取 `mintgao/dsh-desktop` 的公开 GitHub Releases。更新器只接受稳定版本，绝不自动下载；除非用户明确选择，否则普通退出时也绝不自动安装。源码构建与未打包构建没有更新源，用户手工执行命令时会看到相应说明。
+经过签名的 macOS 稳定版使用 `electron-updater` 读取 `mintgao/dsh-desktop` 的公开 GitHub Releases。更新器只接受稳定版本，绝不自动下载；除非用户明确选择，否则普通退出时也绝不自动安装。源码构建与未打包构建没有更新源，用户手工执行命令时会看到相应说明。未签名预览版使用独立的[预览版手工更新提醒](2026-08-24-desktop-manual-preview-updates.zh.md)生命周期。
 
 ### 检查与用户决策
 
@@ -20,7 +20,7 @@
 
 ### 发布更新源
 
-每次 `desktop-vX.Y.Z` 构建都会为 arm64 和 x64 分别生成经过签名和公证的 DMG，以及 ZIP 与 blockmap。发布工作流保留 electron-builder 按架构生成的元数据，校验其中的版本与必需的架构标记 ZIP，再合并成一份 `latest-mac.yml`。合并后的更新源保留两种文件哈希，使 MacUpdater 能选择当前运行架构。客户端看不到 Release 草稿；维护者手工发布已审查草稿时，更新源才会启用。应用只包含公开仓库身份，不包含 GitHub token。
+每次稳定版 `desktop-vX.Y.Z` 构建都会为 arm64 和 x64 分别生成经过签名和公证的 DMG，以及 ZIP 与 blockmap。发布工作流保留 electron-builder 按架构生成的元数据，校验其中的版本与必需的架构标记 ZIP，再合并成一份 `latest-mac.yml`。合并后的更新源保留两种文件哈希，使 MacUpdater 能选择当前运行架构。客户端看不到 Release 草稿；维护者手工发布已审查草稿时，稳定更新源才会启用。应用只包含公开仓库身份，不包含 GitHub token。
 
 桌面应用与内置 DSH 运行时会作为一个经过配套测试的应用单元一起更新。定时工作流观察上游 `dsh-v*` 标签，推送下游审查分支，并创建带预填 PR 链接的跟踪 Issue；它不会创建或合并 PR、修改桌面版本、创建标签或发布更新。仓库级 Actions 权限保持默认只读，该工作流只取得限定范围的分支与 Issue 写权限。这样，上游版本提醒与维护者的兼容性及发布决策保持分离。
 

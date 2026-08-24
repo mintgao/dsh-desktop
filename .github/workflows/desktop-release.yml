@@ -16,8 +16,33 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
+  prepare:
+    name: Select release channel
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.release.outputs.mode }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Validate desktop tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#desktop-v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag must be desktop-v followed by a semantic version." >&2
+            exit 1
+          fi
+          mode=signed
+          if [[ "$version" == *-* ]]; then
+            mode=preview
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   build:
-    name: Signed macOS artifacts / ${{ matrix.arch }}
+    name: macOS artifacts / ${{ matrix.arch }}
+    needs: prepare
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -46,28 +71,23 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
 
-      - name: Validate tag and signing secrets
-        id: release
+      - name: Validate signing secrets
+        if: needs.prepare.outputs.mode == 'signed'
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#desktop-v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag must be desktop-v followed by a semantic version." >&2
-            exit 1
-          fi
           for name in CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
             if [[ -z "${!name}" ]]; then
               echo "Missing required release secret: $name" >&2
               exit 1
             fi
           done
-          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Install immutable dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Materialize App Store Connect API key
+        if: needs.prepare.outputs.mode == 'signed'
         shell: bash
         run: |
           set -euo pipefail
@@ -80,32 +100,50 @@ jobs:
         run: pnpm run desktop:stage
 
       - name: Build, sign, and notarize DMG and update ZIP
+        if: needs.prepare.outputs.mode == 'signed'
         run: >-
           pnpm exec electron-builder
           --config apps/desktop/electron-builder.yml
-          --config.extraMetadata.version=${{ steps.release.outputs.version }}
+          --config.extraMetadata.version=${{ needs.prepare.outputs.version }}
           --config.forceCodeSigning=true
           --config.mac.notarize=true
           --mac dmg zip
           --${{ matrix.arch }}
           --publish never
 
+      - name: Build unsigned preview DMG
+        if: needs.prepare.outputs.mode == 'preview'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: >-
+          pnpm exec electron-builder
+          --config apps/desktop/electron-builder.yml
+          --config.extraMetadata.version=${{ needs.prepare.outputs.version }}
+          --mac dmg
+          --${{ matrix.arch }}
+          --publish never
+
+      - name: Verify architecture DMG
+        shell: bash
+        run: test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
+
       - name: Verify notarization ticket
+        if: needs.prepare.outputs.mode == 'signed'
         shell: bash
         run: |
           set -euo pipefail
-          dmg_path="$(find apps/desktop/dist -maxdepth 1 -type f -name '*.dmg' -print -quit)"
-          test -n "$dmg_path"
+          dmg_path="apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
           xcrun stapler validate "$dmg_path"
           spctl --assess --verbose=2 --type open "$dmg_path"
 
       - name: Preserve architecture update metadata
+        if: needs.prepare.outputs.mode == 'signed'
         shell: bash
         run: |
           set -euo pipefail
           test -f apps/desktop/dist/latest-mac.yml
-          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ steps.release.outputs.version }}-${{ matrix.arch }}.zip"
-          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ steps.release.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
+          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip"
+          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
           mv apps/desktop/dist/latest-mac.yml "apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml"
 
       - uses: actions/upload-artifact@v4
@@ -120,7 +158,9 @@ jobs:
 
   draft-release:
     name: Create draft GitHub release
-    needs: build
+    needs:
+      - prepare
+      - build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -130,13 +170,16 @@ jobs:
           persist-credentials: false
 
       - uses: pnpm/action-setup@v4
+        if: needs.prepare.outputs.mode == 'signed'
 
       - uses: actions/setup-node@v6
+        if: needs.prepare.outputs.mode == 'signed'
         with:
           node-version-file: .node-version
           cache: pnpm
 
       - name: Install immutable dependencies
+        if: needs.prepare.outputs.mode == 'signed'
         run: pnpm install --frozen-lockfile
 
       - uses: actions/download-artifact@v5
@@ -146,20 +189,31 @@ jobs:
           merge-multiple: true
 
       - name: Merge architecture update metadata
+        if: needs.prepare.outputs.mode == 'signed'
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#desktop-v}"
           pnpm exec tsx scripts/merge-desktop-update-metadata.ts \
-            --version "$version" \
+            --version "${{ needs.prepare.outputs.version }}" \
             --output release-assets/latest-mac.yml \
             release-assets/latest-mac-arm64.yml \
             release-assets/latest-mac-x64.yml
 
-      - name: Write checksums
+      - name: Write signed release checksums
+        if: needs.prepare.outputs.mode == 'signed'
         run: sha256sum release-assets/*.dmg release-assets/*.zip > release-assets/SHA256SUMS.txt
 
-      - name: Create draft release
+      - name: Write preview release checksums and notes
+        if: needs.prepare.outputs.mode == 'preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum release-assets/*.dmg > release-assets/SHA256SUMS.txt
+          sed 's/__VERSION__/${{ needs.prepare.outputs.version }}/g' \
+            .github/desktop-preview-release-notes.md > release-notes.md
+
+      - name: Create signed draft release
+        if: needs.prepare.outputs.mode == 'signed'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
@@ -172,5 +226,20 @@ jobs:
           --repo "$GITHUB_REPOSITORY"
           --verify-tag
           --draft
-          --title "DSH Desktop Mint ${GITHUB_REF_NAME#desktop-v}"
+          --title "DSH Desktop Mint ${{ needs.prepare.outputs.version }}"
           --notes "Unofficial DSH Desktop distribution maintained by Mint. Built on DeepSeek Harness without official endorsement. Review both notarized DMGs, update ZIPs, latest-mac.yml, and SHA256SUMS.txt before publishing this draft. Publishing this draft makes the version visible to installed clients."
+
+      - name: Create preview draft release
+        if: needs.prepare.outputs.mode == 'preview'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          release-assets/*.dmg
+          release-assets/SHA256SUMS.txt
+          --repo "$GITHUB_REPOSITORY"
+          --verify-tag
+          --draft
+          --prerelease
+          --title "DSH Desktop Mint ${{ needs.prepare.outputs.version }}"
+          --notes-file release-notes.md

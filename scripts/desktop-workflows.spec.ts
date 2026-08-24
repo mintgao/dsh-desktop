@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 const root = resolve(import.meta.dirname, '..')
 
 describe('desktop release workflow', () => {
-  it('publishes both native update ZIPs through one draft-only feed', () => {
+  it('keeps stable releases signed and publishes both native update ZIPs through one draft-only feed', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release.yml')
     const build = workflowJob(workflow, 'build')
     const draft = workflowJob(workflow, 'draft-release')
@@ -14,13 +14,34 @@ describe('desktop release workflow', () => {
     const draftSteps = workflowSteps(draft)
     const packageStep = namedStep(buildSteps, 'Build, sign, and notarize DMG and update ZIP')
     const metadataStep = namedStep(draftSteps, 'Merge architecture update metadata')
-    const releaseStep = namedStep(draftSteps, 'Create draft release')
+    const releaseStep = namedStep(draftSteps, 'Create signed draft release')
 
     expect(packageStep.run).toContain('--mac dmg zip')
     expect(String(metadataStep.run)).toContain('latest-mac-arm64.yml')
     expect(String(metadataStep.run)).toContain('latest-mac-x64.yml')
     expect(String(releaseStep.run)).toContain('release-assets/latest-mac.yml')
     expect(String(releaseStep.run)).toContain('--draft')
+  })
+
+  it('builds prerelease tags without Apple credentials and creates an unsigned preview draft', () => {
+    const workflow = workflowDocument('.github/workflows/desktop-release.yml')
+    const prepareSteps = workflowSteps(workflowJob(workflow, 'prepare'))
+    const buildSteps = workflowSteps(workflowJob(workflow, 'build'))
+    const draftSteps = workflowSteps(workflowJob(workflow, 'draft-release'))
+    const channelStep = namedStep(prepareSteps, 'Validate desktop tag')
+    const secretStep = namedStep(buildSteps, 'Validate signing secrets')
+    const previewBuild = namedStep(buildSteps, 'Build unsigned preview DMG')
+    const previewRelease = namedStep(draftSteps, 'Create preview draft release')
+
+    expect(String(channelStep.run)).toContain('mode=preview')
+    expect(secretStep.if).toBe("needs.prepare.outputs.mode == 'signed'")
+    expect(previewBuild.if).toBe("needs.prepare.outputs.mode == 'preview'")
+    expect(previewBuild.env).toEqual({ CSC_IDENTITY_AUTO_DISCOVERY: 'false' })
+    expect(String(previewBuild.run)).toContain('--mac dmg')
+    expect(String(previewBuild.run)).not.toContain('--config.forceCodeSigning=true')
+    expect(String(previewRelease.run)).toContain('--prerelease')
+    expect(String(previewRelease.run)).toContain('--draft')
+    expect(String(previewRelease.run)).not.toContain('latest-mac.yml')
   })
 })
 
