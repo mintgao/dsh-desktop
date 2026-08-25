@@ -217,14 +217,19 @@ jobs:
 
       - name: Write signed release checksums
         if: needs.prepare.outputs.mode == 'signed'
-        run: sha256sum release-assets/*.dmg release-assets/*.zip > release-assets/SHA256SUMS.txt
+        run: |
+          cd release-assets
+          sha256sum *.dmg *.zip > SHA256SUMS.txt
 
       - name: Write preview release checksums and notes
         if: needs.prepare.outputs.mode == 'preview'
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum release-assets/*.dmg > release-assets/SHA256SUMS.txt
+          (
+            cd release-assets
+            sha256sum *.dmg > SHA256SUMS.txt
+          )
           sed 's/__VERSION__/${{ needs.prepare.outputs.version }}/g' \
             .github/desktop-preview-release-notes.md > release-notes.md
 

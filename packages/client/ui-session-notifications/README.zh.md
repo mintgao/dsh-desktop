@@ -6,7 +6,7 @@
 
 插件使用标准 Web Notifications API。因此 Electron renderer 无需 preload bridge 或理解 agent 语义的主进程代码即可接入 macOS 通知中心，普通浏览器则使用自身的通知实现与权限策略。系统通知显示任务的展示标题和本地化的“任务已结束”文案，不读取 transcript 内容。
 
-Host 端在共享用户设置文档中注册 `ui-session-notifications.mode`。常规设置行持有 `off`、`background` 与 `always` 三种选择以及权限请求。Config `defaultMode` 选择尚无已保存值时的初始偏好，默认是 `off`；产品 Bundle 如需其他默认值必须明确选择。DSH Desktop Mint 设置为 `background`，因此客户端可见且获得焦点时不会重复自身的完成状态。loopback 客户端通过 Host 设置提供方持久化选择；远程浏览器沿用普通的进程本地设置行为。
+Host 端在共享用户设置文档中注册 `ui-session-notifications.mode`。常规设置行持有 `off`、`background` 与 `always` 三种选择以及权限请求。Host Config `defaultMode` 选择尚无已保存值时的初始偏好，默认是 `off`；产品 Bundle 如需其他默认值必须明确选择。浏览器启动行只携带包身份，不携带 Host Cordis 配置，因此 Client 端先使用安全的 `off` 后备值，再由设置 scope 接纳 Host 区段。DSH Desktop Mint 注册的值是 `background`，因此客户端可见且获得焦点时不会重复自身的完成状态。loopback 客户端通过 Host 设置提供方持久化选择；远程浏览器沿用普通的进程本地设置行为。
 
 该包是单一用途的客户端插件，不是 agent 能力 seam。它消费现有会话服务、设置与 slot 扩展点，不持有 agent 生命周期，也不增加 Electron IPC。产品启用和默认值属于更后的 Bundle 层：共享 Web Bundle 不挂载这个插件，而 [`desktop-mint` Bundle](../../bundle/desktop-mint/README.zh.md)会挂载它。[下游客户端产品层决策](../../../.agents/notes/implemented/architecture/2026-08-25-downstream-client-product-layer.zh.md)记录了这一归属。
 

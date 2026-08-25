@@ -21,7 +21,7 @@ DSH 是插件式 harness 与可复用平台。DSH Desktop Mint 是下游产品�
 
 `desktop-mint` Profile 会在自己的用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 `@deepseek-ai/dsh-desktop-mint`。Mint Bundle 是 DSH 功能选择与产品默认值的唯一来源；它只包含 patch 行，不包含功能实现。后续产品版本通过修改该 Bundle 增减功能，不需要改变 Profile 元组；用户仍可增加更后的 Profile patch 或额外 Bundle。
 
-任务完成通知是这条规则的第一个显式应用。`@deepseek-ai/dsh-client-ui-session-notifications` 观察公开的会话列表快照，注册自己的常规设置行，并使用 renderer 的 Web Notifications API。Electron 把该标准 API 映射到 macOS 通知中心，因此主进程不增加任务生命周期分支或 renderer bridge。插件保持可复用，在组合没有给出产品选择时默认关闭；只有 Mint Bundle 会挂载它并设置 `defaultMode: background`。通用 `web` Profile 不继承该选择。
+任务完成通知是这条规则的第一个显式应用。`@deepseek-ai/dsh-client-ui-session-notifications` 观察公开的会话列表快照，注册自己的常规设置行，并使用 renderer 的 Web Notifications API。Electron 把该标准 API 映射到 macOS 通知中心，因此主进程不增加任务生命周期分支或 renderer bridge。插件保持可复用，在组合没有给出产品选择时默认关闭；只有 Mint Bundle 会挂载它并设置 `defaultMode: background`。Host 设置持有这个产品默认值，因为浏览器启动行不会投影 Host Cordis 配置；Client 配置缺省时先安全地关闭通知，再由设置 scope 接纳 Host 区段。通用 `web` Profile 不继承该选择。
 
 每项待开发产品功能都先建立一份简短功能记录，写明用户结果、所属平面、真源、现有扩展点、新包或提供方、设置与持久性、模型可见影响、权限或隐私影响、dispose 行为以及装配后的验收路径。如果没有扩展点能够支持该功能，平台变更会先引入最小的可复用扩展，再把产品功能实现为其消费方。只有 agent 生命周期责任才可以成为修改 Agent Loop 的理由，方便观察不能。仓库中的 [dsh-mint-client-feature](../../../skills/dsh-mint-client-feature/SKILL.md) 工作流会把这些规则带入后续 Agent 会话。
 

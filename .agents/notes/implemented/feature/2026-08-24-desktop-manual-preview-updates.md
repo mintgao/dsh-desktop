@@ -26,7 +26,7 @@ Background failures are written to the desktop log. A manual failure uses a nati
 
 ### Release and signed-channel transition
 
-A tag with a prerelease suffix makes the release workflow build unsigned arm64 and x64 DMGs with signing discovery disabled. It creates a draft GitHub prerelease containing only those DMGs and SHA-256 checksums. The release-note template identifies the distribution and unsigned status, links each architecture directly, explains manual replacement and Gatekeeper confirmation, and requires the embedded Harness revision, changes, and migration notes before publication.
+A tag with a prerelease suffix makes the release workflow build unsigned arm64 and x64 DMGs with signing discovery disabled. It creates a draft GitHub prerelease containing only those DMGs and SHA-256 checksums. The checksum file records asset basenames so downloading it beside the DMGs makes the standard verification command work without recreating a CI directory. The release-note template identifies the distribution and unsigned status, links each architecture directly, explains manual replacement and Gatekeeper confirmation, and requires the embedded Harness revision, changes, and migration notes before publication.
 
 A preview client can discover a later stable release and guide the user through one final manual installation. Stable versions do not contain a prerelease suffix, so the newly installed application switches to the signed `electron-updater` lifecycle. Unsigned artifacts never provide channel metadata or enter automatic installation.
 

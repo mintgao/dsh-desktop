@@ -112,9 +112,9 @@ describe('ui-session-notifications client apply', () => {
     expect(b.locale.bind(SESSION_NOTIFICATION_LOCALE_NAMESPACE)('settings.title')).toBe('settings.title')
   })
 
-  it('loads and disposes quietly before the General slot is declared', async () => {
+  it('loads without Client config and disposes quietly before the General slot is declared', async () => {
     const b = await bench()
-    const fiber = b.ctx.plugin({ inject: [...inject], apply }, { defaultMode: 'off' })
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(b.slots.entries(SLOT)).toHaveLength(0)
     await fiber.dispose()

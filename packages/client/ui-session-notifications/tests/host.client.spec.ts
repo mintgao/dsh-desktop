@@ -36,5 +36,7 @@ describe('ui-session-notifications host', () => {
     expect(Config({})).toEqual({ defaultMode: DEFAULT_SESSION_NOTIFICATION_MODE })
     expect(resolveSessionNotificationConfig({}))
       .toEqual({ defaultMode: DEFAULT_SESSION_NOTIFICATION_MODE })
+    expect(resolveSessionNotificationConfig(undefined))
+      .toEqual({ defaultMode: DEFAULT_SESSION_NOTIFICATION_MODE })
   })
 })
