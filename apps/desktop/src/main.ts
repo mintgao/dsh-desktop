@@ -36,6 +36,7 @@ import {
 } from './updates.ts'
 
 const APPLICATION_NAME = 'DSH Desktop'
+const PACKAGE_SMOKE_ARGUMENT = '--dsh-package-smoke'
 const UPDATE_MENU_ITEM_ID = 'check-for-updates'
 const RELEASES_URL = 'https://github.com/mintgao/dsh-desktop/releases'
 
@@ -51,33 +52,37 @@ let updateController: DesktopUpdateController | undefined
 let updateDriver: ElectronUpdateDriver | undefined
 let requestUpdateCheck: (() => Promise<void>) | undefined
 
-app.setName(APPLICATION_NAME)
-app.setAboutPanelOptions({
-  applicationName: APPLICATION_NAME,
-  applicationVersion: app.getVersion(),
-  version: app.getVersion(),
-  copyright: 'Unofficial distribution maintained by Mint.',
-  credits: 'Built on DeepSeek Harness. Not endorsed by DeepSeek.',
-})
-
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
+if (process.argv.includes(PACKAGE_SMOKE_ARGUMENT)) {
+  app.exit(0)
 } else {
-  app.on('second-instance', () => {
-    if (mainWindow === undefined) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.show()
-    mainWindow.focus()
+  app.setName(APPLICATION_NAME)
+  app.setAboutPanelOptions({
+    applicationName: APPLICATION_NAME,
+    applicationVersion: app.getVersion(),
+    version: app.getVersion(),
+    copyright: 'Unofficial distribution maintained by Mint.',
+    credits: 'Built on DeepSeek Harness. Not endorsed by DeepSeek.',
   })
-  app.on('before-quit', (event) => {
-    if (backend === undefined || backendStopped) return
-    event.preventDefault()
-    void stopApplicationBackend().then(finishApplicationQuit)
-  })
-  app.on('window-all-closed', () => {
+
+  if (!app.requestSingleInstanceLock()) {
     app.quit()
-  })
-  void app.whenReady().then(startApplication).catch(reportStartupFailure)
+  } else {
+    app.on('second-instance', () => {
+      if (mainWindow === undefined) return
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.show()
+      mainWindow.focus()
+    })
+    app.on('before-quit', (event) => {
+      if (backend === undefined || backendStopped) return
+      event.preventDefault()
+      void stopApplicationBackend().then(finishApplicationQuit)
+    })
+    app.on('window-all-closed', () => {
+      app.quit()
+    })
+    void app.whenReady().then(startApplication).catch(reportStartupFailure)
+  }
 }
 
 /** Create the native window, start dsh Web, and load its canonical loopback URL. */

@@ -135,6 +135,14 @@ jobs:
         shell: bash
         run: test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
 
+      - name: Smoke packaged updater module
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
+          test -n "$app_path"
+          "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke
+
       - name: Verify notarization ticket
         if: needs.prepare.outputs.mode == 'signed'
         shell: bash
