@@ -6,7 +6,7 @@ English | [中文](2026-08-24-desktop-manual-preview-updates.zh.md)
 
 ## Problem
 
-Small-group testing must be possible before the maintainer can obtain a Developer ID certificate and notarization credentials. An unsigned DMG cannot use the supported Squirrel.Mac installation path, but leaving update discovery entirely outside the application makes testers depend on messages from the maintainer and encourages indefinite use of old embedded Harness versions. Polling or opening arbitrary API fields would also expose users to unnecessary GitHub rate usage and unsafe external navigation.
+Small-group testing needs a prerelease channel that remains outside the stable automatic-update feed. Leaving update discovery entirely outside the application makes testers depend on messages from the maintainer and encourages indefinite use of old embedded Harness versions. Polling or opening arbitrary API fields would also expose users to unnecessary GitHub rate usage and unsafe external navigation.
 
 ## Decision
 
@@ -26,15 +26,15 @@ Background failures are written to the desktop log. A manual failure uses a nati
 
 ### Release and signed-channel transition
 
-A tag with a prerelease suffix makes the release workflow build unsigned arm64 and x64 DMGs with signing discovery disabled. It creates a draft GitHub prerelease containing only those DMGs and SHA-256 checksums. The checksum file records asset basenames so downloading it beside the DMGs makes the standard verification command work without recreating a CI directory. The release-note template identifies the distribution and unsigned status, links each architecture directly, explains manual replacement and Gatekeeper confirmation, and requires the embedded Harness revision, changes, and migration notes before publication.
+A tag with a prerelease suffix makes the release workflow build Developer ID-signed and notarized arm64 and x64 DMGs. It creates a draft GitHub prerelease containing only those DMGs and SHA-256 checksums. The checksum file records asset basenames so downloading it beside the DMGs makes the standard verification command work without recreating a CI directory. The release-note template identifies the distribution and signed preview status, links each architecture directly, explains manual replacement, and requires the embedded Harness revision, changes, and migration notes before publication.
 
-A preview client can discover a later stable release and guide the user through one final manual installation. Stable versions do not contain a prerelease suffix, so the newly installed application switches to the signed `electron-updater` lifecycle. Unsigned artifacts never provide channel metadata or enter automatic installation.
+A preview client can discover a later stable release and guide the user through one final manual installation. Stable versions do not contain a prerelease suffix, so the newly installed application switches to the `electron-updater` lifecycle. Preview artifacts do not provide channel metadata or enter automatic installation.
 
 ## Alternatives considered
 
 **Require users to watch GitHub or maintainer messages.** This removes application code but gives no durable signal or architecture guidance. Native release awareness keeps installation manual while making version status visible where the work happens.
 
-**Download an unsigned DMG inside the application.** A download button could be mistaken for a verified automatic update and would still end at a Gatekeeper-controlled manual installation. Opening the exact Release page keeps provenance, warnings, checksums, and notes together.
+**Download the preview DMG inside the application.** A download button could be mistaken for the stable automatic-update path even though installation remains manual. Opening the exact Release page keeps provenance, checksums, and notes together.
 
 **Use a private endpoint or bundled GitHub token.** A distributed credential is not secret, and per-user authentication adds unrelated setup. Anonymous conditional requests remain well below GitHub's public rate limit at the selected interval.
 
@@ -42,8 +42,8 @@ A preview client can discover a later stable release and guide the user through 
 
 ## Verification
 
-Controller tests cover notification deduplication, 24-hour one-shot reminders, skipped-version isolation, manual results, failure visibility, scheduling, and teardown. API tests cover ETags, HTTP failures, semantic ordering, draft and unrelated-tag filtering, architecture assets, and exact Release URLs. Preference tests cover atomic round trips and invalid-document reset. Workflow tests prove that prerelease tags avoid signing secrets and automatic-update assets while stable tags retain forced signing, notarization metadata, and draft publication. The Electron TypeScript build verifies the native integration.
+Controller tests cover notification deduplication, 24-hour one-shot reminders, skipped-version isolation, manual results, failure visibility, scheduling, and teardown. API tests cover ETags, HTTP failures, semantic ordering, draft and unrelated-tag filtering, architecture assets, and exact Release URLs. Preference tests cover atomic round trips and invalid-document reset. Workflow tests prove that prerelease tags require signing and notarization while excluding automatic-update assets, and that stable tags retain update metadata and draft publication. The Electron TypeScript build verifies the native integration.
 
 ## Consequences
 
-Early testers can receive version awareness without Apple credentials or silent code download, and the first signed stable release remains reachable. They must still understand that preview DMGs are unsigned, verify the tag, filename, and checksum, and approve the current macOS Gatekeeper flow themselves. GitHub availability now affects background awareness but never application startup or existing DSH work. The maintainer owns clear release notes and must not present preview artifacts as signed, notarized, or suitable for unattended installation.
+Early testers can receive version awareness without silent code download, and the first stable release remains reachable. Public previews require Apple signing credentials, but their stable application identity also supports native macOS capabilities during acceptance testing. Testers still verify the tag, filename, and checksum and perform a manual replacement. GitHub availability affects background awareness but never application startup or existing DSH work. The maintainer owns clear release notes and must not present preview artifacts as suitable for unattended installation.

@@ -30,7 +30,7 @@ Build the Intel application with `pnpm run desktop:app:mac:x64`. Replace `app` w
 
 Each command runs the official client build, packs the current local DSH and vendored packages, installs the selected runtime closure in an isolated resource directory, rejects links that escape that directory, and invokes electron-builder. An unpublished local backend change is therefore included instead of being replaced by the same version from npm.
 
-Local commands disable signing-identity discovery and never create a supported public release. Install a local Apple Silicon build for the current user with:
+Local commands disable signing-identity discovery and never create a supported public release. Electron 43 cannot deliver macOS notifications from unsigned or ad-hoc-signed applications, so local output cannot validate task notifications or another native capability that depends on stable application identity. Use a Developer ID-signed and notarized artifact for those acceptance tests. Install a local Apple Silicon build for the current user with:
 
 ```sh
 ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desktop.app"
@@ -42,7 +42,7 @@ The Electron main process runs its own executable in Node mode with the packaged
 
 The backend log is `~/Library/Logs/DSH Desktop/backend.log`. External HTTP and HTTPS links open in the system browser. Same-origin application navigation stays inside the DSH window; new windows and all other schemes are denied.
 
-The Web client sends a native macOS notification after a top-level task and all of its subagents stop running. The default **Background only** mode avoids duplicating foreground status; **Settings > General > Task completion notifications** also offers **Off** and **Always**. Clicking the notification opens that task and focuses the existing window. Notification permission remains under macOS control.
+A Developer ID-signed public application lets the Web client send a native macOS notification after a top-level task and all of its subagents stop running. The default **Background only** mode avoids duplicating foreground status; **Settings > General > Task completion notifications** also offers **Off** and **Always**. Clicking the notification opens that task and focuses the existing window. Notification permission remains under macOS control; unsigned local builds cannot deliver this notification.
 
 ## Updates
 
@@ -50,7 +50,7 @@ A packaged prerelease such as `0.2.0-preview.1` checks public `mintgao/dsh-deskt
 
 The first background discovery for a version creates one native notification and an attention badge. Choosing the notification or **Open Release** opens the exact validated release page and names the recommended arm64 or x64 DMG. **Remind Me Tomorrow** defers one reminder for 24 hours, while **Skip this version** suppresses that version without hiding a later release. These choices and the GitHub ETag live in the application user-data directory; no GitHub credential is stored. Background failures go only to the desktop log, while a manual failure offers the public Releases page.
 
-Preview releases are unsigned, so the user quits DSH Desktop, replaces the application from the downloaded DMG, and follows the current macOS **Privacy & Security** confirmation when Gatekeeper blocks the first launch. Settings, credentials, workspaces, and sessions remain in the ordinary DSH home and are not replaced. A preview client can discover the first later signed stable release through this same manual path. Once that stable application is installed, subsequent updates use the signed automatic channel described below.
+Prerelease versions use manual installation even though their DMGs are Developer ID-signed and notarized. The user quits DSH Desktop and replaces the application from the downloaded DMG; settings, credentials, workspaces, and sessions remain in the ordinary DSH home and are not replaced. A preview client can discover a later preview or the first stable release through this same manual path. Once that stable application is installed, subsequent updates use the automatic channel described below.
 
 A signed stable application checks the public stable update feed ten seconds after startup and every six hours thereafter. An available version is never downloaded silently. The native dialog offers **Download Update**, **Later**, or **View Release Notes**; the application menu, Dock, and window show download state. After signature-verified download, the user chooses **Restart and Install**, **Install on Quit**, or **Later**. An immediate installation first stops the local DSH backend, and no update forces the application to restart. Source and unpackaged development builds keep the menu command available but explain that public update checks are unavailable.
 
@@ -68,11 +68,16 @@ The root [contributor guide](../../CONTRIBUTING.md) defines remotes, branches, c
 
 [`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) runs desktop tests, the desktop build, repository type checking, and documentation checks on pull requests and `main`. Its manual package smoke uses native GitHub macOS runners for both arm64 and x64 and loads the packaged Electron main process through the shipped executable before accepting either bundle. Official DeepSeek Harness workflows retain repository guards and do not allocate their organization-specific jobs in this downstream repository.
 
-## Preview and signed releases
+## Preview and stable releases
 
-Desktop versions use semantic tags independently of the root Harness package version. A prerelease tag such as `desktop-v0.2.0-preview.1` selects the unsigned preview channel; a stable tag such as `desktop-v0.2.0` selects the signed and notarized channel. Both paths build native arm64 and x64 DMGs from a reviewed `main` commit and create a draft Release so a maintainer remains the publishing authority.
+Desktop versions use semantic tags independently of the root Harness package version. A prerelease tag such as `desktop-v0.2.0-preview.1` selects the manual preview channel; a stable tag such as `desktop-v0.2.0` additionally selects the automatic update channel. Both paths build Developer ID-signed and notarized native arm64 and x64 DMGs from a reviewed `main` commit and create a draft Release so a maintainer remains the publishing authority.
 
-To share an early preview before Apple credentials are available:
+Every public desktop tag requires these encrypted GitHub Actions secrets:
+
+- `MACOS_CERTIFICATE_P12_BASE64` and `MACOS_CERTIFICATE_PASSWORD` for the Developer ID Application certificate.
+- `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` for App Store Connect notarization.
+
+Create a prerelease tag after those credentials are configured:
 
 ```sh
 git switch main
@@ -81,14 +86,9 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-The workflow needs no Apple secret for a prerelease tag. Signing credentials are scoped only to signed-channel steps, so a preview build inherits no CSC or App Store Connect environment variable. It disables signing-identity discovery, creates only the two unsigned DMGs and their SHA-256 checksums, and marks the GitHub Release draft as a prerelease. Before publishing, replace every placeholder in its release notes, record the embedded Harness tag or commit, verify both downloads and checksums, and test the Gatekeeper instructions on a clean user account. Published preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
+The workflow forces signing, submits both preview architectures for notarization, verifies their Developer ID identities and stapled tickets, creates the two DMGs and their SHA-256 checksums, and marks the GitHub Release draft as a prerelease. Before publishing, replace every placeholder in its release notes, record the embedded Harness tag or commit, verify both downloads and checksums, and exercise every affected native capability from an installed artifact. Published preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
 
-Stable releases require the following encrypted GitHub Actions secrets:
-
-- `MACOS_CERTIFICATE_P12_BASE64` and `MACOS_CERTIFICATE_PASSWORD` for the Developer ID Application certificate.
-- `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` for App Store Connect notarization.
-
-Create the stable tag only after those credentials are configured:
+Create the stable tag after the same credential and artifact checks pass:
 
 ```sh
 git switch main
@@ -97,7 +97,7 @@ git tag -s desktop-v0.1.0 -m "DSH Desktop Mint 0.1.0"
 git push origin desktop-v0.1.0
 ```
 
-For a stable tag, [`desktop-release.yml`](../../.github/workflows/desktop-release.yml) requires code signing, submits each architecture for notarization, validates the stapled ticket, and uploads both DMGs, architecture ZIPs and blockmaps, one combined `latest-mac.yml`, and SHA-256 checksums to a draft GitHub Release. Drafts are invisible to installed clients. A maintainer tests both architectures and manually publishes the draft; publication is the action that activates signed automatic updates. Stable release notes must state the embedded Harness version plus any migration or compatibility requirement.
+For a stable tag, [`desktop-release.yml`](../../.github/workflows/desktop-release.yml) additionally uploads both architecture ZIPs and blockmaps plus one combined `latest-mac.yml` to the signed DMGs and SHA-256 checksums in the draft GitHub Release. Drafts are invisible to installed clients. A maintainer tests both architectures and manually publishes the draft; publication is the action that activates automatic updates. Stable release notes must state the embedded Harness version plus any migration or compatibility requirement.
 
 ## Development ownership
 

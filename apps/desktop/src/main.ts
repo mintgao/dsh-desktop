@@ -184,7 +184,7 @@ function initializeSignedUpdates(): void {
   }
 }
 
-/** Start credential-free release awareness for an unsigned prerelease. */
+/** Start manual release awareness for a prerelease channel. */
 async function initializeManualUpdates(): Promise<void> {
   const architecture = desktopArchitecture()
   const enabled = app.isPackaged && process.platform === 'darwin' && architecture !== undefined

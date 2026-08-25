@@ -10,7 +10,7 @@
 
 ## 决策
 
-经过签名的 macOS 稳定版使用 `electron-updater` 读取 `mintgao/dsh-desktop` 的公开 GitHub Releases。更新器只接受稳定版本，绝不自动下载；除非用户明确选择，否则普通退出时也绝不自动安装。源码构建与未打包构建没有更新源，用户手工执行命令时会看到相应说明。未签名预览版使用独立的[预览版手工更新提醒](2026-08-24-desktop-manual-preview-updates.zh.md)生命周期。
+经过签名的 macOS 稳定版使用 `electron-updater` 读取 `mintgao/dsh-desktop` 的公开 GitHub Releases。更新器只接受稳定版本，绝不自动下载；除非用户明确选择，否则普通退出时也绝不自动安装。源码构建与未打包构建没有更新源，用户手工执行命令时会看到相应说明。经过签名的预览版使用独立的[预览版手工更新提醒](2026-08-24-desktop-manual-preview-updates.zh.md)生命周期。
 
 ### 检查与用户决策
 
