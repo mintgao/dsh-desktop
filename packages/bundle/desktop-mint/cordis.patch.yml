@@ -1,0 +1,9 @@
+# DSH Desktop Mint product defaults over the shared Web bundle. Feature code
+# stays in independently disposable packages; this layer only selects and
+# configures the product's DSH plugins.
+
+- insert:
+    - id: ui-session-notifications
+      name: '@deepseek-ai/dsh-client-ui-session-notifications'
+      config:
+        defaultMode: background

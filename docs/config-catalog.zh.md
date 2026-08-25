@@ -438,6 +438,26 @@ export interface Config {
 
 来源：[`packages/client/hmr/src/index.ts:31`](../packages/client/hmr/src/index.ts)
 
+<a id="deepseek-aidsh-client-ui-session-notifications"></a>
+
+## `@deepseek-ai/dsh-client-ui-session-notifications`
+
+```ts config-catalog
+/** Deployment configuration shared by this package's Host and Client halves. */
+export type Config = SessionNotificationConfig
+
+/** Deployment configuration resolved before the Host and Client halves start. */
+export interface SessionNotificationConfig {
+  /** Initial user preference when the settings document has no saved value. */
+  defaultMode?: SessionNotificationMode
+}
+
+/** User-selected system-notification delivery policy. */
+export type SessionNotificationMode = typeof SESSION_NOTIFICATION_MODES[number]
+```
+
+来源：[`packages/client/ui-session-notifications/src/index.ts:20`](../packages/client/ui-session-notifications/src/index.ts)
+
 <a id="deepseek-aidsh-code-runtime-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-code-runtime-worker-thread`
@@ -3332,6 +3352,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-web`（[`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts)）
 - `@deepseek-ai/dsh-cmdline`（[`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts)）
 - `@deepseek-ai/dsh-code-runtime-python`（[`packages/code-runtime/code-runtime-python/src/index.ts`](../packages/code-runtime/code-runtime-python/src/index.ts)）
+- `@deepseek-ai/dsh-desktop-mint`（[`packages/bundle/desktop-mint/src/index.ts`](../packages/bundle/desktop-mint/src/index.ts)）
 - `@deepseek-ai/dsh-home-paths`（[`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts)）
 - `@deepseek-ai/dsh-hook-protocol`（[`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts)）
 - `@deepseek-ai/dsh-launch-environment`（[`packages/util/launch-environment/src/index.ts`](../packages/util/launch-environment/src/index.ts)）

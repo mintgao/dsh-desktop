@@ -8,6 +8,9 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000
 const DIAGNOSTIC_LIMIT = 8_000
 const READY_LINE = /^dsh web: (http:\/\/127\.0\.0\.1:\d+)(?:\s|$)/u
 
+/** Profile whose Bundle stack defines the DSH Desktop Mint product. */
+export const DESKTOP_PROFILE = 'desktop-mint'
+
 type BackendChild = ChildProcessByStdio<null, Readable, Readable>
 
 /** Information reported when a ready backend exits without a desktop shutdown request. */
@@ -49,6 +52,24 @@ export function parseBackendReadyUrl(line: string): string | undefined {
   const url = new URL(candidate)
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port === '') return undefined
   return url.href
+}
+
+/**
+ * Build the immutable launcher and Web arguments for the Mint backend.
+ * @param cliPath - absolute built dsh CLI entry.
+ * @param electronNodeMode - whether Electron must expose its Node entry mode.
+ * @returns argv passed to the backend executable.
+ */
+export function desktopBackendArguments(cliPath: string, electronNodeMode: boolean): string[] {
+  return [
+    ...(electronNodeMode ? ['--expose-internals'] : []),
+    cliPath,
+    '--profile',
+    DESKTOP_PROFILE,
+    '--no-open',
+    '--port',
+    '0',
+  ]
 }
 
 /** Convert arbitrary stream chunks into complete lines while retaining a trailing fragment. */
@@ -112,10 +133,9 @@ export class BackendSupervisor {
     return new Promise<string>((resolve, reject) => {
       const environment = { ...(this.options.environment ?? process.env) }
       if (this.options.electronNodeMode) environment.ELECTRON_RUN_AS_NODE = '1'
-      const runtimeArguments = this.options.electronNodeMode ? ['--expose-internals'] : []
       const child = spawn(
         this.options.executable,
-        [...runtimeArguments, this.options.cliPath, 'web', '--no-open', '--port', '0'],
+        desktopBackendArguments(this.options.cliPath, this.options.electronNodeMode),
         {
           cwd: this.options.cwd,
           env: environment,

@@ -660,6 +660,11 @@
         "@deepseek-ai/.+"
       ]
     },
+    "packages/bundle/desktop-mint": {
+      "ignoreDependencies": [
+        "@deepseek-ai/.+"
+      ]
+    },
     "packages/bundle/headless": {
       "ignoreDependencies": [
         "@deepseek-ai/dsh-code-runtime-worker-thread"

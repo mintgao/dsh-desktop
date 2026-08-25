@@ -38,9 +38,11 @@ ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desk
 
 ## 运行时行为
 
-Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh web --no-open --port 0`。它只接受官方的 `dsh web: http://127.0.0.1:<port>` 就绪行。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
+Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh --profile desktop-mint --no-open --port 0`。这个 Profile 会在用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 Mint 产品 Bundle。壳只接受官方的 `dsh web: http://127.0.0.1:<port>` 就绪行。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
 
 后端日志位于 `~/Library/Logs/DSH Desktop/backend.log`。外部 HTTP 与 HTTPS 链接会在系统浏览器中打开。同源应用导航留在 DSH 窗口内；新窗口与其他所有 scheme 均被拒绝。
+
+顶层任务及其所有 subagent 都结束运行后，Web 客户端会发送 macOS 原生通知。默认的**仅在后台**模式不会重复前台状态；也可以在**设置 > 常规 > 任务完成通知**中选择**关闭**或**始终通知**。点击通知会打开对应任务并聚焦已有窗口。通知权限继续由 macOS 管理。
 
 ## 更新
 

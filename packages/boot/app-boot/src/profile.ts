@@ -113,6 +113,11 @@ export function resolveProfileDir(name: string, home: string = resolveDshHome())
 /** The shipped profile templates auto-initialized on first use, by name. */
 export const PROFILE_TEMPLATES: Record<string, readonly string[]> = {
   web: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
+  'desktop-mint': [
+    '@deepseek-ai/dsh-base',
+    '@deepseek-ai/dsh-web-app',
+    '@deepseek-ai/dsh-desktop-mint',
+  ],
   headless: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'],
 }
 

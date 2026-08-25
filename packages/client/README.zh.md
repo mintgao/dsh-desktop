@@ -41,6 +41,7 @@ dsh web GUI 的浏览器侧：shell 启动、浏览器与宿主通信、共享 U
 | [`ui-agent-preset/`](ui-agent-preset/README.zh.md) | 选择会话的 agent 预设，并编写预设组合。 |
 | [`ui-settings/`](ui-settings/README.zh.md) | 承载设置界面及其扩展区域。 |
 | [`ui-settings-general/`](ui-settings-general/README.zh.md) | 提供常规设置分区。 |
+| [`ui-session-notifications/`](ui-session-notifications/README.zh.md) | 从共享会话列表发送任务结束系统通知。 |
 | [`ui-settings-models/`](ui-settings-models/README.zh.md) | 提供模型提供方配置与 DeepSeek 配置引导。 |
 | [`ui-settings-plugin-inventory/`](ui-settings-plugin-inventory/README.zh.md) | 向“插件”设置贡献只读的 Host Loader 清单标签页。 |
 

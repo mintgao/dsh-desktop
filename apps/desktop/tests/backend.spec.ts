@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { BackendSupervisor, parseBackendReadyUrl } from '../src/backend.ts'
+import {
+  BackendSupervisor, desktopBackendArguments, DESKTOP_PROFILE, parseBackendReadyUrl,
+} from '../src/backend.ts'
 
 const fixture = (name: string): string => fileURLToPath(new URL(`fixtures/${name}`, import.meta.url))
 
@@ -18,6 +20,16 @@ describe('parseBackendReadyUrl', () => {
 })
 
 describe('BackendSupervisor', () => {
+  it('boots the Mint product profile with fixed loopback Web arguments', () => {
+    expect(desktopBackendArguments('/app/dsh.js', true)).toEqual([
+      '--expose-internals', '/app/dsh.js', '--profile', DESKTOP_PROFILE,
+      '--no-open', '--port', '0',
+    ])
+    expect(desktopBackendArguments('/app/dsh.js', false)).toEqual([
+      '/app/dsh.js', '--profile', 'desktop-mint', '--no-open', '--port', '0',
+    ])
+  })
+
   it('recognizes a split readiness line and stops the child cleanly', async () => {
     const output: string[] = []
     const supervisor = new BackendSupervisor({
