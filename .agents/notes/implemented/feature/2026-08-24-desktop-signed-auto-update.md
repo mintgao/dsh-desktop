@@ -10,7 +10,7 @@ A self-contained DSH Desktop application cannot inherit a globally installed Har
 
 ## Decision
 
-Signed stable macOS builds use `electron-updater` against public GitHub Releases in `mintgao/dsh-desktop`. The updater accepts stable releases only, never downloads automatically, and never installs automatically on ordinary application quit unless the user selected that behavior. Source and unpackaged builds have no feed and explain that state when the manual command is used. Unsigned prereleases use the separate [manual preview release awareness](2026-08-24-desktop-manual-preview-updates.md) lifecycle.
+Signed stable macOS builds use `electron-updater` against public GitHub Releases in `mintgao/dsh-desktop`. The updater accepts stable releases only, never downloads automatically, and never installs automatically on ordinary application quit unless the user selected that behavior. Source and unpackaged builds have no feed and explain that state when the manual command is used. Signed prereleases use the separate [manual preview release awareness](2026-08-24-desktop-manual-preview-updates.md) lifecycle.
 
 ### Checks and user decisions
 

@@ -30,7 +30,7 @@ pnpm run desktop:app:mac
 
 每条命令都会执行官方客户端构建，打包当前本地 DSH 与 vendored 包，向隔离的资源目录安装选定运行时闭包，拒绝逃逸该目录的链接，再调用 electron-builder。因此，尚未发布的本地后端变更会进入应用，而不会被 npm 上的同版本替换。
 
-本地命令会关闭签名身份自动发现，而且绝不会生成受支持的公开版本。可以使用以下命令为当前用户安装本地 Apple Silicon 版本：
+本地命令会关闭签名身份自动发现，而且绝不会生成受支持的公开版本。Electron 43 无法从未签名或 ad-hoc 签名的应用发送 macOS 通知，因此本地产物不能验证任务通知或其他依赖稳定应用身份的原生能力；这些验收必须使用经过 Developer ID 签名与公证的产物。可以使用以下命令为当前用户安装本地 Apple Silicon 版本：
 
 ```sh
 ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desktop.app"
@@ -42,7 +42,7 @@ Electron 主进程以 Node 模式运行自己的可执行文件，带上应用�
 
 后端日志位于 `~/Library/Logs/DSH Desktop/backend.log`。外部 HTTP 与 HTTPS 链接会在系统浏览器中打开。同源应用导航留在 DSH 窗口内；新窗口与其他所有 scheme 均被拒绝。
 
-顶层任务及其所有 subagent 都结束运行后，Web 客户端会发送 macOS 原生通知。默认的**仅在后台**模式不会重复前台状态；也可以在**设置 > 常规 > 任务完成通知**中选择**关闭**或**始终通知**。点击通知会打开对应任务并聚焦已有窗口。通知权限继续由 macOS 管理。
+在经过 Developer ID 签名的公开应用中，顶层任务及其所有 subagent 都结束运行后，Web 客户端会发送 macOS 原生通知。默认的**仅在后台**模式不会重复前台状态；也可以在**设置 > 常规 > 任务完成通知**中选择**关闭**或**始终通知**。点击通知会打开对应任务并聚焦已有窗口。通知权限继续由 macOS 管理；未签名的本地构建无法发送这项通知。
 
 ## 更新
 
@@ -50,7 +50,7 @@ Electron 主进程以 Node 模式运行自己的可执行文件，带上应用�
 
 首次在后台发现某一版本时，客户端会发送一次原生通知并显示提醒徽标。点击通知或选择**前往 Release 下载**会打开经过校验的确切 Release 页面，并提示应下载 arm64 还是 x64 DMG。**明天提醒我**会把一次提醒推迟 24 小时，**跳过此版本**只会屏蔽当前版本，不会隐藏后续版本。这些选择与 GitHub ETag 保存在应用 user-data 目录，不会保存 GitHub 凭据。后台错误只写入桌面日志；手工检查失败时会提供公开 Releases 页面。
 
-预览版未签名，因此用户需要先退出 DSH Desktop，再用下载的 DMG 替换应用；若 Gatekeeper 阻止首次启动，应在 macOS **隐私与安全性**中按系统当前流程确认。设置、凭据、workspace 和会话仍保存在普通 DSH 主目录，不会随应用替换。预览版可以通过这条手工路径发现未来首个签名稳定版；手工安装该稳定版后，后续更新会切换到下述签名自动通道。
+预发布版本的 DMG 虽然已经过 Developer ID 签名与公证，仍使用手工安装。用户需要先退出 DSH Desktop，再用下载的 DMG 替换应用；设置、凭据、workspace 和会话仍保存在普通 DSH 主目录，不会随应用替换。预览版可以通过这条手工路径发现后续预览版或首个稳定版；手工安装该稳定版后，后续更新会切换到下述自动通道。
 
 经过签名的稳定版会在启动十秒后检查公开的稳定更新源，之后每六小时检查一次。发现新版本后绝不会静默下载。原生对话框提供 **Download Update**、**Later** 与 **View Release Notes**，应用菜单、Dock 和窗口会显示下载状态。通过签名校验的下载完成后，用户可以选择 **Restart and Install**、**Install on Quit** 或 **Later**。立即安装会先停止本地 DSH 后端，任何更新都不会强制应用重启。源码构建与未打包的开发构建仍保留菜单命令，但会说明无法检查公开更新。
 
@@ -68,11 +68,16 @@ renderer（渲染进程）启用沙箱、上下文隔离与 Web 安全，不启�
 
 [`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) 会在 Pull Request 与 `main` 上运行桌面测试、桌面构建、仓库类型检查和文档检查。手动打包冒烟测试会分别使用 GitHub 原生的 arm64 与 x64 macOS runner，并在接受任一应用 bundle 前通过发布的可执行文件加载打包后的 Electron 主进程。DeepSeek Harness 官方工作流保留仓库保护条件，不会在这个下游仓库分配其组织专用任务。
 
-## 预览版与签名发布
+## 预览版与稳定版发布
 
-桌面版本使用独立于根 Harness 包版本的语义化标签。`desktop-v0.2.0-preview.1` 这类预发布标签选择未签名预览通道，`desktop-v0.2.0` 这类稳定标签选择签名与公证通道。两条路径都从经过审查的 `main` 提交构建原生 arm64 与 x64 DMG，并创建 Release 草稿，由维护者决定何时发布。
+桌面版本使用独立于根 Harness 包版本的语义化标签。`desktop-v0.2.0-preview.1` 这类预发布标签选择手工预览通道，`desktop-v0.2.0` 这类稳定标签还会选择自动更新通道。两条路径都从经过审查的 `main` 提交构建经过 Developer ID 签名与公证的原生 arm64、x64 DMG，并创建 Release 草稿，由维护者决定何时发布。
 
-在尚未具备 Apple 凭据时，可以这样分享早期预览版：
+每个公开桌面标签都需要以下加密 GitHub Actions Secrets：
+
+- `MACOS_CERTIFICATE_P12_BASE64` 与 `MACOS_CERTIFICATE_PASSWORD`，用于 Developer ID Application 证书。
+- `APPLE_API_KEY_P8_BASE64`、`APPLE_API_KEY_ID` 与 `APPLE_API_ISSUER`，用于 App Store Connect 公证。
+
+配置这些凭据后创建预发布标签：
 
 ```sh
 git switch main
@@ -81,14 +86,9 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-预发布标签不需要 Apple Secret。签名凭据只作用于签名通道的步骤，因此预览构建不会继承任何 CSC 或 App Store Connect 环境变量。工作流会关闭签名身份发现，只生成两份未签名 DMG 与 SHA-256 校验和，并把 GitHub Release 草稿标为 Pre-release。发布前必须替换说明中的所有占位内容，记录内置 Harness 标签或提交，核对两份下载与校验和，并在干净用户账号中验证 Gatekeeper 指引。已发布的预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
+工作流会强制签名，分别提交两个预览架构进行公证，验证 Developer ID 身份与已装订票据，只生成两份 DMG 与 SHA-256 校验和，并把 GitHub Release 草稿标为 Pre-release。发布前必须替换说明中的所有占位内容，记录内置 Harness 标签或提交，核对两份下载与校验和，并从安装后的产物验证所有受影响的原生能力。已发布的预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
 
-稳定版需要以下加密 GitHub Actions Secrets：
-
-- `MACOS_CERTIFICATE_P12_BASE64` 与 `MACOS_CERTIFICATE_PASSWORD`，用于 Developer ID Application 证书。
-- `APPLE_API_KEY_P8_BASE64`、`APPLE_API_KEY_ID` 与 `APPLE_API_ISSUER`，用于 App Store Connect 公证。
-
-配置这些凭据后才能创建稳定标签：
+相同凭据与产物检查通过后创建稳定标签：
 
 ```sh
 git switch main
@@ -97,7 +97,7 @@ git tag -s desktop-v0.1.0 -m "DSH Desktop Mint 0.1.0"
 git push origin desktop-v0.1.0
 ```
 
-对于稳定标签，[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) 会强制执行代码签名，分别提交两种架构进行公证，验证已装订票据，再把两份 DMG、分架构 ZIP 与 blockmap、一份合并后的 `latest-mac.yml` 和 SHA-256 校验和上传至 GitHub Release 草稿。已安装客户端看不到草稿。维护者测试两种架构后手工发布；发布动作会启用签名自动更新。稳定版发布说明必须列出内置 Harness 版本以及迁移或兼容性要求。
+对于稳定标签，[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) 会在已经签名的 DMG 与 SHA-256 校验和之外，额外把分架构 ZIP、blockmap 和一份合并后的 `latest-mac.yml` 上传至 GitHub Release 草稿。已安装客户端看不到草稿。维护者测试两种架构后手工发布；发布动作会启用自动更新。稳定版发布说明必须列出内置 Harness 版本以及迁移或兼容性要求。
 
 ## 开发职责
 

@@ -1,6 +1,6 @@
 # DSH Desktop Mint __VERSION__
 
-This is an **unsigned preview** of the unofficial DSH Desktop distribution maintained by Mint. It is built on DeepSeek Harness and is not endorsed, cooperated with, or authorized by DeepSeek.
+This is a **code-signed and notarized preview** of the unofficial DSH Desktop distribution maintained by Mint. It is built on DeepSeek Harness and is not endorsed, cooperated with, or authorized by DeepSeek.
 
 ## Download for your Mac
 
@@ -11,10 +11,8 @@ This is an **unsigned preview** of the unofficial DSH Desktop distribution maint
 
 1. Quit DSH Desktop.
 2. Open the DMG for your Mac and drag **DSH Desktop** to **Applications**, replacing the previous copy when prompted.
-3. Because this preview is not signed or notarized, macOS may block its first launch. In **System Settings > Privacy & Security**, confirm that you trust this release before choosing **Open Anyway**. Never bypass the warning for a download whose tag, filename, and checksum do not match this page.
-4. Open DSH Desktop. Your ordinary `~/.dsh` settings, credentials, workspaces, and sessions stay outside the application bundle.
-
-See [Apple's guidance for safely opening Mac apps](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unidentified-developer-mh40616/mac) for the current macOS steps.
+3. Open DSH Desktop. Stop if macOS cannot verify its Developer ID signature or notarization ticket.
+4. Your ordinary `~/.dsh` settings, credentials, workspaces, and sessions stay outside the application bundle.
 
 ## Release information
 
@@ -27,13 +25,13 @@ See [Apple's guidance for safely opening Mac apps](https://support.apple.com/gui
 
 ---
 
-这是由 Mint 维护的非官方 DSH Desktop **未签名预览版**，基于 DeepSeek Harness 构建，未获得 DeepSeek 的背书、合作或授权。
+这是由 Mint 维护的非官方 DSH Desktop **已签名并公证的预览版**，基于 DeepSeek Harness 构建，未获得 DeepSeek 的背书、合作或授权。
 
 ## 选择适合本机的下载
 
 - Apple Silicon（M1、M2、M3、M4 或更新机型）：[DSH-Desktop-Mint-__VERSION__-arm64.dmg](https://github.com/mintgao/dsh-desktop/releases/download/desktop-v__VERSION__/DSH-Desktop-Mint-__VERSION__-arm64.dmg)
 - Intel：[DSH-Desktop-Mint-__VERSION__-x64.dmg](https://github.com/mintgao/dsh-desktop/releases/download/desktop-v__VERSION__/DSH-Desktop-Mint-__VERSION__-x64.dmg)
 
-安装更新前请退出 DSH Desktop，打开对应 DMG，把 **DSH Desktop** 拖入**应用程序**并替换旧版本。由于预览版未经签名或公证，macOS 可能阻止首次启动；请先核对本页标签、文件名与 `SHA256SUMS.txt`，仅在确认信任此版本后，前往**系统设置 > 隐私与安全性**选择**仍要打开**。应用外的普通 `~/.dsh` 设置、凭据、workspace 与会话不会被替换。
+安装更新前请退出 DSH Desktop，打开对应 DMG，把 **DSH Desktop** 拖入**应用程序**并替换旧版本。打开应用时，如果 macOS 无法验证 Developer ID 签名或公证票据，请停止使用该下载。应用外的普通 `~/.dsh` 设置、凭据、workspace 与会话不会被替换。
 
 发布前必须补齐上方 Release information 中的内置 Harness 修订、变更与迁移说明。本预览版只会提醒并引导用户打开确切 Release 页面，不会自行下载或安装更新。

@@ -70,4 +70,4 @@ Resolve conflicts on the sync branch, run checks matched to the changed files, a
 
 - State the user-visible result, list only checks actually run, and mark the affected Mac architectures in the pull request template.
 - Keep unrelated changes in separate pull requests. Update the owning documentation and Agent Note for every non-trivial code, process, or release decision.
-- Follow the [desktop application reference](apps/desktop/README.md) for local packages, unsigned preview releases, signed stable releases, and installed-client updates. Public artifacts come only from the tag-driven workflow and remain draft until a maintainer reviews the channel-appropriate DMGs, metadata, release notes, and checksums.
+- Follow the [desktop application reference](apps/desktop/README.md) for local packages, signed preview and stable releases, and installed-client updates. Public artifacts come only from the tag-driven workflow and remain draft until a maintainer reviews the channel-appropriate DMGs, metadata, release notes, and checksums.

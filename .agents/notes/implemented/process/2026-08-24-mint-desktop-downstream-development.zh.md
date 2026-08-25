@@ -18,7 +18,7 @@ Mint 项目在公开的 `mintgao/dsh-desktop` 仓库中保留完整的 DeepSeek 
 
 官方仓库自动触发的 CI、E2E、Issue 管理和包发布任务带有 `github.repository == 'deepseek-ai/deepseek-harness'` 条件。这样既保留它们的源码与上游行为，也能阻止下游仓库分配组织专用 runner、修改官方 Project 看板、消耗外部 API 凭据或发布官方包。[`desktop-ci.yml`](../../../../.github/workflows/desktop-ci.yml) 提供下游无密钥检查与显式双架构打包冒烟测试。
 
-桌面版本使用独立于 Harness npm 版本的不可变语义化 `desktop-v*` 标签。[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) 在原生 Apple Silicon runner 上构建 arm64，在原生 Intel runner 上构建 x64。带预发布后缀的标签选择预览路径：关闭签名身份发现，预览环境不含签名凭据，将草稿标记为 Pre-release，只包含两份未签名 DMG 与 SHA-256 校验和。稳定版 `desktop-vX.Y.Z` 标签要求 Developer ID Application 证书与 App Store Connect API key 凭据，仅在签名步骤中提供这些凭据，强制签名，分别提交两种架构进行公证，验证已装订票据，并增加两份更新 ZIP 与 blockmap 以及合并后的更新元数据。维护者测试相应产物后手工发布任一种草稿。发布预览版会启用手工 Release 提醒，发布稳定版会启用签名自动更新源。具体过渡方案记录在[预览版手工更新提醒](../feature/2026-08-24-desktop-manual-preview-updates.zh.md)。
+桌面版本使用独立于 Harness npm 版本的不可变语义化 `desktop-v*` 标签。[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) 在原生 Apple Silicon runner 上构建 arm64，在原生 Intel runner 上构建 x64。每个标签都要求 Developer ID Application 证书与 App Store Connect API key 凭据，强制签名，分别提交两种架构进行公证，验证应用身份与已装订票据，并创建 Release 草稿。预发布后缀会把草稿标记为 Pre-release，只包含两份 DMG 与 SHA-256 校验和；稳定版 `desktop-vX.Y.Z` 标签还会增加两份更新 ZIP、blockmap 与合并后的更新元数据。维护者从安装产物完成测试后，手工发布任一种草稿。发布预览版会启用手工 Release 提醒，发布稳定版会启用自动更新源。[公开桌面版签名](2026-08-25-signed-public-desktop-releases.zh.md)持有应用身份要求，[预览版手工更新提醒](../feature/2026-08-24-desktop-manual-preview-updates.zh.md)持有通道过渡。
 
 应用使用 `io.github.mintgao.dsh-desktop` 作为 bundle 标识符，使用 `DSH-Desktop-Mint-*` 作为产物前缀。Mint 浪花图标、根仓库声明、应用 README、安全政策、发布说明与仓库描述都会明确它是非官方发行版，同时保留真实的 DeepSeek Harness 归属说明。
 
@@ -30,12 +30,12 @@ Mint 项目在公开的 `mintgao/dsh-desktop` 仓库中保留完整的 DeepSeek 
 
 **通过云盘同步检出目录或 `node_modules`。** 文件同步可能在没有提交和审查的情况下合并不完整 Git 状态、原生编译模块、符号链接与被忽略的凭据。Git 分支与每台设备独立执行的不可变安装能让传递状态保持明确且可复现。
 
-**把未签名或 ad-hoc 签名的 DMG 当作稳定版发布。** 当 Mint 品牌需要建立明确发布者身份时，此类产物反而削弱身份与 Gatekeeper 预期。明确标记的预发布版本可以通过手工安装和校验和服务知情的早期测试者，但稳定通道与自动安装仍须等待 Developer ID 签名与公证。
+**把未签名或 ad-hoc 签名的 DMG 作为公开预览版。** 当 Mint 品牌需要建立明确发布者身份时，此类产物反而削弱身份与 Gatekeeper 预期，而且 Electron 会拒绝通知这类依赖应用身份的原生能力。本地开发可以使用此类产物，但每条公开通道都要求 Developer ID 签名与公证。
 
 ## 验证
 
-桌面源码测试、更新元数据测试、Electron 主进程构建、类型检查、文档门禁与原生 arm64、x64 打包冒烟测试覆盖普通变更。每条打包冒烟测试都会用内部 smoke 参数运行发布的可执行文件并加载打包后的主进程模块图，因此 ESM/CommonJS 互操作在 `app.asar` 内接受检查，而不是从 TypeScript 构建结果推断。工作流约定测试固定该产物检查、签名步骤的凭据作用域与预览步骤的无凭据环境。发布任务还会验证原生架构选择、必需 Secrets、代码签名、公证票据装订、DMG 评估、架构更新元数据、校验和与仅生成草稿的发布行为。定时上游任务只能证明可以提出源码合并与 Pull Request；普通 Pull Request 检查在合并前持有兼容性验证。
+桌面源码测试、更新元数据测试、Electron 主进程构建、类型检查、文档门禁与原生 arm64、x64 打包冒烟测试覆盖普通变更。每条打包冒烟测试都会用内部 smoke 参数运行发布的可执行文件并加载打包后的主进程模块图，因此 ESM/CommonJS 互操作在 `app.asar` 内接受检查，而不是从 TypeScript 构建结果推断。工作流约定测试固定该产物检查、两条通道的签名凭据、仅稳定版包含的更新资产与草稿发布。发布任务还会验证原生架构选择、必需 Secrets、Developer ID 签名、公证票据装订、DMG 评估、架构更新元数据、校验和与仅生成草稿的发布行为。定时上游任务只能证明可以提出源码合并与 Pull Request；普通 Pull Request 检查在合并前持有兼容性验证。
 
 ## 后果
 
-下游仓库仍然大于独立 Electron 客户端，自动提出的上游更新也可能因发布或工作流文件冲突而停止。两个原生 macOS 任务及其产物会增加发布时间和存储。Apple 凭据就绪前可以开始提供预览下载，但它们带有明确的 Gatekeeper 警告并要求知情用户手工替换；签名自动更新仍须等待维护者提供 Apple Developer 证书与 App Store Connect API key。一份 Git 历史仍可以跨设备承载桌面版与 Harness 迭代，上游发布可以被及时感知且不会绕过审查，官方基础设施不会意外运行。
+下游仓库仍然大于独立 Electron 客户端，自动提出的上游更新也可能因发布或工作流文件冲突而停止。两个原生 macOS 任务及签名、公证会增加发布时间和存储。Apple 凭据就绪前不能发布任何公开桌面通道；预览版仍要求知情用户手工替换，自动更新则仅属于稳定版。一份 Git 历史仍可以跨设备承载桌面版与 Harness 迭代，上游发布可以被及时感知且不会绕过审查，官方基础设施不会意外运行。
