@@ -38,9 +38,11 @@ ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desk
 
 ## Runtime behavior
 
-The Electron main process runs its own executable in Node mode with the packaged CLI and `dsh web --no-open --port 0`. It accepts only the official `dsh web: http://127.0.0.1:<port>` readiness line. The startup page remains visible until that line arrives; its Mint ocean scene moves the whale, water, bubbles, and progress current on separate timelines, while reduced-motion preference produces a static whale and progress state. Startup failure or an unexpected backend exit produces a native error dialog. Closing the last window stops the backend with `SIGTERM`, then uses `SIGKILL` after a bounded grace period if required. A second application launch focuses the existing window.
+The Electron main process runs its own executable in Node mode with the packaged CLI and `dsh --profile desktop-mint --no-open --port 0`. That Profile composes `dsh-base`, the shared Web Bundle, and the Mint product Bundle before its user patch. The shell accepts only the official `dsh web: http://127.0.0.1:<port>` readiness line. The startup page remains visible until that line arrives; its Mint ocean scene moves the whale, water, bubbles, and progress current on separate timelines, while reduced-motion preference produces a static whale and progress state. Startup failure or an unexpected backend exit produces a native error dialog. Closing the last window stops the backend with `SIGTERM`, then uses `SIGKILL` after a bounded grace period if required. A second application launch focuses the existing window.
 
 The backend log is `~/Library/Logs/DSH Desktop/backend.log`. External HTTP and HTTPS links open in the system browser. Same-origin application navigation stays inside the DSH window; new windows and all other schemes are denied.
+
+The Web client sends a native macOS notification after a top-level task and all of its subagents stop running. The default **Background only** mode avoids duplicating foreground status; **Settings > General > Task completion notifications** also offers **Off** and **Always**. Clicking the notification opens that task and focuses the existing window. Notification permission remains under macOS control.
 
 ## Updates
 
