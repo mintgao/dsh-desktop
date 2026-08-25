@@ -40,7 +40,7 @@ Immediate installation and install-on-quit use the same bounded backend shutdown
 
 ## Verification
 
-Controller tests snapshot the visible download and installation decision sequence and cover deferred re-entry, manual and background failures, scheduling, development-build feedback, and install-on-quit. Metadata tests cover deterministic two-architecture output plus version, file-hash, and missing-architecture rejection. The desktop TypeScript build keeps `electron-updater` as a packaged runtime dependency. Release CI additionally builds, signs, notarizes, and checks both native artifacts before it can create the draft. A complete update installation still requires two signed public releases and is therefore verified in release acceptance rather than a keyless source test.
+Controller tests snapshot the visible download and installation decision sequence and cover deferred re-entry, manual and background failures, scheduling, development-build feedback, and install-on-quit. Metadata tests cover deterministic two-architecture output plus version, file-hash, and missing-architecture rejection. The desktop TypeScript build keeps `electron-updater` as a packaged CommonJS runtime dependency, and both package-smoke paths use the shipped Electron executable to load the packaged main-process module graph before accepting an artifact. Release CI additionally builds, signs, notarizes, and checks both native artifacts before it can create the draft. A complete update installation still requires two signed public releases and is therefore verified in release acceptance rather than a keyless source test.
 
 ## Consequences
 

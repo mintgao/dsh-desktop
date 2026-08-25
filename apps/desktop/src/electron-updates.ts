@@ -1,12 +1,14 @@
-/** Adapt electron-updater to the desktop update controller. */
+/** Adapt the CommonJS electron-updater package to the desktop update controller. */
 
-import { autoUpdater, type AppUpdater, type ProgressInfo, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater'
+import electronUpdater, { type AppUpdater, type ProgressInfo, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater'
 import type {
   DesktopUpdateDriver,
   DesktopUpdateDriverListeners,
   DesktopUpdateInfo,
   DesktopUpdateProgress,
 } from './updates.ts'
+
+const { autoUpdater } = electronUpdater
 
 /** Severity and text sink for updater diagnostics. */
 export type DesktopUpdateLog = (level: 'info' | 'warn' | 'error', message: string) => void

@@ -81,5 +81,10 @@ jobs:
       - name: Build unsigned local application
         run: pnpm run desktop:app:mac:${{ matrix.arch }}
 
-      - name: Verify application bundle exists
-        run: test -n "$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
+      - name: Smoke packaged updater module
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
+          test -n "$app_path"
+          "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke

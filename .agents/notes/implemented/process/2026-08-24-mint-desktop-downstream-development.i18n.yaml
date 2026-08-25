@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md
-2026-08-24-mint-desktop-downstream-development.md: b98bc46339af903d9b938bfc0bbd477fd5c02973
-2026-08-24-mint-desktop-downstream-development.zh.md: 18b9f03c4b64c1133038fd79286b961e855aacbf
+2026-08-24-mint-desktop-downstream-development.md: cbad7c6707750df963d6c257d5d3ff1c31c57685
+2026-08-24-mint-desktop-downstream-development.zh.md: b9a2c47c0da429ef1661bf52ad7b1f6795fbee98

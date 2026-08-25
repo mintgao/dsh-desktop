@@ -15,6 +15,7 @@ describe('desktop release workflow', () => {
     const secretStep = namedStep(buildSteps, 'Validate signing secrets')
     const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
     const packageStep = namedStep(buildSteps, 'Build, sign, and notarize DMG and update ZIP')
+    const packageSmokeStep = namedStep(buildSteps, 'Smoke packaged updater module')
     const metadataStep = namedStep(draftSteps, 'Merge architecture update metadata')
     const releaseStep = namedStep(draftSteps, 'Create signed draft release')
 
@@ -37,6 +38,8 @@ describe('desktop release workflow', () => {
       APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
     })
     expect(packageStep.run).toContain('--mac dmg zip')
+    expect(String(packageSmokeStep.run)).toContain('Contents/MacOS/DSH Desktop')
+    expect(String(packageSmokeStep.run)).toContain('--dsh-package-smoke')
     expect(String(metadataStep.run)).toContain('latest-mac-arm64.yml')
     expect(String(metadataStep.run)).toContain('latest-mac-x64.yml')
     expect(String(releaseStep.run)).toContain('release-assets/latest-mac.yml')
@@ -64,6 +67,23 @@ describe('desktop release workflow', () => {
     expect(String(previewRelease.run)).toContain('--prerelease')
     expect(String(previewRelease.run)).toContain('--draft')
     expect(String(previewRelease.run)).not.toContain('latest-mac.yml')
+  })
+
+  it('loads the updater adapter from both native package-smoke artifacts', () => {
+    const workflow = workflowDocument('.github/workflows/desktop-ci.yml')
+    const smokeJob = workflowJob(workflow, 'package-smoke')
+    const smokeStep = namedStep(workflowSteps(smokeJob), 'Smoke packaged updater module')
+
+    expect(smokeJob.strategy).toMatchObject({
+      matrix: {
+        include: [
+          { arch: 'arm64', runner: 'macos-15' },
+          { arch: 'x64', runner: 'macos-15-intel' },
+        ],
+      },
+    })
+    expect(String(smokeStep.run)).toContain('Contents/MacOS/DSH Desktop')
+    expect(String(smokeStep.run)).toContain('--dsh-package-smoke')
   })
 })
 
