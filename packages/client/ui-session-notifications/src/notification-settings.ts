@@ -31,13 +31,13 @@ export interface ResolvedSessionNotificationConfig {
 
 /**
  * Resolve the reusable plugin's safe default before either runtime face starts.
- * @param config - validated composition input.
+ * @param config - validated Host input, or omitted Client boot input.
  * @returns complete notification deployment configuration.
  */
 export function resolveSessionNotificationConfig(
-  config: SessionNotificationConfig,
+  config: SessionNotificationConfig | undefined,
 ): ResolvedSessionNotificationConfig {
-  return { defaultMode: config.defaultMode ?? DEFAULT_SESSION_NOTIFICATION_MODE }
+  return { defaultMode: config?.defaultMode ?? DEFAULT_SESSION_NOTIFICATION_MODE }
 }
 
 /** Durable session-notification section shared by the Host schema and browser scope. */

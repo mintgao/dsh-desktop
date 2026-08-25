@@ -49,9 +49,9 @@ export const inject = ['slots', 'locale', 'sessions', 'settingsScope']
  * Observe the shared session list, present task-completion system notifications,
  * and register this feature's General settings row.
  * @param ctx - client Cordis context.
- * @param config - composition-selected initial notification preference.
+ * @param config - optional local fallback; Host settings carry the product default.
  */
-export function apply(ctx: ClientContext, config: SessionNotificationConfig): void {
+export function apply(ctx: ClientContext, config: SessionNotificationConfig = {}): void {
   const resolved = resolveSessionNotificationConfig(config)
   const settings = ctx.settingsScope.bind<SessionNotificationSettings>({
     namespace: SESSION_NOTIFICATION_SETTINGS_NAMESPACE,
