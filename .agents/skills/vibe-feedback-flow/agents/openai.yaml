@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vibe Feedback Flow"
+  short_description: "Review and safely report Vibe Kit gaps"
+  default_prompt: "Use $vibe-feedback-flow to turn this Vibe Kit friction into a sanitized local report."

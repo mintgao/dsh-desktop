@@ -1,0 +1,2339 @@
+#!/usr/bin/env python3
+"""Vibe Kit: install and operate the repository-scoped development workflow."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import platform
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from typing import Dict, List, Optional, Sequence, Tuple
+import zipfile
+
+
+AGENTS_START = "<!-- vibe-kit:managed:start -->"
+AGENTS_END = "<!-- vibe-kit:managed:end -->"
+MANIFEST_PATH = Path(".vibe/manifest.json")
+INSTALLED_VERSION_PATH = Path(".vibe/version")
+VERIFY_ORDER = ("lint", "typecheck", "test", "build")
+FEEDBACK_ROOT = Path(".vibe/local/feedback")
+FEEDBACK_CONFIG_PATH = Path(".vibe/core/feedback.json")
+FEEDBACK_SCHEMA_VERSION = 1
+RELEASE_MANIFEST_SCHEMA = 1
+RELEASE_STATUSES = ("release-candidate-unpublished", "prerelease")
+RELEASE_ARCHIVE_MAX_FILES = 5000
+RELEASE_ARCHIVE_MAX_FILE_SIZE = 2 * 1024 * 1024
+RELEASE_ARCHIVE_MAX_TOTAL_SIZE = 20 * 1024 * 1024
+FEEDBACK_KINDS = ("bug", "workflow-gap", "documentation", "compatibility", "enhancement")
+FEEDBACK_SEVERITIES = ("low", "medium", "high", "critical")
+FEEDBACK_CONFIDENCE = ("low", "medium", "high")
+SEVERITY_RANK = {value: index for index, value in enumerate(FEEDBACK_SEVERITIES)}
+
+SECRET_PATTERNS = (
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----", re.IGNORECASE),
+    re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"),
+    re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b"),
+    re.compile(r"\b(?:AKIA|ASIA|AIDA|AROA|AIPA|ANPA|ANVA|ASCA)[A-Z0-9]{16}\b"),
+    re.compile(r"\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
+    re.compile(r"\bnpm_[A-Za-z0-9]{36,}\b"),
+    re.compile(r"\bpypi-[A-Za-z0-9_-]{40,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
+    re.compile(r"\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bSK[0-9a-fA-F]{32}\b"),
+    re.compile(
+        r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"
+    ),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(
+        r"\b(?:authorization|api[_ -]?key|access[_ -]?token|password|secret)"
+        r"\s*[:=]\s*\S+",
+        re.IGNORECASE,
+    ),
+)
+
+
+class VibeError(RuntimeError):
+    """A user-facing CLI error."""
+
+
+class RemoteFeedbackError(RuntimeError):
+    """A recoverable remote feedback operation failure."""
+
+
+def source_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def framework_version(root: Path) -> str:
+    path = root / ".vibe/core/version"
+    if not path.is_file():
+        raise VibeError(f"Framework version is missing: {path}")
+    return path.read_text(encoding="utf-8").strip()
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def atomic_write_text(path: Path, content: str, mode: Optional[int] = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", dir=str(path.parent), delete=False
+    ) as handle:
+        handle.write(content)
+        temporary = Path(handle.name)
+    if mode is not None:
+        os.chmod(temporary, mode)
+    os.replace(temporary, path)
+
+
+def atomic_write_bytes(path: Path, content: bytes, mode: Optional[int] = None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("wb", dir=str(path.parent), delete=False) as handle:
+        handle.write(content)
+        temporary = Path(handle.name)
+    if mode is not None:
+        os.chmod(temporary, mode)
+    os.replace(temporary, path)
+
+
+def atomic_copy(source: Path, target: Path) -> None:
+    if source.resolve() == target.resolve():
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("wb", dir=str(target.parent), delete=False) as handle:
+        temporary = Path(handle.name)
+        with source.open("rb") as incoming:
+            shutil.copyfileobj(incoming, handle)
+    shutil.copymode(source, temporary)
+    os.replace(temporary, target)
+
+
+def atomic_write_json(path: Path, value: object) -> None:
+    atomic_write_text(
+        path,
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    )
+
+
+def managed_source_files(root: Path) -> List[Path]:
+    files: List[Path] = []
+    explicit = root / "bin/vibe"
+    if explicit.is_file():
+        files.append(explicit)
+
+    core = root / ".vibe/core"
+    if core.is_dir():
+        files.extend(path for path in core.rglob("*") if path.is_file())
+
+    agents = root / ".codex/agents"
+    if agents.is_dir():
+        files.extend(path for path in agents.glob("vibe-*.toml") if path.is_file())
+
+    skills = root / ".agents/skills"
+    if skills.is_dir():
+        for directory in skills.glob("vibe-*"):
+            if directory.is_dir():
+                files.extend(path for path in directory.rglob("*") if path.is_file())
+
+    unique = {path.relative_to(root): path for path in files}
+    return [unique[key] for key in sorted(unique, key=lambda item: item.as_posix())]
+
+
+def extract_agents_block(text: str) -> Optional[str]:
+    start_count = text.count(AGENTS_START)
+    end_count = text.count(AGENTS_END)
+    if start_count == 0 and end_count == 0:
+        return None
+    if start_count != 1 or end_count != 1:
+        raise VibeError("AGENTS.md has malformed Vibe Kit managed markers.")
+    start = text.index(AGENTS_START)
+    end = text.index(AGENTS_END, start) + len(AGENTS_END)
+    return text[start:end]
+
+
+def incoming_agents_block(root: Path) -> str:
+    source = root / "AGENTS.md"
+    if not source.is_file():
+        raise VibeError(f"Framework AGENTS.md is missing: {source}")
+    block = extract_agents_block(source.read_text(encoding="utf-8"))
+    if block is None:
+        raise VibeError("Framework AGENTS.md does not contain managed markers.")
+    return block
+
+
+def merge_agents_text(current: str, incoming_block: str) -> str:
+    current_block = extract_agents_block(current)
+    if current_block is None:
+        if not current.strip():
+            return incoming_block + "\n\n"
+        return incoming_block + "\n\n" + current.lstrip()
+    return current.replace(current_block, incoming_block, 1)
+
+
+def json_scalar(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def detect_package_manager(target: Path) -> str:
+    if (target / "pnpm-lock.yaml").exists():
+        return "pnpm"
+    if (target / "yarn.lock").exists():
+        return "yarn"
+    if (target / "bun.lockb").exists() or (target / "bun.lock").exists():
+        return "bun"
+    return "npm"
+
+
+def js_script_command(manager: str, script: str) -> str:
+    if manager == "npm":
+        return f"npm run {script}"
+    if manager == "bun":
+        return f"bun run {script}"
+    return f"{manager} {script}"
+
+
+def detect_project(target: Path) -> Tuple[str, str, Dict[str, str]]:
+    language = "Unknown"
+    framework = "Unknown"
+    commands = {"install": "", "lint": "", "typecheck": "", "test": "", "build": ""}
+
+    package_path = target / "package.json"
+    if package_path.is_file():
+        language = "TypeScript" if (target / "tsconfig.json").exists() else "JavaScript"
+        framework = "Node.js"
+        try:
+            package = json.loads(package_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            package = {}
+        dependencies: Dict[str, object] = {}
+        for key in ("dependencies", "devDependencies", "peerDependencies"):
+            value = package.get(key, {}) if isinstance(package, dict) else {}
+            if isinstance(value, dict):
+                dependencies.update(value)
+        if "next" in dependencies:
+            framework = "Next.js"
+        elif "nuxt" in dependencies:
+            framework = "Nuxt"
+        elif "@sveltejs/kit" in dependencies:
+            framework = "SvelteKit"
+        elif "vite" in dependencies:
+            framework = "Vite"
+        elif "react" in dependencies:
+            framework = "React"
+        elif "vue" in dependencies:
+            framework = "Vue"
+
+        manager = detect_package_manager(target)
+        if manager == "pnpm":
+            commands["install"] = "pnpm install --frozen-lockfile"
+        elif manager == "yarn":
+            commands["install"] = "yarn install --frozen-lockfile"
+        elif manager == "bun":
+            commands["install"] = "bun install --frozen-lockfile"
+        elif (target / "package-lock.json").exists():
+            commands["install"] = "npm ci"
+        else:
+            commands["install"] = "npm install"
+
+        scripts = package.get("scripts", {}) if isinstance(package, dict) else {}
+        if isinstance(scripts, dict):
+            for key in VERIFY_ORDER:
+                if key in scripts:
+                    commands[key] = js_script_command(manager, key)
+            if not commands["typecheck"] and "check" in scripts:
+                commands["typecheck"] = js_script_command(manager, "check")
+        return language, framework, commands
+
+    pyproject = target / "pyproject.toml"
+    requirements = target / "requirements.txt"
+    if pyproject.is_file() or requirements.is_file() or (target / "setup.py").is_file():
+        language = "Python"
+        framework = "Python"
+        evidence = ""
+        for path in (pyproject, requirements):
+            if path.is_file():
+                evidence += path.read_text(encoding="utf-8", errors="ignore").lower()
+        if "django" in evidence:
+            framework = "Django"
+        elif "fastapi" in evidence:
+            framework = "FastAPI"
+        elif "flask" in evidence:
+            framework = "Flask"
+        if "ruff" in evidence:
+            commands["lint"] = "ruff check ."
+        if "mypy" in evidence:
+            commands["typecheck"] = "mypy ."
+        if "pytest" in evidence or (target / "pytest.ini").exists():
+            commands["test"] = "pytest"
+        return language, framework, commands
+
+    if (target / "Cargo.toml").is_file():
+        return "Rust", "Cargo", {
+            "install": "",
+            "lint": "cargo fmt --check",
+            "typecheck": "cargo check",
+            "test": "cargo test",
+            "build": "cargo build",
+        }
+    if (target / "go.mod").is_file():
+        return "Go", "Go modules", {
+            "install": "go mod download",
+            "lint": "gofmt -l .",
+            "typecheck": "go vet ./...",
+            "test": "go test ./...",
+            "build": "go build ./...",
+        }
+    if (target / "Package.swift").is_file():
+        return "Swift", "Swift Package Manager", {
+            "install": "swift package resolve",
+            "lint": "",
+            "typecheck": "",
+            "test": "swift test",
+            "build": "swift build",
+        }
+    return language, framework, commands
+
+
+def project_yaml(
+    target: Path, lifecycle: str, name: Optional[str] = None
+) -> Tuple[str, str, str]:
+    language, framework, commands = detect_project(target)
+    project_name = name or target.resolve().name
+    lines = [
+        "schema_version: 1",
+        "project:",
+        f"  name: {json_scalar(project_name)}",
+        f"  lifecycle: {json_scalar(lifecycle)}",
+        "stack:",
+        f"  language: {json_scalar(language)}",
+        f"  framework: {json_scalar(framework)}",
+        "commands:",
+    ]
+    for key in ("install",) + VERIFY_ORDER:
+        lines.append(f"  {key}: {json_scalar(commands.get(key, ''))}")
+    lines.extend(("feedback:", '  mode: "ask"'))
+    return "\n".join(lines) + "\n", language, framework
+
+
+def render_template(source: Path, replacements: Dict[str, str]) -> str:
+    content = source.read_text(encoding="utf-8")
+    for key, value in replacements.items():
+        content = content.replace("{{" + key + "}}", value)
+    return content
+
+
+def ensure_project_owned_files(
+    source: Path,
+    target: Path,
+    lifecycle: str,
+    name: Optional[str],
+) -> List[Path]:
+    created: List[Path] = []
+    yaml_content, language, framework = project_yaml(target, lifecycle, name)
+    project_config = target / ".vibe/project.yaml"
+    if not project_config.exists():
+        atomic_write_text(project_config, yaml_content)
+        created.append(project_config)
+
+    rules = target / ".vibe/project-rules.md"
+    if not rules.exists():
+        atomic_copy(source / "templates/project/project-rules.md", rules)
+        created.append(rules)
+
+    replacements = {"LANGUAGE": language, "FRAMEWORK": framework}
+    for filename in ("product.md", "architecture.md", "design-system.md"):
+        destination = target / "docs/context" / filename
+        if not destination.exists():
+            content = render_template(source / "templates/context" / filename, replacements)
+            atomic_write_text(destination, content)
+            created.append(destination)
+
+    work_index = target / "docs/work-items/index.md"
+    if not work_index.exists():
+        atomic_write_text(
+            work_index,
+            "# Work items\n\nCreate one with `./bin/vibe work-item <slug> --size M`.\n",
+        )
+        created.append(work_index)
+    decision_index = target / "docs/decisions/index.md"
+    if not decision_index.exists():
+        atomic_write_text(
+            decision_index,
+            "# Decision records\n\nRecord durable architectural choices here when the tradeoff matters beyond one work item.\n",
+        )
+        created.append(decision_index)
+    return created
+
+
+def write_manifest(
+    target: Path,
+    version: str,
+    managed_hashes: Dict[str, str],
+    agents_block_hash: str,
+) -> None:
+    manifest = {
+        "schema_version": 1,
+        "framework_version": version,
+        "managed_files": dict(sorted(managed_hashes.items())),
+        "agents_block_hash": agents_block_hash,
+    }
+    atomic_write_text(
+        target / MANIFEST_PATH,
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+    )
+    atomic_write_text(target / INSTALLED_VERSION_PATH, version + "\n")
+
+
+def load_manifest(target: Path) -> Dict[str, object]:
+    path = target / MANIFEST_PATH
+    if not path.is_file():
+        raise VibeError(f"Vibe Kit is not installed: {path} is missing.")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        raise VibeError(f"Cannot read manifest {path}: {error}") from error
+    if not isinstance(data.get("managed_files"), dict):
+        raise VibeError(f"Invalid managed file manifest: {path}")
+    return data
+
+
+def read_version_file(path: Path) -> Tuple[Optional[str], str]:
+    if not path.is_file():
+        return None, "<missing>"
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError) as error:
+        return None, f"<unreadable: {error}>"
+    if not value:
+        return None, "<empty>"
+    return value, value
+
+
+def read_manifest_for_doctor(
+    target: Path,
+) -> Tuple[Optional[Dict[str, object]], Optional[str], str]:
+    path = target / MANIFEST_PATH
+    if not path.is_file():
+        return None, None, "<missing>"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeError) as error:
+        return None, None, f"<unreadable: {error}>"
+    if not isinstance(data, dict):
+        return None, None, "<invalid: expected JSON object>"
+    raw_version = data.get("framework_version")
+    if raw_version is None:
+        return data, None, "<missing>"
+    value = str(raw_version).strip()
+    if not value:
+        return data, None, "<empty>"
+    return data, value, value
+
+
+def version_integrity(
+    target: Path, manifest_version: Optional[str], manifest_display: str
+) -> Tuple[bool, str]:
+    installed, installed_display = read_version_file(target / INSTALLED_VERSION_PATH)
+    core, core_display = read_version_file(target / ".vibe/core/version")
+    values = (installed, manifest_version, core)
+    if all(value is not None for value in values) and len(set(values)) == 1:
+        return True, str(installed)
+
+    quoted_target = shlex.quote(str(target))
+    quoted_cli = shlex.quote(str(target / "bin/vibe"))
+    diagnostic = "\n".join(
+        (
+            "Vibe Kit version integrity failed:",
+            f"  .vibe/version: {installed_display}",
+            f"  manifest.framework_version: {manifest_display}",
+            f"  .vibe/core/version: {core_display}",
+            "Repair from the trusted Vibe Kit checkout for the version you intend to install:",
+            f"  /path/to/vibe-kit/bin/vibe upgrade {quoted_target}",
+            "Then rerun:",
+            f"  {quoted_cli} doctor {quoted_target}",
+        )
+    )
+    return False, diagnostic
+
+
+def install(command: str, target: Path, name: Optional[str]) -> int:
+    source = source_root()
+    version = framework_version(source)
+    target = target.resolve()
+    if command == "adopt" and (not target.is_dir() or not any(target.iterdir())):
+        raise VibeError("adopt requires a non-empty existing project; use init instead.")
+    target.mkdir(parents=True, exist_ok=True)
+    if (target / MANIFEST_PATH).exists():
+        raise VibeError("Vibe Kit is already installed; use upgrade instead.")
+
+    files = managed_source_files(source)
+    if not files:
+        raise VibeError("No managed framework files were found in the source checkout.")
+    collisions: List[str] = []
+    for incoming in files:
+        relative = incoming.relative_to(source)
+        existing = target / relative
+        if existing.exists() and existing.resolve() != incoming.resolve():
+            if not existing.is_file() or sha256(existing) != sha256(incoming):
+                collisions.append(relative.as_posix())
+    agents_path = target / "AGENTS.md"
+    if agents_path.exists():
+        extract_agents_block(agents_path.read_text(encoding="utf-8"))
+    if collisions:
+        joined = "\n  - ".join(collisions)
+        raise VibeError(
+            "Installation stopped before making changes because managed paths already exist:\n"
+            f"  - {joined}\nMove or rename them, then retry."
+        )
+
+    for incoming in files:
+        atomic_copy(incoming, target / incoming.relative_to(source))
+
+    block = incoming_agents_block(source)
+    current_agents = agents_path.read_text(encoding="utf-8") if agents_path.exists() else ""
+    atomic_write_text(agents_path, merge_agents_text(current_agents, block))
+    lifecycle = "new" if command == "init" else "existing"
+    created = ensure_project_owned_files(source, target, lifecycle, name)
+
+    managed_hashes = {
+        incoming.relative_to(source).as_posix(): sha256(target / incoming.relative_to(source))
+        for incoming in files
+    }
+    write_manifest(target, version, managed_hashes, sha256_text(block))
+    print(f"Vibe Kit {version} {command} complete: {target}")
+    print(f"Managed files installed: {len(managed_hashes)}")
+    print(f"Project-owned files created: {len(created)}")
+    print("Start a new Codex task so AGENTS.md and repository skills are loaded.")
+    if command == "adopt":
+        print("Next: ask Codex to run $vibe-project-onboarding for this repository.")
+    return 0
+
+
+PROJECT_OWNED_INSTALL_PATHS = (
+    ".vibe/project.yaml",
+    ".vibe/project-rules.md",
+    "docs/context/product.md",
+    "docs/context/architecture.md",
+    "docs/context/design-system.md",
+    "docs/work-items/index.md",
+    "docs/decisions/index.md",
+)
+
+
+def plan_entry(action: str, relative: str, note: str = "") -> Dict[str, str]:
+    return {"action": action, "path": relative, "note": note}
+
+
+def install_plan(operation: str, target: Path) -> Tuple[List[Dict[str, str]], str, str]:
+    source = source_root()
+    target = target.resolve()
+    version = framework_version(source)
+    if target.exists() and not target.is_dir():
+        raise VibeError(f"target is not a directory: {target}")
+    if operation == "adopt" and (
+        not target.is_dir() or not any(target.iterdir())
+    ):
+        raise VibeError("adopt requires a non-empty existing project; use init instead.")
+    if (target / MANIFEST_PATH).exists():
+        raise VibeError("Vibe Kit is already installed; use plan upgrade instead.")
+
+    entries: List[Dict[str, str]] = []
+    for incoming in managed_source_files(source):
+        relative = incoming.relative_to(source).as_posix()
+        existing = target / relative
+        if not existing.exists():
+            entries.append(plan_entry("create", relative, "framework-managed"))
+        elif existing.is_file() and sha256(existing) == sha256(incoming):
+            entries.append(plan_entry("no-op", relative, "identical managed content"))
+        else:
+            entries.append(plan_entry("conflict", relative, "managed path already exists"))
+
+    agents_path = target / "AGENTS.md"
+    incoming_block = incoming_agents_block(source)
+    if not agents_path.exists():
+        entries.append(plan_entry("create", "AGENTS.md", "managed block"))
+    elif not agents_path.is_file():
+        entries.append(plan_entry("conflict", "AGENTS.md", "path is not a file"))
+    else:
+        current = agents_path.read_text(encoding="utf-8")
+        current_block = extract_agents_block(current)
+        merged = merge_agents_text(current, incoming_block)
+        action = "no-op" if merged == current else "update"
+        note = "managed block already current" if action == "no-op" else "merge managed block; preserve project instructions"
+        entries.append(plan_entry(action, "AGENTS.md", note))
+
+    for relative in PROJECT_OWNED_INSTALL_PATHS:
+        action = "preserve" if (target / relative).exists() else "create"
+        entries.append(plan_entry(action, relative, "project-owned"))
+    for relative in (MANIFEST_PATH.as_posix(), INSTALLED_VERSION_PATH.as_posix()):
+        action = "update" if (target / relative).exists() else "create"
+        entries.append(plan_entry(action, relative, "installation state"))
+    return entries, "<not installed>", version
+
+
+def upgrade_plan(target: Path) -> Tuple[List[Dict[str, str]], str, str]:
+    source = source_root()
+    target = target.resolve()
+    manifest = load_manifest(target)
+    version = framework_version(source)
+    previous = {str(key): str(value) for key, value in manifest["managed_files"].items()}
+    incoming_files = managed_source_files(source)
+    incoming_by_relative = {
+        path.relative_to(source).as_posix(): path for path in incoming_files
+    }
+    entries: List[Dict[str, str]] = []
+
+    for relative, incoming in incoming_by_relative.items():
+        destination = target / relative
+        incoming_hash = sha256(incoming)
+        recorded_hash = previous.get(relative)
+        if not destination.exists():
+            entries.append(plan_entry("create", relative, "missing managed file"))
+            continue
+        if not destination.is_file():
+            entries.append(plan_entry("conflict", relative, "managed path is not a file"))
+            continue
+        current_hash = sha256(destination)
+        if recorded_hash is None and current_hash != incoming_hash:
+            entries.append(plan_entry("conflict", relative, "untracked managed path differs"))
+        elif (
+            recorded_hash is not None
+            and current_hash != recorded_hash
+            and incoming_hash != recorded_hash
+            and current_hash != incoming_hash
+        ):
+            entries.append(plan_entry("conflict", relative, "local and incoming content both changed"))
+        elif (
+            recorded_hash is not None
+            and current_hash != recorded_hash
+            and incoming_hash == recorded_hash
+        ):
+            entries.append(plan_entry("preserve", relative, "local modification; source unchanged"))
+        elif current_hash == incoming_hash:
+            entries.append(plan_entry("no-op", relative, "already matches target release"))
+        else:
+            entries.append(plan_entry("update", relative, "managed release change"))
+
+    for relative in sorted(set(previous) - set(incoming_by_relative)):
+        entries.append(plan_entry("preserve", relative, "stale managed path; manual review"))
+
+    agents_path = target / "AGENTS.md"
+    incoming_block = incoming_agents_block(source)
+    recorded_block_hash = str(manifest.get("agents_block_hash", ""))
+    if not agents_path.exists():
+        entries.append(plan_entry("create", "AGENTS.md", "missing managed block"))
+    elif not agents_path.is_file():
+        entries.append(plan_entry("conflict", "AGENTS.md", "path is not a file"))
+    else:
+        current_text = agents_path.read_text(encoding="utf-8")
+        current_block = extract_agents_block(current_text)
+        current_hash = sha256_text(current_block) if current_block is not None else ""
+        incoming_hash = sha256_text(incoming_block)
+        if recorded_block_hash and (
+            current_hash != recorded_block_hash
+            and incoming_hash != recorded_block_hash
+            and current_hash != incoming_hash
+        ):
+            entries.append(plan_entry("conflict", "AGENTS.md", "local and incoming managed block both changed"))
+        elif not recorded_block_hash and current_block is not None and current_hash != incoming_hash:
+            entries.append(plan_entry("conflict", "AGENTS.md", "untracked managed block differs"))
+        elif recorded_block_hash and current_hash != recorded_block_hash and incoming_hash == recorded_block_hash:
+            entries.append(plan_entry("preserve", "AGENTS.md", "local managed-block modification; source unchanged"))
+        else:
+            merged = merge_agents_text(current_text, incoming_block)
+            action = "no-op" if merged == current_text else "update"
+            entries.append(plan_entry(action, "AGENTS.md", "managed block"))
+
+    current_version = str(manifest.get("framework_version", "<unknown>"))
+    for relative in (MANIFEST_PATH.as_posix(), INSTALLED_VERSION_PATH.as_posix()):
+        path = target / relative
+        expected_version = version + "\n" if relative == INSTALLED_VERSION_PATH.as_posix() else None
+        if expected_version is not None and path.is_file() and path.read_text(encoding="utf-8") == expected_version:
+            action = "no-op"
+        else:
+            action = "update"
+        entries.append(plan_entry(action, relative, "installation state"))
+    return entries, current_version, version
+
+
+def print_plan(operation: str, target: Path, entries: Sequence[Dict[str, str]], current: str, target_version: str) -> int:
+    conflicts = [entry for entry in entries if entry["action"] == "conflict"]
+    print(f"Vibe Kit plan: {operation}")
+    print(f"Target: {target.resolve()}")
+    print(f"Current version: {current}")
+    print(f"Target version: {target_version}")
+    print(f"Status: {'blocked' if conflicts else 'safe'}")
+    for entry in entries:
+        suffix = f" — {entry['note']}" if entry.get("note") else ""
+        print(f"{entry['action'].upper():8} {entry['path']}{suffix}")
+    counts: Dict[str, int] = {}
+    for entry in entries:
+        counts[entry["action"]] = counts.get(entry["action"], 0) + 1
+    summary = ", ".join(f"{key}={counts[key]}" for key in sorted(counts))
+    print(f"Summary: {summary}")
+    print("No files were changed.")
+    return 2 if conflicts else 0
+
+
+def plan(operation: str, target: Path) -> int:
+    if operation in ("init", "adopt"):
+        entries, current, target_version = install_plan(operation, target)
+    else:
+        entries, current, target_version = upgrade_plan(target)
+    return print_plan(operation, target, entries, current, target_version)
+
+
+def write_conflict_candidates(
+    source: Path, target: Path, conflicts: Sequence[Tuple[str, Optional[Path]]]
+) -> Path:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    root = target / ".vibe/conflicts" / stamp
+    for relative, incoming in conflicts:
+        candidate = root / (relative + ".incoming")
+        if incoming is None:
+            atomic_write_text(candidate, incoming_agents_block(source) + "\n")
+        else:
+            atomic_copy(incoming, candidate)
+    return root
+
+
+def upgrade(target: Path) -> int:
+    source = source_root()
+    target = target.resolve()
+    manifest = load_manifest(target)
+    version = framework_version(source)
+    previous = {str(key): str(value) for key, value in manifest["managed_files"].items()}
+    incoming_files = managed_source_files(source)
+    incoming_by_relative = {
+        path.relative_to(source).as_posix(): path for path in incoming_files
+    }
+    conflicts: List[Tuple[str, Optional[Path]]] = []
+
+    for relative, incoming in incoming_by_relative.items():
+        destination = target / relative
+        incoming_hash = sha256(incoming)
+        recorded_hash = previous.get(relative)
+        if not destination.exists():
+            continue
+        if not destination.is_file():
+            conflicts.append((relative, incoming))
+            continue
+        current_hash = sha256(destination)
+        if recorded_hash is None:
+            if current_hash != incoming_hash:
+                conflicts.append((relative, incoming))
+        elif (
+            current_hash != recorded_hash
+            and incoming_hash != recorded_hash
+            and current_hash != incoming_hash
+        ):
+            conflicts.append((relative, incoming))
+
+    agents_path = target / "AGENTS.md"
+    incoming_block = incoming_agents_block(source)
+    recorded_block_hash = str(manifest.get("agents_block_hash", ""))
+    current_block: Optional[str] = None
+    if agents_path.is_file():
+        current_block = extract_agents_block(agents_path.read_text(encoding="utf-8"))
+    incoming_block_hash = sha256_text(incoming_block)
+    current_block_hash = sha256_text(current_block) if current_block is not None else ""
+    if recorded_block_hash:
+        if (
+            current_block_hash != recorded_block_hash
+            and incoming_block_hash != recorded_block_hash
+            and current_block_hash != incoming_block_hash
+        ):
+            conflicts.append(("AGENTS.md", None))
+    elif current_block is not None and current_block_hash != incoming_block_hash:
+        conflicts.append(("AGENTS.md", None))
+
+    if conflicts:
+        root = write_conflict_candidates(source, target, conflicts)
+        print("Upgrade aborted; no managed framework files were changed.", file=sys.stderr)
+        print(f"Incoming conflict candidates: {root}", file=sys.stderr)
+        for relative, _ in conflicts:
+            print(f"  - {relative}", file=sys.stderr)
+        return 2
+
+    updated = 0
+    preserved_local = 0
+    new_hashes: Dict[str, str] = {}
+    for relative, incoming in incoming_by_relative.items():
+        destination = target / relative
+        incoming_hash = sha256(incoming)
+        recorded_hash = previous.get(relative)
+        current_hash = sha256(destination) if destination.is_file() else None
+        if (
+            recorded_hash is not None
+            and current_hash is not None
+            and current_hash != recorded_hash
+            and incoming_hash == recorded_hash
+        ):
+            new_hashes[relative] = recorded_hash
+            preserved_local += 1
+            continue
+        if current_hash != incoming_hash:
+            atomic_copy(incoming, destination)
+            updated += 1
+        new_hashes[relative] = incoming_hash
+
+    stale = sorted(set(previous) - set(incoming_by_relative))
+    for relative in stale:
+        new_hashes[relative] = previous[relative]
+
+    current_agents_text = agents_path.read_text(encoding="utf-8") if agents_path.exists() else ""
+    if (
+        recorded_block_hash
+        and current_block_hash != recorded_block_hash
+        and incoming_block_hash == recorded_block_hash
+    ):
+        new_block_hash = recorded_block_hash
+        preserved_local += 1
+    else:
+        merged = merge_agents_text(current_agents_text, incoming_block)
+        if merged != current_agents_text:
+            atomic_write_text(agents_path, merged)
+            updated += 1
+        new_block_hash = incoming_block_hash
+
+    write_manifest(target, version, new_hashes, new_block_hash)
+    print(f"Vibe Kit upgrade complete: {target}")
+    print(f"Framework version: {version}")
+    print(f"Managed files updated: {updated}")
+    if preserved_local:
+        print(f"Locally modified managed entries preserved: {preserved_local}")
+    if stale:
+        print(f"Stale managed paths preserved for manual review: {len(stale)}")
+    return 0
+
+
+def validate_skill(path: Path) -> List[str]:
+    errors: List[str] = []
+    content = path.read_text(encoding="utf-8", errors="replace")
+    if not content.startswith("---\n"):
+        errors.append(f"{path}: missing YAML frontmatter")
+        return errors
+    parts = content.split("---", 2)
+    frontmatter = parts[1] if len(parts) == 3 else ""
+    name_match = re.search(r"(?m)^name:\s*([^\s]+)\s*$", frontmatter)
+    if not name_match:
+        errors.append(f"{path}: missing skill name")
+    else:
+        name = name_match.group(1)
+        if not re.fullmatch(r"[a-z0-9-]{1,63}", name):
+            errors.append(f"{path}: invalid skill name {name!r}")
+        if name != path.parent.name:
+            errors.append(f"{path}: skill name does not match its folder")
+    if not re.search(r"(?m)^description:\s*\S+", frontmatter):
+        errors.append(f"{path}: missing skill description")
+    if re.search(r"(?i)\b(TODO|TBD)\b", content):
+        errors.append(f"{path}: unfinished placeholder")
+    return errors
+
+
+def validate_agent(path: Path) -> List[str]:
+    content = path.read_text(encoding="utf-8", errors="replace")
+    errors = []
+    for key in ("name", "description", "developer_instructions"):
+        if not re.search(rf"(?m)^{key}\s*=", content):
+            errors.append(f"{path}: missing {key}")
+    return errors
+
+
+def doctor(target: Path) -> int:
+    target = target.resolve()
+    errors: List[str] = []
+    warnings: List[str] = []
+    manifest, manifest_version, manifest_display = read_manifest_for_doctor(target)
+    versions_ok, version_result = version_integrity(
+        target, manifest_version, manifest_display
+    )
+    if not versions_ok:
+        errors.append(version_result)
+
+    if manifest is not None:
+        managed_files = manifest.get("managed_files")
+        if not isinstance(managed_files, dict):
+            errors.append(f"invalid managed file manifest: {target / MANIFEST_PATH}")
+            managed_files = {}
+        for relative, expected in managed_files.items():
+            path = target / str(relative)
+            if not path.is_file():
+                errors.append(f"missing managed file: {relative}")
+            elif sha256(path) != str(expected):
+                warnings.append(f"locally modified managed file: {relative}")
+        agents = target / "AGENTS.md"
+        if not agents.is_file():
+            errors.append("missing AGENTS.md")
+        else:
+            block = extract_agents_block(agents.read_text(encoding="utf-8"))
+            if block is None:
+                errors.append("missing Vibe Kit block in AGENTS.md")
+            elif manifest.get("agents_block_hash") and sha256_text(block) != manifest.get(
+                "agents_block_hash"
+            ):
+                warnings.append("locally modified Vibe Kit block in AGENTS.md")
+
+    for required in (
+        Path(".vibe/project.yaml"),
+        Path(".vibe/project-rules.md"),
+        Path(".vibe/core/operating-model.md"),
+    ):
+        if not (target / required).is_file():
+            errors.append(f"missing required file: {required}")
+
+    for skill in (target / ".agents/skills").glob("vibe-*/SKILL.md"):
+        errors.extend(validate_skill(skill))
+    for agent in (target / ".codex/agents").glob("vibe-*.toml"):
+        errors.extend(validate_agent(agent))
+
+    if versions_ok:
+        print(f"Version integrity: OK ({version_result})")
+    for warning in warnings:
+        print(f"WARN: {warning}")
+    for error in errors:
+        print(f"ERROR: {error}", file=sys.stderr)
+    if errors:
+        return 1
+    print(
+        f"Vibe Kit doctor passed with {len(warnings)} warning(s): {target}"
+    )
+    return 0
+
+
+def parse_commands(path: Path) -> Dict[str, str]:
+    commands: Dict[str, str] = {}
+    in_commands = False
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if raw_line.strip() == "commands:":
+            in_commands = True
+            continue
+        if not in_commands:
+            continue
+        if raw_line and not raw_line.startswith(" "):
+            break
+        match = re.match(r"^\s{2}([A-Za-z0-9_-]+):\s*(.*)$", raw_line)
+        if not match:
+            continue
+        key, raw_value = match.groups()
+        raw_value = raw_value.strip()
+        if not raw_value:
+            commands[key] = ""
+            continue
+        try:
+            value = json.loads(raw_value)
+        except json.JSONDecodeError:
+            value = raw_value
+        commands[key] = str(value)
+    return commands
+
+
+def verify(target: Path, only: Sequence[str]) -> int:
+    target = target.resolve()
+    config = target / ".vibe/project.yaml"
+    if not config.is_file():
+        raise VibeError(f"Project configuration is missing: {config}")
+    commands = parse_commands(config)
+    selected = list(only) if only else list(VERIFY_ORDER)
+    runnable = [(key, commands.get(key, "")) for key in selected if commands.get(key, "")]
+    if not runnable:
+        print("No verification commands are configured.")
+        return 0
+
+    failures: List[str] = []
+    for key, command in runnable:
+        print(f"\n==> {key}: {command}", flush=True)
+        result = subprocess.run(command, cwd=str(target), shell=True, check=False)
+        if result.returncode != 0:
+            failures.append(f"{key} ({result.returncode})")
+    if failures:
+        print("\nVerification failed: " + ", ".join(failures), file=sys.stderr)
+        return 1
+    print("\nVerification passed: " + ", ".join(key for key, _ in runnable))
+    return 0
+
+
+def normalized_slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    if not slug:
+        raise VibeError("Work-item slug must contain an ASCII letter or digit.")
+    return slug
+
+
+def work_item(target: Path, slug_value: str, size: str, title: Optional[str]) -> int:
+    target = target.resolve()
+    slug = normalized_slug(slug_value)
+    date = dt.date.today().isoformat()
+    identifier = dt.date.today().strftime("%Y%m%d") + "-" + slug
+    destination = target / "docs/work-items" / identifier
+    if destination.exists():
+        raise VibeError(f"Work item already exists: {destination}")
+    template_root = target / ".vibe/core/templates"
+    if not template_root.is_dir():
+        raise VibeError("Vibe Kit work-item templates are missing; run doctor or upgrade.")
+    replacements = {
+        "TITLE": title or slug.replace("-", " ").title(),
+        "ID": identifier,
+        "SIZE": size.upper(),
+        "DATE": date,
+    }
+    destination.mkdir(parents=True)
+    atomic_write_text(
+        destination / "brief.md",
+        render_template(template_root / "work-item-brief.md", replacements),
+    )
+    atomic_write_text(
+        destination / "verification.md",
+        render_template(template_root / "work-item-verification.md", replacements),
+    )
+    print(f"Created work item: {destination}")
+    return 0
+
+
+def release_payload_files(root: Path, version: str) -> List[Path]:
+    files = list(managed_source_files(root))
+    for relative in ("AGENTS.md", "README.md", "CHANGELOG.md", "LICENSE"):
+        path = root / relative
+        if path.is_file():
+            files.append(path)
+    templates = root / "templates"
+    if templates.is_dir():
+        files.extend(path for path in templates.rglob("*") if path.is_file())
+    release_notes = root / "docs/releases" / f"{version}.md"
+    if release_notes.is_file():
+        files.append(release_notes)
+    unique = {path.relative_to(root): path for path in files}
+    result = [unique[key] for key in sorted(unique, key=lambda item: item.as_posix())]
+    for path in result:
+        if path.is_symlink():
+            raise VibeError(f"release payload cannot contain a symlink: {path}")
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
+            raise VibeError(f"release payload contains generated Python cache: {path}")
+    return result
+
+
+def release_file_mode(relative: str) -> int:
+    if relative == "bin/vibe" or relative.endswith("/scripts/vibe_from_plugin.py"):
+        return 0o755
+    return 0o644
+
+
+def normalized_zip(
+    destination: Path, entries: Dict[str, Tuple[bytes, int]]
+) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(
+        destination, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
+    ) as archive:
+        for name in sorted(entries):
+            if not archive_name_is_safe(name):
+                raise VibeError(f"unsafe release archive path: {name}")
+            content, mode = entries[name]
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.external_attr = ((0o100000 | mode) & 0xFFFF) << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, content, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+
+
+def release_source_metadata(root: Path) -> Dict[str, object]:
+    ref: Optional[str] = None
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=str(root),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40,64}", result.stdout.strip()):
+            ref = result.stdout.strip().lower()
+    except OSError:
+        pass
+    tree_state = "uncommitted"
+    if ref is not None:
+        try:
+            status = subprocess.run(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                cwd=str(root),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            if status.returncode == 0 and not status.stdout.strip():
+                tree_state = "clean"
+        except OSError:
+            pass
+    return {"type": "git-working-tree", "ref": ref, "tree_state": tree_state}
+
+
+def plugin_source_entries(root: Path, version: str) -> Dict[str, Tuple[bytes, int]]:
+    plugin_root = root / "distribution/plugin-src/vibe-kit"
+    manifest_path = plugin_root / ".codex-plugin/plugin.json"
+    if not manifest_path.is_file():
+        raise VibeError(f"Plugin source is missing: {manifest_path}")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise VibeError(f"Plugin manifest is invalid: {error}") from error
+    if manifest.get("name") != "vibe-kit" or manifest.get("version") != version:
+        raise VibeError("Plugin name/version must match the Vibe Kit release")
+    for forbidden in ("mcpServers", "hooks", "apps"):
+        if forbidden in manifest:
+            raise VibeError(f"bootstrap Plugin must not declare {forbidden}")
+    skill_root = plugin_root / "skills"
+    skills = sorted(path.name for path in skill_root.iterdir() if path.is_dir())
+    if skills != ["vibe-bootstrap", "vibe-maintain"]:
+        raise VibeError("bootstrap Plugin must contain exactly vibe-bootstrap and vibe-maintain")
+
+    entries: Dict[str, Tuple[bytes, int]] = {}
+    for path in sorted(plugin_root.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.is_symlink():
+            raise VibeError(f"Plugin source cannot contain a symlink: {path}")
+        if "__pycache__" in path.parts or path.suffix == ".pyc" or path.name == ".DS_Store":
+            continue
+        relative = path.relative_to(plugin_root).as_posix()
+        entries[relative] = (path.read_bytes(), release_file_mode(relative))
+    return entries
+
+
+def release_protocol(root: Path) -> Dict[str, object]:
+    path = root / ".vibe/core/protocol.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise VibeError(f"release protocol is invalid: {error}") from error
+    if not isinstance(value, dict):
+        raise VibeError("release protocol must be a JSON object")
+    return value
+
+
+def release_marketplace_payload() -> Dict[str, object]:
+    return {
+        "name": "personal",
+        "interface": {"displayName": "Personal Plugins"},
+        "plugins": [
+            {
+                "name": "vibe-kit",
+                "source": {"source": "local", "path": "./plugins/vibe-kit"},
+                "policy": {
+                    "installation": "AVAILABLE",
+                    "authentication": "ON_INSTALL",
+                },
+                "category": "Productivity",
+            }
+        ],
+    }
+
+
+def package_release(output: Optional[Path], status: str) -> int:
+    root = source_root()
+    version = framework_version(root)
+    destination = (
+        output.resolve()
+        if output is not None
+        else (root / "dist" / f"vibe-kit-{version}").resolve()
+    )
+    if destination.exists() and not destination.is_dir():
+        raise VibeError(f"release output is not a directory: {destination}")
+    if destination.is_dir() and any(destination.iterdir()):
+        raise VibeError(f"release output is not empty: {destination}")
+
+    source_metadata = release_source_metadata(root)
+    if status == "prerelease" and (
+        source_metadata.get("ref") is None
+        or source_metadata.get("tree_state") != "clean"
+    ):
+        raise VibeError(
+            "prerelease packaging requires a clean committed Git source; commit the reviewed tree first"
+        )
+    payload_entries: Dict[str, Tuple[bytes, int]] = {}
+    for path in release_payload_files(root, version):
+        relative = path.relative_to(root).as_posix()
+        payload_entries[relative] = (path.read_bytes(), release_file_mode(relative))
+    protocol = release_protocol(root)
+    plugin_entries = plugin_source_entries(root, version)
+
+    destination.mkdir(parents=True, exist_ok=True)
+    release_name = f"vibe-kit-{version}.zip"
+    plugin_name = f"vibe-kit-plugin-{version}.zip"
+    release_archive = destination / release_name
+    plugin_archive = destination / plugin_name
+    normalized_zip(
+        release_archive,
+        {f"vibe-kit-{version}/{name}": value for name, value in payload_entries.items()},
+    )
+    combined_plugin_entries = {
+        f"vibe-kit/{name}": value for name, value in plugin_entries.items()
+    }
+    combined_plugin_entries.update(
+        {f"vibe-kit/payload/{name}": value for name, value in payload_entries.items()}
+    )
+    normalized_zip(plugin_archive, combined_plugin_entries)
+
+    marketplace_root = destination / "marketplace"
+    plugin_output = marketplace_root / "plugins/vibe-kit"
+    for relative, (content, mode) in plugin_entries.items():
+        atomic_write_bytes(plugin_output / relative, content, mode)
+    for relative, (content, mode) in payload_entries.items():
+        atomic_write_bytes(plugin_output / "payload" / relative, content, mode)
+    marketplace_path = marketplace_root / "marketplace.json"
+    atomic_write_json(marketplace_path, release_marketplace_payload())
+
+    marketplace_files = {
+        path.relative_to(marketplace_root).as_posix(): sha256(path)
+        for path in sorted((marketplace_root / "plugins").rglob("*"))
+        if path.is_file()
+    }
+
+    payload_hashes = {
+        relative: hashlib.sha256(content).hexdigest()
+        for relative, (content, _) in sorted(payload_entries.items())
+    }
+    artifact_paths = [release_archive, plugin_archive, marketplace_path]
+    artifacts = []
+    for path in artifact_paths:
+        artifacts.append(
+            {
+                "path": path.relative_to(destination).as_posix(),
+                "sha256": sha256(path),
+                "size": path.stat().st_size,
+            }
+        )
+    manifest = {
+        "schema_version": RELEASE_MANIFEST_SCHEMA,
+        "status": status,
+        "kit_version": version,
+        "manifest_schema": protocol.get("manifest_schema"),
+        "core_protocol": protocol.get("core_protocol"),
+        "adapters": protocol.get("adapters"),
+        "runtime": {
+            "python": ">=3.9",
+            "os_supported": ["macOS", "Linux"],
+            "os_tested_for_candidate": ["macOS"],
+        },
+        "source": source_metadata,
+        "payload_files": payload_hashes,
+        "marketplace_files": marketplace_files,
+        "artifacts": artifacts,
+    }
+    manifest_path = destination / "release-manifest.json"
+    atomic_write_json(manifest_path, manifest)
+    checksum_paths = artifact_paths + [manifest_path] + [
+        marketplace_root / relative for relative in marketplace_files
+    ]
+    checksums = "".join(
+        f"{sha256(path)}  {path.relative_to(destination).as_posix()}\n"
+        for path in sorted(checksum_paths, key=lambda item: item.relative_to(destination).as_posix())
+    )
+    atomic_write_text(destination / "SHA256SUMS", checksums)
+
+    result = validate_release(destination)
+    if result != 0:
+        return result
+    bundle_name = f"vibe-kit-distribution-{version}.zip"
+    bundle_path = destination / bundle_name
+    bundle_entries = {
+        f"vibe-kit-{version}/{path.relative_to(destination).as_posix()}": (
+            path.read_bytes(),
+            release_file_mode(path.relative_to(destination).as_posix()),
+        )
+        for path in sorted(destination.rglob("*"))
+        if path.is_file() and path != bundle_path
+    }
+    normalized_zip(bundle_path, bundle_entries)
+    bundled_files, bundle_errors = read_normalized_archive(
+        bundle_path, f"vibe-kit-{version}"
+    )
+    expected_bundle_files = {
+        path.relative_to(destination).as_posix(): path.read_bytes()
+        for path in sorted(destination.rglob("*"))
+        if path.is_file() and path != bundle_path
+    }
+    if bundle_errors or bundled_files != expected_bundle_files:
+        details = "; ".join(bundle_errors) or "bundle contents differ from release directory"
+        raise VibeError(f"distribution bundle validation failed: {details}")
+    print(f"Vibe Kit release candidate built: {destination}")
+    print(f"Version: {version}")
+    print(f"Artifacts: {release_name}, {plugin_name}, {bundle_name}, marketplace/")
+    print(f"Distribution bundle SHA-256: {sha256(bundle_path)}")
+    print(f"Publication status: {status}")
+    return 0
+
+
+def archive_name_is_safe(name: str) -> bool:
+    if not name or name.startswith("/") or "\\" in name or ":" in name:
+        return False
+    path = PurePosixPath(name)
+    return all(part not in ("", ".", "..") for part in path.parts)
+
+
+def read_normalized_archive(path: Path, expected_root: str) -> Tuple[Dict[str, bytes], List[str]]:
+    errors: List[str] = []
+    entries: Dict[str, bytes] = {}
+    try:
+        with zipfile.ZipFile(path, "r") as archive:
+            infos = archive.infolist()
+            if len(infos) > RELEASE_ARCHIVE_MAX_FILES:
+                errors.append(f"{path.name}: too many archive entries")
+                return entries, errors
+            total_size = 0
+            for info in infos:
+                name = info.filename
+                if info.is_dir():
+                    continue
+                if not archive_name_is_safe(name):
+                    errors.append(f"{path.name}: unsafe archive path {name!r}")
+                    continue
+                if info.flag_bits & 0x1:
+                    errors.append(f"{path.name}: encrypted entries are not supported")
+                    continue
+                file_type = (info.external_attr >> 16) & 0o170000
+                if file_type == 0o120000:
+                    errors.append(f"{path.name}: symlink entries are not allowed")
+                    continue
+                if info.file_size > RELEASE_ARCHIVE_MAX_FILE_SIZE:
+                    errors.append(f"{path.name}: entry is too large: {name}")
+                    continue
+                total_size += info.file_size
+                if total_size > RELEASE_ARCHIVE_MAX_TOTAL_SIZE:
+                    errors.append(f"{path.name}: uncompressed payload is too large")
+                    break
+                prefix = expected_root.rstrip("/") + "/"
+                if not name.startswith(prefix):
+                    errors.append(f"{path.name}: entry is outside expected root {expected_root}: {name}")
+                    continue
+                relative = name[len(prefix):]
+                if not relative or relative in entries:
+                    errors.append(f"{path.name}: invalid or duplicate entry {name}")
+                    continue
+                entries[relative] = archive.read(info)
+    except (OSError, zipfile.BadZipFile) as error:
+        errors.append(f"{path.name}: cannot read ZIP: {error}")
+    return entries, errors
+
+
+def validate_release(release_dir: Path) -> int:
+    release_dir = release_dir.resolve()
+    manifest_path = release_dir / "release-manifest.json"
+    checksum_path = release_dir / "SHA256SUMS"
+    if not manifest_path.is_file() or not checksum_path.is_file():
+        raise VibeError("release-manifest.json and SHA256SUMS are required")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise VibeError(f"release manifest is invalid: {error}") from error
+    if not isinstance(manifest, dict):
+        raise VibeError("release manifest must be a JSON object")
+
+    errors: List[str] = []
+    version = str(manifest.get("kit_version", ""))
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        errors.append("manifest kit_version must be strict SemVer")
+    if manifest.get("schema_version") != RELEASE_MANIFEST_SCHEMA:
+        errors.append("unsupported release manifest schema")
+    status = manifest.get("status")
+    if status not in RELEASE_STATUSES:
+        errors.append("release candidate status is missing or unsupported")
+    if status == "prerelease":
+        source = manifest.get("source")
+        if not isinstance(source, dict):
+            errors.append("prerelease source metadata must be an object")
+        elif (
+            not re.fullmatch(r"[0-9a-f]{40,64}", str(source.get("ref", "")))
+            or source.get("tree_state") != "clean"
+        ):
+            errors.append("prerelease requires a committed clean source ref")
+    release_name = f"vibe-kit-{version}.zip"
+    plugin_name = f"vibe-kit-plugin-{version}.zip"
+
+    checksum_entries: Dict[str, str] = {}
+    for line in checksum_path.read_text(encoding="utf-8").splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  (.+)", line)
+        if not match or not archive_name_is_safe(match.group(2)):
+            errors.append(f"invalid SHA256SUMS line: {line!r}")
+            continue
+        checksum_entries[match.group(2)] = match.group(1)
+    marketplace_hashes = manifest.get("marketplace_files")
+    if not isinstance(marketplace_hashes, dict):
+        errors.append("manifest marketplace_files must be an object")
+        marketplace_hashes = {}
+    expected_checksum_paths = {
+        release_name,
+        plugin_name,
+        "marketplace/marketplace.json",
+        "release-manifest.json",
+    }
+    expected_checksum_paths.update(
+        "marketplace/" + str(relative) for relative in marketplace_hashes
+    )
+    if set(checksum_entries) != expected_checksum_paths:
+        errors.append("SHA256SUMS does not cover the exact release artifact set")
+    for relative, expected in checksum_entries.items():
+        path = release_dir / relative
+        if not path.is_file():
+            errors.append(f"missing checksummed artifact: {relative}")
+        elif sha256(path) != expected:
+            errors.append(f"checksum mismatch: {relative}")
+
+    artifact_entries = manifest.get("artifacts")
+    if not isinstance(artifact_entries, list):
+        errors.append("manifest artifacts must be a list")
+        artifact_entries = []
+    expected_manifest_artifacts = {
+        release_name,
+        plugin_name,
+        "marketplace/marketplace.json",
+    }
+    seen_artifacts = set()
+    for item in artifact_entries:
+        if not isinstance(item, dict):
+            errors.append("manifest artifact entry must be an object")
+            continue
+        relative = str(item.get("path", ""))
+        seen_artifacts.add(relative)
+        path = release_dir / relative
+        if not archive_name_is_safe(relative) or not path.is_file():
+            errors.append(f"invalid or missing manifest artifact: {relative}")
+            continue
+        if item.get("sha256") != sha256(path) or item.get("size") != path.stat().st_size:
+            errors.append(f"manifest artifact metadata mismatch: {relative}")
+    if seen_artifacts != expected_manifest_artifacts:
+        errors.append("manifest does not declare the exact artifact set")
+
+    release_entries, release_errors = read_normalized_archive(
+        release_dir / release_name, f"vibe-kit-{version}"
+    )
+    plugin_entries, plugin_errors = read_normalized_archive(
+        release_dir / plugin_name, "vibe-kit"
+    )
+    errors.extend(release_errors)
+    errors.extend(plugin_errors)
+    payload_hashes = manifest.get("payload_files")
+    if not isinstance(payload_hashes, dict):
+        errors.append("manifest payload_files must be an object")
+        payload_hashes = {}
+    actual_payload_hashes = {
+        relative: hashlib.sha256(content).hexdigest()
+        for relative, content in sorted(release_entries.items())
+    }
+    if actual_payload_hashes != payload_hashes:
+        errors.append("release ZIP payload does not match manifest payload_files")
+    core_version = release_entries.get(".vibe/core/version", b"").decode("utf-8", errors="replace").strip()
+    if core_version != version:
+        errors.append("release ZIP core version does not match kit_version")
+    for required in ("bin/vibe", "AGENTS.md", "templates/project/project-rules.md"):
+        if required not in release_entries:
+            errors.append(f"release ZIP is missing required payload file: {required}")
+
+    plugin_manifest_bytes = plugin_entries.get(".codex-plugin/plugin.json")
+    plugin_manifest: Dict[str, object] = {}
+    if plugin_manifest_bytes is None:
+        errors.append("Plugin ZIP is missing .codex-plugin/plugin.json")
+    else:
+        try:
+            loaded = json.loads(plugin_manifest_bytes.decode("utf-8"))
+            if isinstance(loaded, dict):
+                plugin_manifest = loaded
+            else:
+                errors.append("Plugin manifest must be an object")
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            errors.append(f"Plugin manifest is invalid: {error}")
+    if plugin_manifest.get("name") != "vibe-kit" or plugin_manifest.get("version") != version:
+        errors.append("Plugin name/version does not match release")
+    for forbidden in ("mcpServers", "hooks", "apps"):
+        if forbidden in plugin_manifest:
+            errors.append(f"Plugin declares forbidden capability: {forbidden}")
+    skill_names = {
+        PurePosixPath(relative).parts[1]
+        for relative in plugin_entries
+        if relative.startswith("skills/") and len(PurePosixPath(relative).parts) > 2
+    }
+    if skill_names != {"vibe-bootstrap", "vibe-maintain"}:
+        errors.append("Plugin ZIP must contain exactly the bootstrap and maintenance Skills")
+    plugin_payload = {
+        relative[len("payload/"):]: content
+        for relative, content in plugin_entries.items()
+        if relative.startswith("payload/")
+    }
+    if plugin_payload != release_entries:
+        errors.append("Plugin bundled payload differs from release ZIP payload")
+
+    expanded_plugin_root = release_dir / "marketplace/plugins/vibe-kit"
+    expanded_plugin = {
+        path.relative_to(expanded_plugin_root).as_posix(): path.read_bytes()
+        for path in sorted(expanded_plugin_root.rglob("*"))
+        if path.is_file()
+    } if expanded_plugin_root.is_dir() else {}
+    expected_expanded_plugin = {
+        relative: content
+        for relative, content in plugin_entries.items()
+    }
+    if expanded_plugin != expected_expanded_plugin:
+        errors.append("marketplace Plugin files differ from Plugin ZIP")
+    actual_marketplace_hashes = {
+        "plugins/vibe-kit/" + relative: hashlib.sha256(content).hexdigest()
+        for relative, content in sorted(expanded_plugin.items())
+    }
+    if actual_marketplace_hashes != marketplace_hashes:
+        errors.append("marketplace Plugin files do not match release manifest")
+
+    marketplace_path = release_dir / "marketplace/marketplace.json"
+    if marketplace_path.is_file():
+        try:
+            marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
+            entry = marketplace["plugins"][0]
+            if (
+                marketplace.get("name") != "personal"
+                or entry.get("name") != "vibe-kit"
+                or entry.get("source", {}).get("path") != "./plugins/vibe-kit"
+            ):
+                errors.append("marketplace entry does not point to the bundled Vibe Kit Plugin")
+        except (OSError, json.JSONDecodeError, KeyError, IndexError, TypeError, AttributeError) as error:
+            errors.append(f"marketplace catalog is invalid: {error}")
+
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        print(f"Release validation failed with {len(errors)} error(s).", file=sys.stderr)
+        return 1
+    print(f"Release validation passed: {release_dir}")
+    print(f"Version: {version}")
+    print(f"Payload files: {len(release_entries)}")
+    print("Network: not used")
+    return 0
+
+
+def utc_now() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z"
+    )
+
+
+def feedback_project_name(target: Path) -> str:
+    config = target / ".vibe/project.yaml"
+    if not config.is_file():
+        return target.name
+    for line in config.read_text(encoding="utf-8", errors="ignore").splitlines():
+        match = re.match(r"^\s{2}name:\s*(.+?)\s*$", line)
+        if not match:
+            continue
+        raw = match.group(1)
+        try:
+            return str(json.loads(raw))
+        except json.JSONDecodeError:
+            return raw.strip("'\"")
+    return target.name
+
+
+def feedback_state_root(target: Path, create: bool = False) -> Path:
+    root = target / FEEDBACK_ROOT
+    if create:
+        root.mkdir(parents=True, exist_ok=True)
+        local_root = root.parent
+        ignore = local_root / ".gitignore"
+        if not ignore.exists():
+            atomic_write_text(ignore, "*\n!.gitignore\n")
+    return root
+
+
+def feedback_redact_text(
+    value: object, target: Path, field: str, required: bool = True
+) -> Tuple[str, List[str]]:
+    if not isinstance(value, str):
+        raise VibeError(f"feedback field {field!r} must be a string")
+    text = value.strip()
+    if required and not text:
+        raise VibeError(f"feedback field {field!r} is required")
+    if len(text) > 2000 or text.count("\n") > 4:
+        raise VibeError(
+            f"feedback field {field!r} is too large; summarize instead of including raw logs or code"
+        )
+    for pattern in SECRET_PATTERNS:
+        if pattern.search(text):
+            raise VibeError(
+                f"feedback field {field!r} appears to contain a secret; public feedback is blocked"
+            )
+
+    redactions: List[str] = []
+
+    def replace(pattern: re.Pattern, replacement: str, kind: str) -> None:
+        nonlocal text
+        text, count = pattern.subn(replacement, text)
+        redactions.extend([kind] * count)
+
+    target_text = str(target.resolve())
+    if target_text and target_text in text:
+        text = text.replace(target_text, "<PROJECT_ROOT>")
+        redactions.append("absolute_path")
+
+    project_name = feedback_project_name(target)
+    for private_name in (project_name, target.name):
+        if len(private_name) >= 4 and private_name.lower() in text.lower():
+            text, count = re.subn(
+                re.escape(private_name), "<PROJECT>", text, flags=re.IGNORECASE
+            )
+            redactions.extend(["project_identity"] * count)
+
+    replace(
+        re.compile(
+            r"(?<![A-Za-z0-9])/(?:Users|home|private|var|opt|tmp)(?:/[^\s,;]+)+"
+        ),
+        "<ABSOLUTE_PATH>",
+        "absolute_path",
+    )
+    replace(
+        re.compile(r"\b[A-Za-z]:\\(?:[^\s,;]+\\)*[^\s,;]+"),
+        "<ABSOLUTE_PATH>",
+        "absolute_path",
+    )
+    replace(
+        re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
+        "<EMAIL>",
+        "email",
+    )
+    replace(re.compile(r"https?://[^\s)\]>]+", re.IGNORECASE), "<URL>", "url")
+    replace(
+        re.compile(r"(?<!\d)(?:\+?\d[\d -]{8,}\d)(?!\d)"),
+        "<PHONE>",
+        "phone",
+    )
+    return text, redactions
+
+
+def feedback_redact_list(
+    value: object, target: Path, field: str
+) -> Tuple[List[str], List[str]]:
+    if value is None:
+        return [], []
+    if not isinstance(value, list) or len(value) > 5:
+        raise VibeError(f"feedback field {field!r} must be a list with at most 5 items")
+    sanitized: List[str] = []
+    redactions: List[str] = []
+    for index, item in enumerate(value):
+        clean, found = feedback_redact_text(item, target, f"{field}[{index}]")
+        sanitized.append(clean)
+        redactions.extend(found)
+    return sanitized, redactions
+
+
+def feedback_fingerprint(signal: Dict[str, object]) -> str:
+    raw = "|".join(
+        str(signal.get(key, ""))
+        for key in ("kind", "component", "summary", "expected")
+    ).lower()
+    normalized = re.sub(r"[^a-z0-9<>]+", " ", raw).strip()
+    return "sha256:" + hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def feedback_preview(report: Dict[str, object], state: Dict[str, object]) -> str:
+    signal = report["signal"]
+    environment = report["environment"]
+    privacy = report["privacy"]
+    dedup = report["dedup"]
+    reproduction = signal.get("reproduction", [])
+    evidence = signal.get("evidence", [])
+    lines = [
+        f"## Summary\n\n{signal['summary']}",
+        f"## Expected\n\n{signal['expected']}",
+        f"## Observed\n\n{signal['observed']}",
+        f"## Impact\n\n{signal['impact']}",
+        f"## Hypothesis\n\n{signal['hypothesis']}",
+        f"## Proposed iteration\n\n{signal['proposal']}",
+    ]
+    if reproduction:
+        lines.append(
+            "## Generic reproduction\n\n"
+            + "\n".join(f"{index}. {item}" for index, item in enumerate(reproduction, 1))
+        )
+    if evidence:
+        lines.append(
+            "## Sanitized evidence\n\n" + "\n".join(f"- {item}" for item in evidence)
+        )
+    lines.extend(
+        (
+            "## Classification\n\n"
+            f"- Kind: `{signal['kind']}`\n"
+            f"- Component: `{signal['component']}`\n"
+            f"- Severity: `{signal['severity']}`\n"
+            f"- Confidence: `{signal['confidence']}`\n"
+            f"- Trigger: `{signal['trigger']}`\n"
+            f"- Occurrences in this project: `{state.get('occurrence_count', 1)}`",
+            "## Minimal environment\n\n"
+            f"- Vibe Kit: `{environment['vibe_kit_version']}`\n"
+            f"- Workflow: `{environment['workflow']}`\n"
+            f"- Agent role: `{environment['agent_role']}`\n"
+            f"- Runtime: `{environment['runtime']}`\n"
+            f"- Platform family: `{environment['platform_family']}`",
+            "## Privacy\n\n"
+            f"- Status: `{privacy['status']}`\n"
+            "- Raw code, logs, prompts, conversations and environment values are not included.",
+            f"<!-- vibe-kit-feedback:fingerprint={dedup['fingerprint']} -->",
+        )
+    )
+    return "\n\n".join(lines) + "\n"
+
+
+def feedback_input(args: argparse.Namespace) -> Dict[str, object]:
+    if args.input:
+        try:
+            raw = sys.stdin.read() if args.input == "-" else Path(args.input).read_text(
+                encoding="utf-8"
+            )
+            value = json.loads(raw)
+        except (OSError, json.JSONDecodeError) as error:
+            raise VibeError(f"cannot read feedback input: {error}") from error
+        if not isinstance(value, dict):
+            raise VibeError("feedback input must be a JSON object")
+        return value
+    return {
+        "kind": args.kind,
+        "component": args.component,
+        "title": args.title,
+        "summary": args.summary,
+        "expected": args.expected,
+        "observed": args.observed,
+        "impact": args.impact,
+        "hypothesis": args.hypothesis,
+        "proposal": args.proposal,
+        "reproduction": args.reproduction,
+        "evidence": args.evidence,
+        "workflow": args.workflow,
+        "agent_role": args.agent_role,
+        "severity": args.severity,
+        "confidence": args.confidence,
+        "trigger": args.trigger,
+    }
+
+
+def feedback_build_report(target: Path, raw: Dict[str, object]) -> Dict[str, object]:
+    kind = str(raw.get("kind", ""))
+    severity = str(raw.get("severity", "medium"))
+    confidence = str(raw.get("confidence", "medium"))
+    if kind not in FEEDBACK_KINDS:
+        raise VibeError(f"feedback kind must be one of: {', '.join(FEEDBACK_KINDS)}")
+    if severity not in FEEDBACK_SEVERITIES:
+        raise VibeError(
+            f"feedback severity must be one of: {', '.join(FEEDBACK_SEVERITIES)}"
+        )
+    if confidence not in FEEDBACK_CONFIDENCE:
+        raise VibeError(
+            f"feedback confidence must be one of: {', '.join(FEEDBACK_CONFIDENCE)}"
+        )
+
+    redactions: List[str] = []
+    signal: Dict[str, object] = {
+        "kind": kind,
+        "severity": severity,
+        "confidence": confidence,
+    }
+    for key in (
+        "component",
+        "title",
+        "summary",
+        "expected",
+        "observed",
+        "impact",
+        "hypothesis",
+        "proposal",
+        "trigger",
+    ):
+        clean, found = feedback_redact_text(raw.get(key, ""), target, key)
+        signal[key] = clean
+        redactions.extend(found)
+    reproduction, found = feedback_redact_list(raw.get("reproduction"), target, "reproduction")
+    signal["reproduction"] = reproduction
+    redactions.extend(found)
+    evidence, found = feedback_redact_list(raw.get("evidence"), target, "evidence")
+    signal["evidence"] = evidence
+    redactions.extend(found)
+
+    environment: Dict[str, str] = {}
+    defaults = {
+        "workflow": "unspecified",
+        "agent_role": "unspecified",
+        "runtime": f"Python {sys.version_info.major}.{sys.version_info.minor}",
+        "platform_family": platform.system() or "Unknown",
+    }
+    for key, default in defaults.items():
+        clean, found = feedback_redact_text(raw.get(key, default), target, key)
+        environment[key] = clean
+        redactions.extend(found)
+    environment["vibe_kit_version"] = framework_version(target)
+
+    counts: Dict[str, int] = {}
+    for item in redactions:
+        counts[item] = counts.get(item, 0) + 1
+    fingerprint = feedback_fingerprint(signal)
+    return {
+        "schema_version": FEEDBACK_SCHEMA_VERSION,
+        "created_at": utc_now(),
+        "signal": signal,
+        "environment": environment,
+        "privacy": {
+            "policy": "strict",
+            "raw_evidence_persisted": False,
+            "status": "redacted" if counts else "clean",
+            "redactions": [
+                {"class": key, "count": counts[key]} for key in sorted(counts)
+            ],
+        },
+        "dedup": {"fingerprint": fingerprint, "local": "unique"},
+    }
+
+
+def feedback_record_paths(target: Path, report_id: str) -> Tuple[Path, Path, Path]:
+    if not re.fullmatch(r"fb-[0-9]{8}t[0-9]{6}z-[a-f0-9]{8}", report_id):
+        raise VibeError(f"invalid feedback report id: {report_id}")
+    root = feedback_state_root(target) / report_id
+    return root / "report.json", root / "preview.md", root / "state.json"
+
+
+def load_feedback_record(
+    target: Path, report_id: str
+) -> Tuple[Dict[str, object], Dict[str, object], Path]:
+    report_path, _, state_path = feedback_record_paths(target, report_id)
+    if not report_path.is_file() or not state_path.is_file():
+        raise VibeError(f"feedback report not found: {report_id}")
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise VibeError(f"cannot read feedback report {report_id}: {error}") from error
+    if not isinstance(report, dict) or not isinstance(state, dict):
+        raise VibeError(f"invalid feedback report: {report_id}")
+    return report, state, report_path.parent
+
+
+def feedback_draft(target: Path, raw: Dict[str, object]) -> int:
+    target = target.resolve()
+    report = feedback_build_report(target, raw)
+    root = feedback_state_root(target, create=True)
+    fingerprint = str(report["dedup"]["fingerprint"])
+    now = utc_now()
+    for candidate in sorted(root.glob("fb-*/report.json")):
+        try:
+            existing = json.loads(candidate.read_text(encoding="utf-8"))
+            state_path = candidate.parent / "state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if existing.get("dedup", {}).get("fingerprint") != fingerprint:
+            continue
+        existing_signal = existing["signal"]
+        incoming_signal = report["signal"]
+        new_evidence = [
+            item
+            for item in incoming_signal.get("evidence", [])
+            if item not in existing_signal.get("evidence", [])
+        ]
+        severity_increased = SEVERITY_RANK[str(incoming_signal["severity"])] > SEVERITY_RANK[
+            str(existing_signal["severity"])
+        ]
+        state["occurrence_count"] = int(state.get("occurrence_count", 1)) + 1
+        state["last_seen"] = now
+        if new_evidence:
+            existing_signal["evidence"] = (
+                list(existing_signal.get("evidence", [])) + new_evidence
+            )[:5]
+        if severity_increased:
+            existing_signal["severity"] = incoming_signal["severity"]
+        if state.get("status") == "dismissed" and not (new_evidence or severity_increased):
+            atomic_write_json(state_path, state)
+            print(f"Feedback suppressed by prior dismissal: {candidate.parent.name}")
+            print("Network: not used")
+            return 0
+        if state.get("status") == "dismissed":
+            state["status"] = "review-ready"
+            state["dismiss_reason"] = None
+            print(f"Feedback resurfaced with material change: {candidate.parent.name}")
+        else:
+            print(f"Feedback reused existing candidate: {candidate.parent.name}")
+        existing["dedup"]["local"] = "duplicate"
+        atomic_write_json(candidate, existing)
+        atomic_write_json(state_path, state)
+        atomic_write_text(candidate.parent / "preview.md", feedback_preview(existing, state))
+        print(f"Occurrences: {state['occurrence_count']}")
+        print("Network: not used")
+        return 0
+
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dt%H%M%Sz")
+    report_id = f"fb-{stamp}-{fingerprint.split(':', 1)[1][:8]}"
+    report["report_id"] = report_id
+    state = {
+        "status": "review-ready",
+        "occurrence_count": 1,
+        "last_seen": now,
+        "dismiss_reason": None,
+        "remote": {"status": "not_checked", "matching_issue": None},
+        "submission": None,
+    }
+    report_path, preview_path, state_path = feedback_record_paths(target, report_id)
+    report_path.parent.mkdir(parents=True)
+    atomic_write_json(report_path, report)
+    atomic_write_json(state_path, state)
+    atomic_write_text(preview_path, feedback_preview(report, state))
+    print(f"Feedback draft ready: {report_id}")
+    print(f"Preview: {preview_path}")
+    print(f"Privacy: {report['privacy']['status']}")
+    print("Network: not used")
+    return 0
+
+
+def feedback_config(target: Path) -> Dict[str, object]:
+    defaults: Dict[str, object] = {
+        "github_host": "github.com",
+        "github_repository": "",
+        "labels": [],
+    }
+    path = target / FEEDBACK_CONFIG_PATH
+    if not path.is_file():
+        return defaults
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise VibeError(f"cannot read feedback configuration {path}: {error}") from error
+    if not isinstance(value, dict):
+        raise VibeError(f"invalid feedback configuration: {path}")
+    defaults.update(value)
+    if not isinstance(defaults.get("labels"), list):
+        raise VibeError(f"feedback labels must be a list: {path}")
+    return defaults
+
+
+def feedback_repository(target: Path, explicit: Optional[str]) -> str:
+    repository = explicit or str(feedback_config(target).get("github_repository", ""))
+    if not repository:
+        raise VibeError(
+            "No feedback GitHub repository is configured. Local drafting and review remain available; pass --repo owner/repository."
+        )
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise VibeError("feedback repository must use owner/repository form")
+    return repository
+
+
+def feedback_payload(
+    target: Path, report: Dict[str, object], state: Dict[str, object], repository: str
+) -> Tuple[str, str, List[str], str]:
+    title = f"[Vibe Kit feedback] {report['signal']['title']}"
+    body = feedback_preview(report, state)
+    labels = [str(item) for item in feedback_config(target).get("labels", [])]
+    canonical = json.dumps(
+        {"repository": repository, "title": title, "body": body, "labels": labels},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    review_hash = "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return title, body, labels, review_hash
+
+
+def feedback_list(target: Path) -> int:
+    root = feedback_state_root(target.resolve())
+    if not root.is_dir():
+        print("No feedback candidates.")
+        return 0
+    found = 0
+    for state_path in sorted(root.glob("fb-*/state.json")):
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            report = json.loads((state_path.parent / "report.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        print(
+            f"{state_path.parent.name}\t{state.get('status', 'unknown')}\t"
+            f"{state.get('occurrence_count', 1)}\t{report.get('signal', {}).get('title', '')}"
+        )
+        found += 1
+    if not found:
+        print("No feedback candidates.")
+    return 0
+
+
+def feedback_review(target: Path, report_id: str, explicit_repo: Optional[str]) -> int:
+    target = target.resolve()
+    report, state, _ = load_feedback_record(target, report_id)
+    repository = explicit_repo or str(feedback_config(target).get("github_repository", ""))
+    if repository:
+        repository = feedback_repository(target, repository)
+        title, body, labels, review_hash = feedback_payload(
+            target, report, state, repository
+        )
+    else:
+        title = f"[Vibe Kit feedback] {report['signal']['title']}"
+        body = feedback_preview(report, state)
+        labels = []
+        review_hash = "<unavailable: configure --repo owner/repository>"
+    print(f"Target: {repository or '<not configured>'}")
+    print(f"Privacy: {report['privacy']['status']}")
+    print(f"Labels: {', '.join(labels) if labels else '<none>'}")
+    print(f"Review hash: {review_hash}")
+    print("--- exact GitHub payload ---")
+    print(f"Title: {title}\n")
+    print(body, end="")
+    print("--- end payload ---")
+    if repository:
+        print(
+            f"To submit after approving this exact payload:\n"
+            f"  ./bin/vibe feedback submit {report_id} --repo {repository} --confirm {review_hash}"
+        )
+    else:
+        print("No network was used. Configure a repository to obtain a submit hash.")
+    return 0
+
+
+def feedback_gh(target: Path) -> Tuple[str, str]:
+    executable = shutil.which("gh")
+    if not executable:
+        raise VibeError(
+            "GitHub CLI is required only for feedback check and submit. The local draft is unchanged."
+        )
+    host = str(feedback_config(target).get("github_host", "github.com"))
+    auth = subprocess.run(
+        [executable, "auth", "status", "--hostname", host],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if auth.returncode != 0:
+        raise VibeError(
+            f"GitHub CLI is not authenticated for {host}. The local draft is unchanged; run gh auth login --hostname {host}."
+        )
+    return executable, host
+
+
+def feedback_remote_duplicate(
+    target: Path, report: Dict[str, object], repository: str
+) -> Optional[Dict[str, object]]:
+    executable, _ = feedback_gh(target)
+    fingerprint = str(report["dedup"]["fingerprint"])
+    result = subprocess.run(
+        [
+            executable,
+            "issue",
+            "list",
+            "--repo",
+            repository,
+            "--state",
+            "all",
+            "--search",
+            fingerprint,
+            "--json",
+            "number,url,title,state",
+            "--limit",
+            "10",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RemoteFeedbackError(result.stderr.strip() or "GitHub duplicate check failed")
+    try:
+        issues = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError as error:
+        raise RemoteFeedbackError(f"GitHub duplicate response was invalid: {error}") from error
+    if not isinstance(issues, list):
+        raise RemoteFeedbackError("GitHub duplicate response was not a list")
+    return issues[0] if issues else None
+
+
+def feedback_check(target: Path, report_id: str, explicit_repo: Optional[str]) -> int:
+    target = target.resolve()
+    report, state, root = load_feedback_record(target, report_id)
+    repository = feedback_repository(target, explicit_repo)
+    try:
+        duplicate = feedback_remote_duplicate(target, report, repository)
+    except RemoteFeedbackError as error:
+        print(f"ERROR: Could not verify remote duplicates: {error}", file=sys.stderr)
+        print("No issue was created; the local draft is unchanged.", file=sys.stderr)
+        return 1
+    state["remote"] = {
+        "status": "duplicate" if duplicate else "unique",
+        "matching_issue": duplicate,
+    }
+    atomic_write_json(root / "state.json", state)
+    if duplicate:
+        print(f"Feedback already covered by {duplicate.get('url', '<unknown URL>')}")
+        print("No new issue was created.")
+    else:
+        print(f"Remote duplicate check: unique in {repository}")
+    return 0
+
+
+def feedback_submit(
+    target: Path,
+    report_id: str,
+    explicit_repo: Optional[str],
+    confirm: Optional[str],
+) -> int:
+    target = target.resolve()
+    report, state, root = load_feedback_record(target, report_id)
+    if state.get("status") == "dismissed":
+        raise VibeError("dismissed feedback cannot be submitted; create or resurface evidence first")
+    repository = feedback_repository(target, explicit_repo)
+    title, body, labels, review_hash = feedback_payload(target, report, state, repository)
+    if not confirm or confirm != review_hash:
+        raise VibeError(
+            "feedback confirmation is missing or stale; run feedback review for this repository and confirm its exact review hash"
+        )
+
+    print(f"Target: {repository}")
+    print(f"Review hash: {review_hash}")
+    print("--- exact GitHub payload ---")
+    print(f"Title: {title}\n")
+    print(body, end="")
+    print("--- end payload ---")
+
+    try:
+        duplicate = feedback_remote_duplicate(target, report, repository)
+    except RemoteFeedbackError as error:
+        state["status"] = "submit-failed"
+        state["submission"] = {"result": "duplicate-check-failed", "message": str(error)}
+        atomic_write_json(root / "state.json", state)
+        print(f"ERROR: Could not verify remote duplicates: {error}", file=sys.stderr)
+        print("No issue was created; retry with the same reviewed hash.", file=sys.stderr)
+        return 1
+    if duplicate:
+        state["status"] = "submitted"
+        state["submission"] = {
+            "result": "existing",
+            "repository": repository,
+            "url": duplicate.get("url"),
+        }
+        atomic_write_json(root / "state.json", state)
+        print(f"Feedback already covered by {duplicate.get('url', '<unknown URL>')}")
+        print("No new issue was created.")
+        return 0
+
+    executable, _ = feedback_gh(target)
+    command = [
+        executable,
+        "issue",
+        "create",
+        "--repo",
+        repository,
+        "--title",
+        title,
+        "--body-file",
+        "-",
+    ]
+    for label in labels:
+        command.extend(("--label", label))
+    result = subprocess.run(
+        command,
+        input=body,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        state["status"] = "submission-unknown"
+        state["submission"] = {
+            "result": "unknown",
+            "repository": repository,
+            "message": result.stderr.strip(),
+        }
+        atomic_write_json(root / "state.json", state)
+        print("ERROR: GitHub issue creation failed or its result is uncertain.", file=sys.stderr)
+        print("Search by fingerprint before retrying; the local report is preserved.", file=sys.stderr)
+        return 1
+    urls = re.findall(r"https://[^\s]+", result.stdout)
+    if not urls:
+        state["status"] = "submission-unknown"
+        state["submission"] = {"result": "unknown", "repository": repository}
+        atomic_write_json(root / "state.json", state)
+        print("ERROR: GitHub did not return an issue URL; verify before retrying.", file=sys.stderr)
+        return 1
+    issue_url = urls[-1]
+    state["status"] = "submitted"
+    state["submission"] = {
+        "result": "created",
+        "repository": repository,
+        "url": issue_url,
+        "review_hash": review_hash,
+    }
+    atomic_write_json(root / "state.json", state)
+    print(f"Feedback submitted: {issue_url}")
+    return 0
+
+
+def feedback_dismiss(target: Path, report_id: str, reason: str) -> int:
+    target = target.resolve()
+    _, state, root = load_feedback_record(target, report_id)
+    clean_reason, _ = feedback_redact_text(reason, target, "dismiss reason")
+    state["status"] = "dismissed"
+    state["dismiss_reason"] = clean_reason
+    atomic_write_json(root / "state.json", state)
+    print(f"Feedback dismissed: {report_id}")
+    print("The same low-severity fingerprint will stay suppressed until material evidence changes.")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="vibe", description="Install and operate the Vibe Kit development workflow."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for command in ("init", "adopt"):
+        child = subparsers.add_parser(command)
+        child.add_argument("target", nargs="?", default=".")
+        child.add_argument("--name", help="Project name written during first installation")
+
+    for command in ("upgrade", "doctor"):
+        child = subparsers.add_parser(command)
+        child.add_argument("target", nargs="?", default=".")
+
+    plan_parser = subparsers.add_parser(
+        "plan", description="Preview init, adopt, or upgrade without writing files."
+    )
+    plan_parser.add_argument("operation", choices=("init", "adopt", "upgrade"))
+    plan_parser.add_argument("target", nargs="?", default=".")
+
+    package_parser = subparsers.add_parser(
+        "package", description="Build a deterministic unpublished release candidate."
+    )
+    package_parser.add_argument(
+        "--output", type=Path, help="Empty output directory; defaults to dist/vibe-kit-<version>."
+    )
+    package_parser.add_argument(
+        "--status",
+        choices=RELEASE_STATUSES,
+        default="release-candidate-unpublished",
+        help="Release lifecycle status embedded in release-manifest.json.",
+    )
+
+    release_parser = subparsers.add_parser(
+        "validate-release", description="Verify a local Vibe Kit release candidate."
+    )
+    release_parser.add_argument("release_dir")
+
+    verify_parser = subparsers.add_parser("verify")
+    verify_parser.add_argument("target", nargs="?", default=".")
+    verify_parser.add_argument(
+        "--only",
+        action="append",
+        choices=VERIFY_ORDER,
+        default=[],
+        help="Run only one configured check; repeat to select more than one.",
+    )
+
+    item_parser = subparsers.add_parser("work-item")
+    item_parser.add_argument("slug")
+    item_parser.add_argument("--target", default=".")
+    item_parser.add_argument("--size", choices=("S", "M", "L", "s", "m", "l"), default="M")
+    item_parser.add_argument("--title")
+
+    feedback_parser = subparsers.add_parser(
+        "feedback", description="Create and optionally submit sanitized Vibe Kit feedback."
+    )
+    feedback_subparsers = feedback_parser.add_subparsers(
+        dest="feedback_command", required=True
+    )
+    draft_parser = feedback_subparsers.add_parser("draft")
+    draft_parser.add_argument("--target", default=".")
+    draft_parser.add_argument(
+        "--input", help="JSON input path, or - for stdin; overrides individual fields"
+    )
+    draft_parser.add_argument("--kind", choices=FEEDBACK_KINDS, default="workflow-gap")
+    draft_parser.add_argument("--component", default="other")
+    draft_parser.add_argument("--title")
+    draft_parser.add_argument("--summary")
+    draft_parser.add_argument("--expected")
+    draft_parser.add_argument("--observed")
+    draft_parser.add_argument("--impact")
+    draft_parser.add_argument("--hypothesis")
+    draft_parser.add_argument("--proposal")
+    draft_parser.add_argument("--reproduction", action="append", default=[])
+    draft_parser.add_argument("--evidence", action="append", default=[])
+    draft_parser.add_argument("--workflow", default="unspecified")
+    draft_parser.add_argument("--agent-role", default="unspecified")
+    draft_parser.add_argument("--severity", choices=FEEDBACK_SEVERITIES, default="medium")
+    draft_parser.add_argument("--confidence", choices=FEEDBACK_CONFIDENCE, default="medium")
+    draft_parser.add_argument("--trigger", default="explicit-user-request")
+
+    list_parser = feedback_subparsers.add_parser("list")
+    list_parser.add_argument("--target", default=".")
+    for feedback_command in ("review", "check"):
+        child = feedback_subparsers.add_parser(feedback_command)
+        child.add_argument("report_id")
+        child.add_argument("--target", default=".")
+        child.add_argument("--repo")
+    submit_parser = feedback_subparsers.add_parser("submit")
+    submit_parser.add_argument("report_id")
+    submit_parser.add_argument("--target", default=".")
+    submit_parser.add_argument("--repo")
+    submit_parser.add_argument("--confirm")
+    dismiss_parser = feedback_subparsers.add_parser("dismiss")
+    dismiss_parser.add_argument("report_id")
+    dismiss_parser.add_argument("--target", default=".")
+    dismiss_parser.add_argument("--reason", required=True)
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        if args.command in ("init", "adopt"):
+            return install(args.command, Path(args.target), args.name)
+        if args.command == "upgrade":
+            return upgrade(Path(args.target))
+        if args.command == "plan":
+            return plan(args.operation, Path(args.target))
+        if args.command == "package":
+            return package_release(args.output, args.status)
+        if args.command == "validate-release":
+            return validate_release(Path(args.release_dir))
+        if args.command == "doctor":
+            return doctor(Path(args.target))
+        if args.command == "verify":
+            return verify(Path(args.target), args.only)
+        if args.command == "work-item":
+            return work_item(Path(args.target), args.slug, args.size, args.title)
+        if args.command == "feedback":
+            target = Path(args.target)
+            if args.feedback_command == "draft":
+                return feedback_draft(target, feedback_input(args))
+            if args.feedback_command == "list":
+                return feedback_list(target)
+            if args.feedback_command == "review":
+                return feedback_review(target, args.report_id, args.repo)
+            if args.feedback_command == "check":
+                return feedback_check(target, args.report_id, args.repo)
+            if args.feedback_command == "submit":
+                return feedback_submit(
+                    target, args.report_id, args.repo, args.confirm
+                )
+            if args.feedback_command == "dismiss":
+                return feedback_dismiss(target, args.report_id, args.reason)
+    except VibeError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    parser.error("unknown command")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

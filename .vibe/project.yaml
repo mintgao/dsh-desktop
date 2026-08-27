@@ -1,0 +1,15 @@
+schema_version: 1
+project:
+  name: "DeepSeek Harness"
+  lifecycle: "existing"
+stack:
+  language: "TypeScript 6 (strict ESM)"
+  framework: "Cordis plugin harness on Node.js"
+commands:
+  install: "pnpm install"
+  lint: "pnpm run lint"
+  typecheck: "pnpm run typecheck"
+  test: "pnpm run test"
+  build: "pnpm run build"
+feedback:
+  mode: "ask"
