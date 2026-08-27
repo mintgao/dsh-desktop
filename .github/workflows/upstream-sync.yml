@@ -1,26 +1,29 @@
-name: Propose upstream DSH update
+name: Adopt and release upstream DSH
 
 on:
   schedule:
-    - cron: '17 3 * * *'
+    - cron: '17,47 * * * *'
   workflow_dispatch:
     inputs:
       upstream_ref:
-        description: Optional deepseek-harness tag or commit to propose
+        description: Optional next published deepseek-harness release tag to adopt
         required: false
         type: string
 
 permissions:
+  actions: write
   contents: write
   issues: write
-  pull-requests: read
 
 concurrency:
   group: upstream-sync
   cancel-in-progress: false
 
+env:
+  DSH_TELEMETRY_DISABLED: '1'
+
 jobs:
-  propose:
+  adopt:
     if: github.repository == 'mintgao/dsh-desktop'
     runs-on: ubuntu-latest
     env:
@@ -30,90 +33,243 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve upstream release
+      - name: Resolve next published upstream release
         id: upstream
         shell: bash
         env:
           REQUESTED_REF: ${{ inputs.upstream_ref }}
         run: |
           set -euo pipefail
-          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
-          git fetch --force upstream master 'refs/tags/dsh-v*:refs/tags/dsh-v*'
-          ref="$REQUESTED_REF"
-          if [[ -z "$ref" ]]; then
-            ref="$(git tag --list 'dsh-v*' --sort=-version:refname | head -n 1)"
-          fi
-          if [[ -z "$ref" ]]; then
-            echo 'No upstream dsh-v* release tag was found.' >&2
-            exit 1
-          fi
-          commit="$(git rev-parse --verify "${ref}^{commit}")"
-          branch_ref="${ref//\//-}"
-          if [[ ! "$branch_ref" =~ ^[A-Za-z0-9._-]+$ ]]; then
-            echo "Upstream ref cannot form a safe branch name: $ref" >&2
-            exit 1
-          fi
-          branch="chore/sync-upstream-${branch_ref}"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "commit=$commit" >> "$GITHUB_OUTPUT"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          state_file=.github/upstream-sync-state.json
+          current_ref="$(jq -r '.lastAdoptedRelease.tag' "$state_file")"
+          current_commit="$(jq -r '.lastAdoptedRelease.commit' "$state_file")"
+          current_desktop_tag="$(jq -r '.lastAdoptedRelease.desktopTag' "$state_file")"
 
-      - name: Check current downstream state
-        id: state
+          mapfile -t releases < <(
+            gh release list \
+              --repo deepseek-ai/deepseek-harness \
+              --limit 100 \
+              --json tagName,isDraft,publishedAt \
+              --jq '[.[] | select(.isDraft == false and (.tagName | startswith("dsh-v")))] | sort_by(.publishedAt) | .[] | [.tagName, .publishedAt] | @tsv'
+          )
+
+          found_current=false
+          next_ref=
+          next_published_at=
+          for release in "${releases[@]}"; do
+            IFS=$'\t' read -r ref published_at <<< "$release"
+            if [[ "$found_current" == true ]]; then
+              next_ref="$ref"
+              next_published_at="$published_at"
+              break
+            fi
+            if [[ "$ref" == "$current_ref" ]]; then
+              found_current=true
+            fi
+          done
+          if [[ "$found_current" != true ]]; then
+            echo "Recorded upstream release is absent from the public release list: $current_ref" >&2
+            exit 1
+          fi
+
+          if ! gh release view "$current_desktop_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            if git ls-remote --exit-code --tags origin "refs/tags/$current_desktop_tag" >/dev/null 2>&1; then
+              echo 'recover=true' >> "$GITHUB_OUTPUT"
+              echo "ref=$current_ref" >> "$GITHUB_OUTPUT"
+              echo "commit=$current_commit" >> "$GITHUB_OUTPUT"
+              echo "desktop_tag=$current_desktop_tag" >> "$GITHUB_OUTPUT"
+              echo "The adopted release $current_ref still needs its desktop Release." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "Adoption state names missing desktop tag: $current_desktop_tag" >&2
+            exit 1
+          fi
+
+          if [[ -n "$REQUESTED_REF" ]]; then
+            if [[ "$REQUESTED_REF" != "$next_ref" ]]; then
+              echo "Requested release must be the next queued release ($next_ref), got $REQUESTED_REF" >&2
+              exit 1
+            fi
+            next_ref="$REQUESTED_REF"
+          fi
+          if [[ -z "$next_ref" ]]; then
+            echo 'needed=false' >> "$GITHUB_OUTPUT"
+            echo 'Every published upstream DSH release is already adopted.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ ! "$next_ref" =~ ^dsh-v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Unsupported upstream release tag: $next_ref" >&2
+            exit 1
+          fi
+
+          desktop_tag="desktop-v${next_ref#dsh-v}"
+          echo 'needed=true' >> "$GITHUB_OUTPUT"
+          echo 'recover=false' >> "$GITHUB_OUTPUT"
+          echo "ref=$next_ref" >> "$GITHUB_OUTPUT"
+          echo "published_at=$next_published_at" >> "$GITHUB_OUTPUT"
+          echo "desktop_tag=$desktop_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Recover pending desktop release
+        if: steps.upstream.outputs.recover == 'true'
         shell: bash
         env:
+          DESKTOP_TAG: ${{ steps.upstream.outputs.desktop_tag }}
           UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
-          BRANCH: ${{ steps.upstream.outputs.branch }}
+          UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
         run: |
           set -euo pipefail
-          if git merge-base --is-ancestor "$UPSTREAM_COMMIT" HEAD; then
-            echo 'needed=false' >> "$GITHUB_OUTPUT"
-            echo 'The selected upstream release is already included.' >> "$GITHUB_STEP_SUMMARY"
+          release_commit="$(git rev-parse "${DESKTOP_TAG}^{commit}")"
+          active_runs="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow desktop-release.yml \
+            --commit "$release_commit" \
+            --limit 10 \
+            --json status \
+            --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting")] | length')"
+          if [[ "$active_runs" != 0 ]]; then
+            echo "A release run for $DESKTOP_TAG is already active." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          existing_pr="$(gh pr list --state open --head "$BRANCH" --json url --jq '.[0].url // empty')"
-          if [[ -n "$existing_pr" ]]; then
-            echo 'needed=false' >> "$GITHUB_OUTPUT"
-            echo "An upstream sync PR is already open: $existing_pr" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            echo 'needed=false' >> "$GITHUB_OUTPUT"
-            echo "Review branch already exists: https://github.com/${GITHUB_REPOSITORY}/compare/main...${BRANCH}?expand=1" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          echo 'needed=true' >> "$GITHUB_OUTPUT"
+          gh workflow run desktop-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f release_tag="$DESKTOP_TAG" \
+            -f publish=true \
+            -f upstream_ref="$UPSTREAM_REF" \
+            -f upstream_commit="$UPSTREAM_COMMIT"
 
-      - name: Merge upstream release
-        if: steps.state.outputs.needed == 'true'
+      - name: Fetch selected upstream release
+        if: steps.upstream.outputs.needed == 'true'
+        id: source
         shell: bash
         env:
           UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
-          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
-          BRANCH: ${{ steps.upstream.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/deepseek-ai/deepseek-harness.git
+          git fetch --force upstream "refs/tags/$UPSTREAM_REF:refs/tags/$UPSTREAM_REF"
+          commit="$(git rev-parse --verify "${UPSTREAM_REF}^{commit}")"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Merge upstream release
+        if: steps.upstream.outputs.needed == 'true'
+        shell: bash
+        env:
+          UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
+          UPSTREAM_COMMIT: ${{ steps.source.outputs.commit }}
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git switch --create "$BRANCH"
-          if ! git merge --no-ff --no-edit "$UPSTREAM_COMMIT"; then
-            git status --short
-            echo "Upstream $UPSTREAM_REF requires a manual conflict resolution." >&2
-            exit 1
+          if git merge-base --is-ancestor "$UPSTREAM_COMMIT" HEAD; then
+            echo "$UPSTREAM_REF is already present; the release record will still advance." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-          git push --set-upstream origin "$BRANCH"
+          git merge --no-ff "$UPSTREAM_COMMIT" -m "chore: merge upstream DSH $UPSTREAM_REF"
 
-      - name: Open review request
-        if: steps.state.outputs.needed == 'true'
+      - uses: pnpm/action-setup@v4
+        if: steps.upstream.outputs.needed == 'true'
+
+      - uses: actions/setup-node@v6
+        if: steps.upstream.outputs.needed == 'true'
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install immutable dependencies
+        if: steps.upstream.outputs.needed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Run desktop tests
+        if: steps.upstream.outputs.needed == 'true'
+        run: pnpm run test:desktop
+
+      - name: Build desktop main process
+        if: steps.upstream.outputs.needed == 'true'
+        run: pnpm run build:desktop
+
+      - name: Check TypeScript projects
+        if: steps.upstream.outputs.needed == 'true'
+        run: pnpm run typecheck
+
+      - name: Check documentation
+        if: steps.upstream.outputs.needed == 'true'
+        run: pnpm run doc-sync
+
+      - name: Reject generated source drift
+        if: steps.upstream.outputs.needed == 'true'
+        run: git diff --exit-code
+
+      - name: Record adoption and create desktop tag
+        if: steps.upstream.outputs.needed == 'true'
+        shell: bash
+        env:
+          DESKTOP_TAG: ${{ steps.upstream.outputs.desktop_tag }}
+          UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
+          UPSTREAM_COMMIT: ${{ steps.source.outputs.commit }}
+          UPSTREAM_PUBLISHED_AT: ${{ steps.upstream.outputs.published_at }}
+        run: |
+          set -euo pipefail
+          state_file=.github/upstream-sync-state.json
+          temporary_state="$RUNNER_TEMP/upstream-sync-state.json"
+          jq \
+            --arg tag "$UPSTREAM_REF" \
+            --arg commit "$UPSTREAM_COMMIT" \
+            --arg publishedAt "$UPSTREAM_PUBLISHED_AT" \
+            --arg desktopTag "$DESKTOP_TAG" \
+            '.lastAdoptedRelease = {tag: $tag, commit: $commit, publishedAt: $publishedAt, desktopTag: $desktopTag}' \
+            "$state_file" > "$temporary_state"
+          mv "$temporary_state" "$state_file"
+          git add "$state_file"
+          git commit -m "chore(desktop): adopt DSH $UPSTREAM_REF as $DESKTOP_TAG"
+          git tag -a "$DESKTOP_TAG" -m "DSH Desktop Mint ${DESKTOP_TAG#desktop-v} from $UPSTREAM_REF"
+          git push --atomic origin HEAD:main "refs/tags/$DESKTOP_TAG"
+
+      - name: Dispatch desktop release
+        if: steps.upstream.outputs.needed == 'true'
+        shell: bash
+        env:
+          DESKTOP_TAG: ${{ steps.upstream.outputs.desktop_tag }}
+          UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
+          UPSTREAM_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          gh workflow run desktop-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f release_tag="$DESKTOP_TAG" \
+            -f publish=true \
+            -f upstream_ref="$UPSTREAM_REF" \
+            -f upstream_commit="$UPSTREAM_COMMIT"
+
+      - name: Close resolved blocker
+        if: success() && steps.upstream.outputs.ref != '' && (steps.upstream.outputs.needed == 'true' || steps.upstream.outputs.recover == 'true')
         shell: bash
         env:
           UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
-          UPSTREAM_COMMIT: ${{ steps.upstream.outputs.commit }}
-          BRANCH: ${{ steps.upstream.outputs.branch }}
         run: |
           set -euo pipefail
-          compare_url="https://github.com/${GITHUB_REPOSITORY}/compare/main...${BRANCH}?expand=1"
-          url="$(gh issue create \
-            --title "Review DeepSeek Harness ${UPSTREAM_REF}" \
-            --body "Upstream DeepSeek Harness **${UPSTREAM_REF}** at \`${UPSTREAM_COMMIT}\` is available on branch \`${BRANCH}\`. Review the source diff and open its pull request from [the prefilled comparison](${compare_url}). This workflow does not merge the branch, bump the desktop version, or publish a desktop release.")"
-          echo "Opened review request: $url" >> "$GITHUB_STEP_SUMMARY"
+          title="Blocked: adopt DeepSeek Harness $UPSTREAM_REF"
+          issue="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title | jq -r --arg title "$title" 'map(select(.title == $title))[0].number // empty')"
+          if [[ -n "$issue" ]]; then
+            gh issue close "$issue" --repo "$GITHUB_REPOSITORY" --comment "Automatic adoption and release dispatch succeeded in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+          fi
+
+      - name: Record adoption blocker
+        if: failure() && steps.upstream.outputs.ref != ''
+        shell: bash
+        env:
+          UPSTREAM_REF: ${{ steps.upstream.outputs.ref }}
+          UPSTREAM_COMMIT: ${{ steps.source.outputs.commit }}
+        run: |
+          set -euo pipefail
+          title="Blocked: adopt DeepSeek Harness $UPSTREAM_REF"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          body_file="$RUNNER_TEMP/upstream-adoption-blocker.md"
+          printf 'Automatic adoption of **%s** at `%s` stopped. Inspect [%s](%s), resolve the conflict or failing check on a normal branch, and rerun this workflow.\n' "$UPSTREAM_REF" "$UPSTREAM_COMMIT" "$run_url" "$run_url" > "$body_file"
+          issue="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title | jq -r --arg title "$title" 'map(select(.title == $title))[0].number // empty')"
+          if [[ -n "$issue" ]]; then
+            gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body-file "$body_file"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body-file "$body_file"
+          fi

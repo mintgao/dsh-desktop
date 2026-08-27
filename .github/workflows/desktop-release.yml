@@ -4,12 +4,31 @@ on:
   push:
     tags:
       - 'desktop-v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing desktop-v* tag to build
+        required: true
+        type: string
+      publish:
+        description: Publish immediately after every release check passes
+        required: true
+        default: false
+        type: boolean
+      upstream_ref:
+        description: Adopted upstream dsh-v* release tag
+        required: false
+        type: string
+      upstream_commit:
+        description: Adopted upstream release commit
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-release-${{ github.ref }}
+  group: desktop-release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -21,16 +40,30 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.release.outputs.mode }}
+      publish: ${{ steps.release.outputs.publish }}
+      tag: ${{ steps.release.outputs.tag }}
+      upstream_commit: ${{ steps.release.outputs.upstream_commit }}
+      upstream_ref: ${{ steps.release.outputs.upstream_ref }}
       version: ${{ steps.release.outputs.version }}
     steps:
       - name: Validate desktop tag
         id: release
         shell: bash
+        env:
+          PUBLISH_REQUESTED: ${{ inputs.publish }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+          UPSTREAM_COMMIT: ${{ inputs.upstream_commit }}
+          UPSTREAM_REF: ${{ inputs.upstream_ref }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#desktop-v}"
+          tag="${REQUESTED_TAG:-$GITHUB_REF_NAME}"
+          version="${tag#desktop-v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag must be desktop-v followed by a semantic version." >&2
+            exit 1
+          fi
+          if [[ "$PUBLISH_REQUESTED" == true && ( -z "$UPSTREAM_REF" || -z "$UPSTREAM_COMMIT" ) ]]; then
+            echo 'An automatic publication requires its upstream tag and commit.' >&2
             exit 1
           fi
           mode=signed
@@ -38,6 +71,10 @@ jobs:
             mode=preview
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "publish=${PUBLISH_REQUESTED:-false}" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "upstream_commit=${UPSTREAM_COMMIT:-not-recorded}" >> "$GITHUB_OUTPUT"
+          echo "upstream_ref=${UPSTREAM_REF:-not-recorded}" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build:
@@ -57,6 +94,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ needs.prepare.outputs.tag }}
 
       - uses: pnpm/action-setup@v4
 
@@ -191,8 +229,8 @@ jobs:
             apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml
           if-no-files-found: error
 
-  draft-release:
-    name: Create draft GitHub release
+  release:
+    name: Create GitHub release
     needs:
       - prepare
       - build
@@ -202,7 +240,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
+          ref: ${{ needs.prepare.outputs.tag }}
 
       - uses: pnpm/action-setup@v4
         if: needs.prepare.outputs.mode == 'signed'
@@ -240,7 +280,7 @@ jobs:
           cd release-assets
           sha256sum *.dmg *.zip > SHA256SUMS.txt
 
-      - name: Write preview release checksums and notes
+      - name: Write preview release checksums
         if: needs.prepare.outputs.mode == 'preview'
         shell: bash
         run: |
@@ -249,37 +289,62 @@ jobs:
             cd release-assets
             sha256sum *.dmg > SHA256SUMS.txt
           )
-          sed 's/__VERSION__/${{ needs.prepare.outputs.version }}/g' \
-            .github/desktop-preview-release-notes.md > release-notes.md
 
-      - name: Create signed draft release
-        if: needs.prepare.outputs.mode == 'signed'
+      - name: Write release notes
+        shell: bash
+        env:
+          RELEASE_MODE: ${{ needs.prepare.outputs.mode }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          UPSTREAM_COMMIT: ${{ needs.prepare.outputs.upstream_commit }}
+          UPSTREAM_REF: ${{ needs.prepare.outputs.upstream_ref }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          template=.github/desktop-stable-release-notes.md
+          if [[ "$RELEASE_MODE" == preview ]]; then
+            template=.github/desktop-preview-release-notes.md
+          fi
+          source_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          sed \
+            -e "s|__VERSION__|$VERSION|g" \
+            -e "s|__UPSTREAM_REF__|$UPSTREAM_REF|g" \
+            -e "s|__UPSTREAM_COMMIT__|$UPSTREAM_COMMIT|g" \
+            -e "s|__SOURCE_COMMIT__|$source_commit|g" \
+            "$template" > release-notes.md
+
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          release-assets/*.dmg
-          release-assets/*.zip
-          release-assets/*.blockmap
-          release-assets/latest-mac.yml
-          release-assets/SHA256SUMS.txt
-          --repo "$GITHUB_REPOSITORY"
-          --verify-tag
-          --draft
-          --title "DSH Desktop Mint ${{ needs.prepare.outputs.version }}"
-          --notes "Unofficial DSH Desktop distribution maintained by Mint. Built on DeepSeek Harness without official endorsement. Review both notarized DMGs, update ZIPs, latest-mac.yml, and SHA256SUMS.txt before publishing this draft. Publishing this draft makes the version visible to installed clients."
-
-      - name: Create preview draft release
-        if: needs.prepare.outputs.mode == 'preview'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          release-assets/*.dmg
-          release-assets/SHA256SUMS.txt
-          --repo "$GITHUB_REPOSITORY"
-          --verify-tag
-          --draft
-          --prerelease
-          --title "DSH Desktop Mint ${{ needs.prepare.outputs.version }}"
-          --notes-file release-notes.md
+          PUBLISH: ${{ needs.prepare.outputs.publish }}
+          RELEASE_MODE: ${{ needs.prepare.outputs.mode }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=(
+            release-assets/*.dmg
+            release-assets/SHA256SUMS.txt
+          )
+          options=(
+            --repo "$GITHUB_REPOSITORY"
+            --verify-tag
+            --title "DSH Desktop Mint $VERSION"
+            --notes-file release-notes.md
+          )
+          if [[ "$RELEASE_MODE" == signed ]]; then
+            assets+=(
+              release-assets/*.zip
+              release-assets/*.blockmap
+              release-assets/latest-mac.yml
+            )
+            if [[ "$PUBLISH" == true ]]; then
+              options+=(--latest)
+            fi
+          else
+            options+=(--prerelease)
+          fi
+          if [[ "$PUBLISH" != true ]]; then
+            options+=(--draft)
+          fi
+          gh release create "$RELEASE_TAG" "${assets[@]}" "${options[@]}"

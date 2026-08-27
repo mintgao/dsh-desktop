@@ -10,7 +10,7 @@ The contributor workflow keeps the downstream application releasable while prese
 
 - `origin` is `https://github.com/mintgao/dsh-desktop.git`, the downstream repository that owns desktop releases.
 - `upstream` is `https://github.com/deepseek-ai/deepseek-harness.git`, the source of DeepSeek Harness updates.
-- `main` contains release-ready downstream code. Work lands through focused branches and pull requests.
+- `main` contains release-ready downstream code. Human work lands through focused branches and pull requests; the upstream-adoption workflow is the documented exception and pushes only after its release checks pass.
 
 ## First checkout
 
@@ -35,6 +35,7 @@ The checkout is ready when both desktop commands succeed. A real backend launch 
 - Before leaving one computer, commit the coherent change and push its branch. Temporary work may use a clearly marked work-in-progress commit on that branch.
 - On the next computer, run `git fetch origin --prune`, switch to the same branch, and run `git pull --ff-only` before editing.
 - Keep `main` clean. Use `feat/<topic>`, `fix/<topic>`, `docs/<topic>`, or `chore/<topic>` for human work and `codex/<topic>` for Codex-owned branches.
+- For automated upstream work, read [`.github/upstream-sync-state.json`](.github/upstream-sync-state.json), the corresponding Git commit and Release notes, and any open `Blocked: adopt DeepSeek Harness ...` or `Desktop release withdrawn: ...` issue before continuing on another computer or with another Agent.
 
 ## Dependency and generated-file rules
 
@@ -52,7 +53,9 @@ The checkout is ready when both desktop commands succeed. A real backend launch 
 
 ## Upstream sync
 
-[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) checks the latest upstream `dsh-v*` release each day and can also be dispatched with a specific upstream ref. When the selected release is not yet present, it merges that commit on a dedicated `chore/sync-upstream-*` branch and opens a tracking issue with a prefilled PR comparison. This keeps the repository-wide Actions default read-only and leaves pull-request creation with the maintainer. The workflow never resolves conflicts, merges a pull request, changes a desktop version, or publishes a release.
+[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) checks published upstream `dsh-v*` Releases twice an hour and adopts them in publication order. For each release it fetches the exact tag, merges it directly into `main`, runs the desktop tests and build, repository type check, documentation checks, and a generated-diff check, then records the adoption in [`.github/upstream-sync-state.json`](.github/upstream-sync-state.json). It maps `dsh-vX.Y.Z[-suffix]` to `desktop-vX.Y.Z[-suffix]`, atomically pushes the adoption commit and tag, and explicitly dispatches the signed desktop workflow for immediate public publication. A prerelease remains a public preview; a stable release becomes the Latest stable release.
+
+Only one upstream release advances at a time. A merge conflict or failing check stops before any downstream push and opens or updates a `Blocked: adopt DeepSeek Harness ...` issue with the failed run. Fix that exact release on a normal branch, merge the fix into `main`, and rerun the workflow; if the tag was pushed but publication was interrupted, the next run redispatches the missing Release. The state file, Git history, workflow runs, Release notes, and blocker issues form the cross-machine and cross-Agent handoff record.
 
 For a manual sync, use the same dedicated-branch model so desktop changes and workflow guards remain reviewable:
 
@@ -64,10 +67,10 @@ git switch -c chore/sync-upstream-YYYY-MM-DD
 git merge --no-ff upstream/master
 ```
 
-Resolve conflicts on the sync branch, run checks matched to the changed files, and merge it through a pull request. Review upstream source changes separately from the later desktop release decision. Do not force-push `main` or rewrite published `desktop-v*` tags.
+Resolve conflicts on the sync branch, run checks matched to the changed files, and merge it through a pull request. Do not advance the state file or create the desktop tag manually; rerun the adoption workflow so it records and releases the queued upstream version consistently. Do not force-push `main` or rewrite `desktop-v*` tags.
 
 ## Pull requests and releases
 
 - State the user-visible result, list only checks actually run, and mark the affected Mac architectures in the pull request template.
 - Keep unrelated changes in separate pull requests. Update the owning documentation and Agent Note for every non-trivial code, process, or release decision.
-- Follow the [desktop application reference](apps/desktop/README.md) for local packages, signed preview and stable releases, and installed-client updates. Public artifacts come only from the tag-driven workflow and remain draft until a maintainer reviews the channel-appropriate DMGs, metadata, release notes, and checksums.
+- Follow the [desktop application reference](apps/desktop/README.md) for local packages, signed preview and stable releases, installed-client updates, and release withdrawal. Upstream-driven tags publish automatically after every signing, notarization, artifact, and source check passes. A manually pushed desktop tag still creates a draft for exceptional releases.
