@@ -26,7 +26,7 @@ Background failures are written to the desktop log. A manual failure uses a nati
 
 ### Release and signed-channel transition
 
-A tag with a prerelease suffix makes the release workflow build Developer ID-signed and notarized arm64 and x64 DMGs. It creates a draft GitHub prerelease containing only those DMGs and SHA-256 checksums. The checksum file records asset basenames so downloading it beside the DMGs makes the standard verification command work without recreating a CI directory. The release-note template identifies the distribution and signed preview status, links each architecture directly, explains manual replacement, and requires the embedded Harness revision, changes, and migration notes before publication.
+A tag with a prerelease suffix makes the release workflow build Developer ID-signed and notarized arm64 and x64 DMGs. An [automatic upstream adoption](../process/2026-08-27-automatic-upstream-desktop-releases.md) publishes the prerelease after all source and release checks pass, while a manually pushed desktop tag creates a draft. Both contain only those DMGs and SHA-256 checksums. The checksum file records asset basenames so downloading it beside the DMGs makes the standard verification command work without recreating a CI directory. Generated release notes identify the distribution and signed preview status, link each architecture directly, explain manual replacement, and record the embedded Harness tag and commit plus the desktop source commit.
 
 A preview client can discover a later stable release and guide the user through one final manual installation. Stable versions do not contain a prerelease suffix, so the newly installed application switches to the `electron-updater` lifecycle. Preview artifacts do not provide channel metadata or enter automatic installation.
 
@@ -42,7 +42,7 @@ A preview client can discover a later stable release and guide the user through 
 
 ## Verification
 
-Controller tests cover notification deduplication, 24-hour one-shot reminders, skipped-version isolation, manual results, failure visibility, scheduling, and teardown. API tests cover ETags, HTTP failures, semantic ordering, draft and unrelated-tag filtering, architecture assets, and exact Release URLs. Preference tests cover atomic round trips and invalid-document reset. Workflow tests prove that prerelease tags require signing and notarization while excluding automatic-update assets, and that stable tags retain update metadata and draft publication. The Electron TypeScript build verifies the native integration.
+Controller tests cover notification deduplication, 24-hour one-shot reminders, skipped-version isolation, manual results, failure visibility, scheduling, and teardown. API tests cover ETags, HTTP failures, semantic ordering, draft and unrelated-tag filtering, architecture assets, and exact Release URLs. Preference tests cover atomic round trips and invalid-document reset. Workflow tests prove that prerelease tags require signing and notarization while excluding automatic-update assets, that stable tags retain update metadata, and that automatic versus manual dispatch selects public or draft publication. The Electron TypeScript build verifies the native integration.
 
 ## Consequences
 

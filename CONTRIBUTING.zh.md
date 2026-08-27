@@ -10,7 +10,7 @@ DSH Desktop Mint 是基于 DeepSeek Harness 构建的非官方下游发行版。
 
 - `origin` 是 `https://github.com/mintgao/dsh-desktop.git`，它持有下游代码与桌面版发布。
 - `upstream` 是 `https://github.com/deepseek-ai/deepseek-harness.git`，它是 DeepSeek Harness 更新的来源。
-- `main` 只包含可发布的下游代码。所有工作通过聚焦的分支与 Pull Request 进入。
+- `main` 只包含可发布的下游代码。人工变更通过聚焦的分支与 Pull Request 进入；上游引入工作流是有文档记录的例外，并且只有发布检查全部通过后才会直接推送。
 
 ## 首次检出
 
@@ -35,6 +35,7 @@ pnpm run build:desktop
 - 离开一台电脑前，提交语义完整的变更并推送对应分支。临时工作可以在该分支上使用明确标记的 WIP 提交。
 - 在另一台电脑上编辑前，运行 `git fetch origin --prune`，切换到同一分支，再运行 `git pull --ff-only`。
 - 保持 `main` 干净。人工变更使用 `feat/<topic>`、`fix/<topic>`、`docs/<topic>` 或 `chore/<topic>`，由 Codex 持有的分支使用 `codex/<topic>`。
+- 跨电脑或 Agent 继续自动上游任务前，先读取 [`.github/upstream-sync-state.json`](.github/upstream-sync-state.json)、对应 Git 提交与 Release 说明，以及所有未关闭的 `Blocked: adopt DeepSeek Harness ...` 或 `Desktop release withdrawn: ...` Issue。
 
 ## 依赖与生成文件规则
 
@@ -52,7 +53,9 @@ pnpm run build:desktop
 
 ## 同步上游
 
-[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) 每天检查最新的上游 `dsh-v*` 发布，也可以用指定上游 ref 手工触发。若下游尚未包含该版本，工作流会把对应提交合并到专用 `chore/sync-upstream-*` 分支，并创建带预填 PR 对比链接的跟踪 Issue。这样可以让仓库级 Actions 默认权限保持只读，同时把 Pull Request 创建动作留给维护者。工作流绝不会解决冲突、合并 Pull Request、修改桌面版本或发布版本。
+[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) 每小时两次检查上游已经公开的 `dsh-v*` Release，并按发布时间逐个引入。对于每个版本，它会取得准确标签，直接合并到 `main`，运行桌面测试与构建、仓库类型检查、文档检查和生成差异检查，再把引入结果写入 [`.github/upstream-sync-state.json`](.github/upstream-sync-state.json)。它把 `dsh-vX.Y.Z[-suffix]` 映射为 `desktop-vX.Y.Z[-suffix]`，原子推送引入提交与标签，并显式触发签名桌面工作流立即公开发布。预发布版本仍是公开预览版；稳定版会成为 Latest 稳定版。
+
+工作流每次只推进一个上游 Release。合并冲突或检查失败会在任何下游推送前停止，并创建或更新带失败运行链接的 `Blocked: adopt DeepSeek Harness ...` Issue。应在普通分支上修复这个准确版本，把修复合入 `main` 后重新运行工作流；如果标签已经推送而发布中断，下一次运行会重新触发缺失的 Release。状态文件、Git 历史、工作流运行、Release 说明和阻塞 Issue 共同组成跨机器、跨 Agent 的交接记录。
 
 手工同步也要使用相同的专用分支模式，使桌面改动与工作流保护保持可审查：
 
@@ -64,10 +67,10 @@ git switch -c chore/sync-upstream-YYYY-MM-DD
 git merge --no-ff upstream/master
 ```
 
-在同步分支解决冲突，按变更文件运行匹配的检查，再通过 Pull Request 合入。应分别审查上游源码变更与后续的桌面发布决策。不得强推 `main`，也不得改写已发布的 `desktop-v*` 标签。
+在同步分支解决冲突，按变更文件运行匹配的检查，再通过 Pull Request 合入。不要手工推进状态文件或创建桌面标签；重新运行上游引入工作流，由它一致地记录并发布队首版本。不得强推 `main`，也不得改写 `desktop-v*` 标签。
 
 ## Pull Request 与发布
 
 - 在 Pull Request 模板中说明用户可见结果，只列出实际运行的检查，并标记受影响的 Mac 架构。
 - 无关变更应拆成不同 Pull Request。每项非平凡的代码、流程或发布决策都要更新其所属文档与 Agent Note。
-- 本地打包、签名预览版与稳定版、已安装客户端更新流程见[桌面应用参考](apps/desktop/README.zh.md)。公开产物只能由标签驱动的发布工作流生成，并在维护者审查对应通道的 DMG、元数据、发布说明与校验和之前保持草稿状态。
+- 本地打包、签名预览版与稳定版、已安装客户端更新和版本撤回流程见[桌面应用参考](apps/desktop/README.zh.md)。由上游驱动的标签会在签名、公证、产物和源码检查全部通过后自动公开发布；手工推送的桌面标签仍会为例外发布创建草稿。

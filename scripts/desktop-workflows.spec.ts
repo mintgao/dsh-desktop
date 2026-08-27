@@ -6,22 +6,25 @@ import { describe, expect, it } from 'vitest'
 const root = resolve(import.meta.dirname, '..')
 
 describe('desktop release workflow', () => {
-  it('keeps stable releases signed and publishes both native update ZIPs through one draft-only feed', () => {
+  it('keeps stable releases signed and can publish both native update ZIPs automatically', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release.yml')
+    const triggers = asRecord(workflow.on, 'workflow triggers')
     const build = workflowJob(workflow, 'build')
-    const draft = workflowJob(workflow, 'draft-release')
+    const release = workflowJob(workflow, 'release')
     const buildSteps = workflowSteps(build)
-    const draftSteps = workflowSteps(draft)
+    const releaseSteps = workflowSteps(release)
     const secretStep = namedStep(buildSteps, 'Validate signing secrets')
     const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
     const packageStep = namedStep(buildSteps, 'Build, sign, and notarize DMG and update ZIP')
     const packageSmokeStep = namedStep(buildSteps, 'Smoke packaged updater module')
     const signatureStep = namedStep(buildSteps, 'Verify Developer ID application signature')
     const notarizationStep = namedStep(buildSteps, 'Verify notarization ticket')
-    const metadataStep = namedStep(draftSteps, 'Merge architecture update metadata')
-    const checksumStep = namedStep(draftSteps, 'Write signed release checksums')
-    const releaseStep = namedStep(draftSteps, 'Create signed draft release')
+    const metadataStep = namedStep(releaseSteps, 'Merge architecture update metadata')
+    const checksumStep = namedStep(releaseSteps, 'Write signed release checksums')
+    const notesStep = namedStep(releaseSteps, 'Write release notes')
+    const releaseStep = namedStep(releaseSteps, 'Create GitHub release')
 
+    expect(triggers).toHaveProperty('workflow_dispatch')
     expect(build.env).toBeUndefined()
     expect(secretStep.env).toEqual({
       CSC_LINK: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
@@ -51,24 +54,27 @@ describe('desktop release workflow', () => {
     expect(String(checksumStep.run)).toContain('cd release-assets')
     expect(String(checksumStep.run)).toContain('sha256sum *.dmg *.zip > SHA256SUMS.txt')
     expect(String(checksumStep.run)).not.toContain('sha256sum release-assets/')
+    expect(String(notesStep.run)).toContain('__UPSTREAM_COMMIT__')
     expect(String(releaseStep.run)).toContain('release-assets/latest-mac.yml')
-    expect(String(releaseStep.run)).toContain('--draft')
+    expect(String(releaseStep.run)).toContain('options+=(--latest)')
+    expect(String(releaseStep.run)).toContain('options+=(--draft)')
+    expect(String(releaseStep.run)).toContain('if [[ "$PUBLISH" != true ]]')
   })
 
-  it('requires Apple credentials for prerelease tags and creates a signed preview draft', () => {
+  it('requires Apple credentials for prerelease tags and creates a signed preview release', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release.yml')
     const prepareSteps = workflowSteps(workflowJob(workflow, 'prepare'))
     const build = workflowJob(workflow, 'build')
     const buildSteps = workflowSteps(build)
-    const draftSteps = workflowSteps(workflowJob(workflow, 'draft-release'))
+    const releaseSteps = workflowSteps(workflowJob(workflow, 'release'))
     const channelStep = namedStep(prepareSteps, 'Validate desktop tag')
     const secretStep = namedStep(buildSteps, 'Validate signing secrets')
     const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
     const previewBuild = namedStep(buildSteps, 'Build, sign, and notarize preview DMG')
     const signatureStep = namedStep(buildSteps, 'Verify Developer ID application signature')
     const notarizationStep = namedStep(buildSteps, 'Verify notarization ticket')
-    const checksumStep = namedStep(draftSteps, 'Write preview release checksums and notes')
-    const previewRelease = namedStep(draftSteps, 'Create preview draft release')
+    const checksumStep = namedStep(releaseSteps, 'Write preview release checksums')
+    const previewRelease = namedStep(releaseSteps, 'Create GitHub release')
 
     expect(build.env).toBeUndefined()
     expect(String(channelStep.run)).toContain('mode=preview')
@@ -90,9 +96,9 @@ describe('desktop release workflow', () => {
     expect(String(checksumStep.run)).toContain('cd release-assets')
     expect(String(checksumStep.run)).toContain('sha256sum *.dmg > SHA256SUMS.txt')
     expect(String(checksumStep.run)).not.toContain('sha256sum release-assets/')
-    expect(String(previewRelease.run)).toContain('--prerelease')
-    expect(String(previewRelease.run)).toContain('--draft')
-    expect(String(previewRelease.run)).not.toContain('latest-mac.yml')
+    expect(String(channelStep.run)).toContain('An automatic publication requires its upstream tag and commit.')
+    expect(String(previewRelease.run)).toContain('options+=(--prerelease)')
+    expect(String(previewRelease.run)).toContain('options+=(--draft)')
   })
 
   it('loads the updater adapter from both native package-smoke artifacts', () => {
@@ -114,19 +120,62 @@ describe('desktop release workflow', () => {
 })
 
 describe('desktop upstream workflow', () => {
-  it('can only propose a reviewed source change', () => {
+  it('adopts each published upstream release and dispatches its desktop release', () => {
     const workflow = workflowDocument('.github/workflows/upstream-sync.yml')
-    const propose = workflowJob(workflow, 'propose')
-    const commands = workflowSteps(propose).map(stepCommand).join('\n')
+    const adopt = workflowJob(workflow, 'adopt')
+    const commands = workflowSteps(adopt).map(stepCommand).join('\n')
 
-    expect(workflow.permissions).toEqual({ contents: 'write', issues: 'write', 'pull-requests': 'read' })
-    expect(propose.if).toBe("github.repository == 'mintgao/dsh-desktop'")
-    expect(commands).toContain("git tag --list 'dsh-v*'")
+    expect(workflow.permissions).toEqual({ actions: 'write', contents: 'write', issues: 'write' })
+    expect(adopt.if).toBe("github.repository == 'mintgao/dsh-desktop'")
+    expect(commands).toContain('.github/upstream-sync-state.json')
+    expect(commands).toContain('gh release list')
+    expect(commands).toContain('git merge --no-ff')
+    expect(commands).toContain('pnpm run test:desktop')
+    expect(commands).toContain('pnpm run build:desktop')
+    expect(commands).toContain('pnpm run typecheck')
+    expect(commands).toContain('pnpm run doc-sync')
+    expect(commands).toContain('git diff --exit-code')
+    expect(commands).toContain('git push --atomic origin HEAD:main')
+    expect(commands).toContain('gh workflow run desktop-release.yml')
     expect(commands).toContain('gh issue create')
-    expect(commands).toContain('/compare/main...')
     expect(commands).not.toContain('gh pr create')
     expect(commands).not.toContain('gh pr merge')
     expect(commands).not.toContain('gh release create')
+  })
+
+  it('records the adopted upstream release and desktop baseline for idempotent handoff', () => {
+    const state = JSON.parse(readFileSync(resolve(root, '.github/upstream-sync-state.json'), 'utf8')) as Record<string, unknown>
+    const adopted = asRecord(state.lastAdoptedRelease, 'last adopted release')
+
+    expect(state.schemaVersion).toBe(1)
+    expect(state.upstreamRepository).toBe('deepseek-ai/deepseek-harness')
+    expect(adopted).toEqual({
+      tag: 'dsh-v0.1.1-rc.2',
+      commit: 'b150a551b8d465e31e418e1b2eaf5e79bbb7d28e',
+      publishedAt: '2026-08-21T12:35:08Z',
+      desktopTag: 'desktop-v0.1.0-preview.5',
+    })
+  })
+})
+
+describe('desktop release withdrawal workflow', () => {
+  it('withdraws without deleting recovery data and restores the previous stable release', () => {
+    const workflow = workflowDocument('.github/workflows/desktop-release-withdraw.yml')
+    const withdraw = workflowJob(workflow, 'withdraw')
+    const commands = workflowSteps(withdraw).map(stepCommand).join('\n')
+
+    expect(workflow.permissions).toEqual({ contents: 'write', issues: 'write' })
+    expect(withdraw.if).toBe("github.repository == 'mintgao/dsh-desktop'")
+    expect(commands).toContain('gh release edit "$RELEASE_TAG"')
+    expect(commands).toContain('--draft')
+    expect(commands).toContain('gh release edit "$fallback_tag"')
+    expect(commands).toContain('--latest')
+    expect(commands).toContain('gh issue create')
+    expect(commands).toContain('gh issue comment')
+    expect(commands).toContain('gh issue reopen')
+    expect(commands).toContain('--draft=false')
+    expect(commands).not.toContain('gh release delete')
+    expect(commands).not.toContain('git push --delete')
   })
 })
 

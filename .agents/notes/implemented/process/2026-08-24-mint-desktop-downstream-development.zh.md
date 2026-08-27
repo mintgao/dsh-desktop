@@ -12,13 +12,13 @@ DSH Desktop 需要发布个人化应用，而它的后端由当前 DeepSeek Harn
 
 ## 决策
 
-Mint 项目在公开的 `mintgao/dsh-desktop` 仓库中保留完整的 DeepSeek Harness Git 历史。本地 `origin` 指向该下游仓库，`upstream` 指向 `deepseek-ai/deepseek-harness`。下游 `main` 始终保持可发布，功能、修复、文档、依赖和上游同步分支都通过 Pull Request 进入。[`upstream-sync.yml`](../../../../.github/workflows/upstream-sync.yml) 每天检查最新的上游 `dsh-v*` 标签，也可以接受手工指定的 ref。它会把缺失版本合并到专用 `chore/sync-upstream-*` 分支，并创建带预填 PR 对比链接的跟踪 Issue；遇到冲突时会停止并等待人工处理，而且绝不创建或合并 PR，也不会发布。仓库级 Actions 权限保持默认只读；该任务只声明分支、Issue 写权限和 Pull Request 读权限。这样，桌面代码与工作流保护的冲突会保持可见。
+Mint 项目在公开的 `mintgao/dsh-desktop` 仓库中保留完整的 DeepSeek Harness Git 历史。本地 `origin` 指向该下游仓库，`upstream` 指向 `deepseek-ai/deepseek-harness`。下游 `main` 始终保持可发布，人工功能、修复、文档与依赖分支都通过 Pull Request 进入。[自动引入上游并发布桌面版](2026-08-27-automatic-upstream-desktop-releases.zh.md)流程是有文档记录的例外：只有必需检查通过后，它才会把队首的已公开上游标签直接合入，然后记录并发布这次引入。冲突和检查失败会在推送前停止，并通过阻塞 Issue 保持可见。
 
 根目录 [`CONTRIBUTING.md`](../../../../CONTRIBUTING.zh.md) 持有跨设备流程。源码只能通过 Git 流转；活跃检出目录、依赖目录、暂存后端和构建产物都不得通过云文件同步，也不得在 CPU 架构之间复制。[`.node-version`](../../../../.node-version) 选择 Node 24，`package.json#packageManager` 选择准确 pnpm 版本，lockfile 继续作为依赖事实来源。凭据、`~/.dsh`、日志、Apple 签名材料和 App Store Connect 密钥都留在 Git 之外。
 
 官方仓库自动触发的 CI、E2E、Issue 管理和包发布任务带有 `github.repository == 'deepseek-ai/deepseek-harness'` 条件。这样既保留它们的源码与上游行为，也能阻止下游仓库分配组织专用 runner、修改官方 Project 看板、消耗外部 API 凭据或发布官方包。[`desktop-ci.yml`](../../../../.github/workflows/desktop-ci.yml) 提供下游无密钥检查与显式双架构打包冒烟测试。
 
-桌面版本使用独立于 Harness npm 版本的不可变语义化 `desktop-v*` 标签。[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) 在原生 Apple Silicon runner 上构建 arm64，在原生 Intel runner 上构建 x64。每个标签都要求 Developer ID Application 证书与 App Store Connect API key 凭据，强制签名，分别提交两种架构进行公证，验证应用身份与已装订票据，并创建 Release 草稿。预发布后缀会把草稿标记为 Pre-release，只包含两份 DMG 与 SHA-256 校验和；稳定版 `desktop-vX.Y.Z` 标签还会增加两份更新 ZIP、blockmap 与合并后的更新元数据。维护者从安装产物完成测试后，手工发布任一种草稿。发布预览版会启用手工 Release 提醒，发布稳定版会启用自动更新源。[公开桌面版签名](2026-08-25-signed-public-desktop-releases.zh.md)持有应用身份要求，[预览版手工更新提醒](../feature/2026-08-24-desktop-manual-preview-updates.zh.md)持有通道过渡。
+桌面版本使用不可变的语义化 `desktop-v*` 标签。自动上游引入会把准确的 Harness Release 版本映射为桌面标签；仍可为例外的桌面专用版本创建标签。[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) 在原生 Apple Silicon runner 上构建 arm64，在原生 Intel runner 上构建 x64。每个标签都要求 Developer ID Application 证书与 App Store Connect API key 凭据，强制签名，分别提交两种架构进行公证，并验证应用身份与已装订票据。自动上游触发会在所有检查通过后公开发布，手工推送的标签则创建草稿。预发布版包含两份 DMG 与 SHA-256 校验和；稳定版 `desktop-vX.Y.Z` Release 还会增加两份更新 ZIP、blockmap 与合并后的更新元数据。[公开桌面版签名](2026-08-25-signed-public-desktop-releases.zh.md)持有应用身份要求，[预览版手工更新提醒](../feature/2026-08-24-desktop-manual-preview-updates.zh.md)持有通道过渡。
 
 应用使用 `io.github.mintgao.dsh-desktop` 作为 bundle 标识符，使用 `DSH-Desktop-Mint-*` 作为产物前缀。Mint 浪花图标、根仓库声明、应用 README、安全政策、发布说明与仓库描述都会明确它是非官方发行版，同时保留真实的 DeepSeek Harness 归属说明。
 
@@ -34,8 +34,8 @@ Mint 项目在公开的 `mintgao/dsh-desktop` 仓库中保留完整的 DeepSeek 
 
 ## 验证
 
-桌面源码测试、更新元数据测试、Electron 主进程构建、类型检查、文档门禁与原生 arm64、x64 打包冒烟测试覆盖普通变更。每条打包冒烟测试都会用内部 smoke 参数运行发布的可执行文件并加载打包后的主进程模块图，因此 ESM/CommonJS 互操作在 `app.asar` 内接受检查，而不是从 TypeScript 构建结果推断。工作流约定测试固定该产物检查、两条通道的签名凭据、仅稳定版包含的更新资产与草稿发布。发布任务还会验证原生架构选择、必需 Secrets、Developer ID 签名、公证票据装订、DMG 评估、架构更新元数据、校验和与仅生成草稿的发布行为。定时上游任务只能证明可以提出源码合并与 Pull Request；普通 Pull Request 检查在合并前持有兼容性验证。
+桌面源码测试、更新元数据测试、Electron 主进程构建、类型检查、文档门禁与原生 arm64、x64 打包冒烟测试覆盖普通变更。每条打包冒烟测试都会用内部 smoke 参数运行发布的可执行文件并加载打包后的主进程模块图，因此 ESM/CommonJS 互操作在 `app.asar` 内接受检查，而不是从 TypeScript 构建结果推断。工作流测试固定该产物检查、两条通道的签名凭据、仅稳定版包含的更新资产、自动与手工发布区别、有序上游状态、必需的推送前检查和可恢复撤回。发布任务还会在公开发布前验证原生架构选择、必需 Secrets、Developer ID 签名、公证票据装订、DMG 评估、架构更新元数据与校验和。
 
 ## 后果
 
-下游仓库仍然大于独立 Electron 客户端，自动提出的上游更新也可能因发布或工作流文件冲突而停止。两个原生 macOS 任务及签名、公证会增加发布时间和存储。Apple 凭据就绪前不能发布任何公开桌面通道；预览版仍要求知情用户手工替换，自动更新则仅属于稳定版。一份 Git 历史仍可以跨设备承载桌面版与 Harness 迭代，上游发布可以被及时感知且不会绕过审查，官方基础设施不会意外运行。
+下游仓库仍然大于独立 Electron 客户端，自动上游引入也可能因发布或工作流文件冲突而停止。两个原生 macOS 任务及签名、公证会增加发布时间和存储。Apple 凭据就绪前不能发布任何公开桌面通道；预览版仍要求知情用户手工替换，自动安装则仅属于稳定版。一份 Git 历史加上明确的状态、Release、工作流与 Issue 记录可以跨设备和 Agent 承载桌面版与 Harness 迭代，官方基础设施不会意外运行。

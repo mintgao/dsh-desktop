@@ -14,11 +14,11 @@ DSH Desktop 使用的部分 macOS 原生能力，其操作系统身份无法通�
 
 每个公开的 `desktop-v*` 产物都必须使用 Developer ID Application 证书签名并完成公证。预发布后缀只控制更新行为与资产选择，不改变信任级别：预览标签生成经过签名与公证、用于手工替换的 DMG；稳定标签还会生成 `electron-updater` 使用的 ZIP、blockmap 和合并元数据。
 
-[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) 对两条通道都要求证书与 App Store Connect API key Secrets。每个原生构建都会强制签名与公证，使用 `codesign` 验证完整 bundle，拒绝缺少 Developer ID Application authority 或只有 ad-hoc 签名的产物，验证 DMG 已装订的公证票据，并且只创建 Release 草稿。维护者从安装后的产物完成测试后再发布。
+[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) 对两条通道都要求证书与 App Store Connect API key Secrets。每个原生构建都会强制签名与公证，使用 `codesign` 验证完整 bundle，拒绝缺少 Developer ID Application authority 或只有 ad-hoc 签名的产物，并验证 DMG 已装订的公证票据。[自动上游引入](2026-08-27-automatic-upstream-desktop-releases.zh.md)只有在这些检查和所有必需源码检查通过后才会公开发布。手工推送桌面标签仍会为例外版本创建草稿。
 
 未签名的本地构建仍可用于源码迭代与打包冒烟测试，但它们绝不是公开发布产物，也不能作为通知、更新、Keychain 行为或其他依赖稳定应用身份的 macOS 能力的验收证据。仓库的 [Mint 功能工作流](../../../skills/dsh-mint-client-feature/SKILL.md)要求从签名并公证的产物执行相关 macOS 交互测试。
 
-本决策只取代 [Mint 桌面下游开发](2026-08-24-mint-desktop-downstream-development.zh.md)与[预览版手工更新提醒](../feature/2026-08-24-desktop-manual-preview-updates.zh.md)中的未签名预览部分。下游仓库模型、预览版手工更新流程、签名稳定版更新器和由维护者控制的 Release 草稿发布均保持不变。
+本决策只取代 [Mint 桌面下游开发](2026-08-24-mint-desktop-downstream-development.zh.md)与[预览版手工更新提醒](../feature/2026-08-24-desktop-manual-preview-updates.zh.md)中的未签名预览部分。下游仓库模型、预览版手工更新流程、签名稳定版更新器与签名要求保持不变。后续的自动上游决策取代了上游驱动版本由维护者控制草稿发布的部分，但没有削弱这里的身份要求。
 
 ## 考虑过的备选方案
 
@@ -32,7 +32,7 @@ DSH Desktop 使用的部分 macOS 原生能力，其操作系统身份无法通�
 
 ## 验证
 
-工作流约定测试会要求两条发布路径都具备签名 Secrets、强制签名、公证、Developer ID 身份检查与票据验证，同时证明只有稳定版包含自动更新资产。文档检查会让公开发布与本地构建限制在两种语言中保持同步。
+工作流测试会要求两条发布路径都具备签名 Secrets、强制签名、公证、Developer ID 身份检查与票据验证，同时证明只有稳定版包含自动更新资产。它们还会区分自动立即公开与手工标签的草稿兜底路径。文档检查会让公开发布与本地构建限制在两种语言中保持同步。
 
 Release 验收会安装工作流生成的 DMG，确认 bundle 身份与公证票据，运行打包冒烟测试，启用相关设置，让应用在后台完成一个真实任务，观察 macOS 通知，再激活通知返回匹配任务。renderer shim 与未签名本地构建仍是较低层级的证据，绝不能替代这项交互。
 

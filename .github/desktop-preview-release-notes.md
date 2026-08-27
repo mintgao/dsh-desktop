@@ -17,9 +17,9 @@ This is a **code-signed and notarized preview** of the unofficial DSH Desktop di
 ## Release information
 
 - Desktop version: `__VERSION__`
-- Embedded DeepSeek Harness: document the adopted upstream tag or commit before publishing
-- Changes: replace this line before publishing
-- Known limitations or migrations: replace this line before publishing
+- Embedded DeepSeek Harness: `__UPSTREAM_REF__` at `__UPSTREAM_COMMIT__`
+- Desktop source commit: `__SOURCE_COMMIT__`
+- Upstream changes: https://github.com/deepseek-ai/deepseek-harness/releases/tag/__UPSTREAM_REF__
 
 `SHA256SUMS.txt` contains the checksums for both DMGs. This preview checks GitHub Releases for newer desktop versions, but it never downloads or installs an update itself. The application will identify the recommended DMG and open the exact Release page after you choose to continue.
 
@@ -34,4 +34,4 @@ This is a **code-signed and notarized preview** of the unofficial DSH Desktop di
 
 安装更新前请退出 DSH Desktop，打开对应 DMG，把 **DSH Desktop** 拖入**应用程序**并替换旧版本。打开应用时，如果 macOS 无法验证 Developer ID 签名或公证票据，请停止使用该下载。应用外的普通 `~/.dsh` 设置、凭据、workspace 与会话不会被替换。
 
-发布前必须补齐上方 Release information 中的内置 Harness 修订、变更与迁移说明。本预览版只会提醒并引导用户打开确切 Release 页面，不会自行下载或安装更新。
+上方 Release information 记录了内置 Harness 版本和 Desktop 源码提交。本预览版只会提醒并引导用户打开确切 Release 页面，不会自行下载或安装更新。

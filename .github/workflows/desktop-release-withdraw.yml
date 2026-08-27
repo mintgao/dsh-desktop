@@ -1,0 +1,115 @@
+name: Withdraw DSH Desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published desktop-v* release to withdraw
+        required: true
+        type: string
+      reason:
+        description: User-visible reason for withdrawing this release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: desktop-release-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  withdraw:
+    if: github.repository == 'mintgao/dsh-desktop'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      WITHDRAWAL_REASON: ${{ inputs.reason }}
+    steps:
+      - name: Validate published release
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#desktop-v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo 'Release must be a desktop-v* semantic version.' >&2
+            exit 1
+          fi
+          release_json="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease)"
+          title="Desktop release withdrawn: $RELEASE_TAG"
+          issue_json="$(gh issue list --repo "$GITHUB_REPOSITORY" --state all --limit 100 --json number,state,title | jq -c --arg title "$title" 'map(select(.title == $title))[0] // {}')"
+          echo "already_withdrawn=$(jq -r '.isDraft' <<< "$release_json")" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$(jq -r '.isPrerelease' <<< "$release_json")" >> "$GITHUB_OUTPUT"
+          echo "issue_number=$(jq -r '.number // empty' <<< "$issue_json")" >> "$GITHUB_OUTPUT"
+          echo "issue_state=$(jq -r '.state // empty' <<< "$issue_json")" >> "$GITHUB_OUTPUT"
+          if [[ "$(jq -r '.isDraft' <<< "$release_json")" == true ]]; then
+            echo "$RELEASE_TAG is already a draft; recovery steps will ensure the fallback and Issue record exist." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Withdraw release without deleting recovery data
+        if: steps.release.outputs.already_withdrawn == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft
+
+      - name: Restore previous stable release as Latest
+        id: fallback
+        if: steps.release.outputs.is_prerelease == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fallback_tag="$(gh release list \
+            --repo "$GITHUB_REPOSITORY" \
+            --limit 100 \
+            --json tagName,isDraft,isPrerelease,publishedAt \
+            --jq '[.[] | select(.isDraft == false and .isPrerelease == false)] | sort_by(.publishedAt) | reverse | .[0].tagName // empty')"
+          if [[ -z "$fallback_tag" ]]; then
+            echo 'No earlier public stable desktop release remains.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh release edit "$fallback_tag" --repo "$GITHUB_REPOSITORY" --latest
+          echo "tag=$fallback_tag" >> "$GITHUB_OUTPUT"
+          echo "Restored $fallback_tag as the Latest stable release." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record withdrawal for maintainers and agents
+        shell: bash
+        env:
+          FALLBACK_TAG: ${{ steps.fallback.outputs.tag }}
+          ALREADY_WITHDRAWN: ${{ steps.release.outputs.already_withdrawn }}
+          ISSUE_NUMBER: ${{ steps.release.outputs.issue_number }}
+          ISSUE_STATE: ${{ steps.release.outputs.issue_state }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$ISSUE_NUMBER" && "$ALREADY_WITHDRAWN" == true ]]; then
+            echo "Withdrawal is already recorded in issue #$ISSUE_NUMBER." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          record="$RUNNER_TEMP/withdrawal-issue.md"
+          {
+            printf 'Release `%s` was converted to a draft and removed from public update discovery. Its tag and assets remain available for audit or restoration.\n\n' "$RELEASE_TAG"
+            printf '**Reason:** %s\n\n' "$WITHDRAWAL_REASON"
+            if [[ -n "$FALLBACK_TAG" ]]; then
+              printf 'Previous stable release restored as Latest: `%s`\n\n' "$FALLBACK_TAG"
+            fi
+            printf 'Workflow run: %s/%s/actions/runs/%s\n\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'Installed applications are not remotely downgraded. Reinstall an earlier DMG manually when rollback is required.\n\n'
+            printf 'To restore this release after fixing or accepting the issue, publish the retained draft with `gh release edit %s --repo %s --draft=false`; add `--latest` when restoring a stable release.\n' "$RELEASE_TAG" "$GITHUB_REPOSITORY"
+          } > "$record"
+          if [[ -n "$ISSUE_NUMBER" ]]; then
+            if [[ "$ISSUE_STATE" == CLOSED ]]; then
+              gh issue reopen "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY"
+            fi
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$record"
+          else
+            gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Desktop release withdrawn: $RELEASE_TAG" \
+              --body-file "$record"
+          fi

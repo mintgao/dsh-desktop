@@ -54,7 +54,7 @@ Prerelease versions use manual installation even though their DMGs are Developer
 
 A signed stable application checks the public stable update feed ten seconds after startup and every six hours thereafter. An available version is never downloaded silently. The native dialog offers **Download Update**, **Later**, or **View Release Notes**; the application menu, Dock, and window show download state. After signature-verified download, the user chooses **Restart and Install**, **Install on Quit**, or **Later**. An immediate installation first stops the local DSH backend, and no update forces the application to restart. Source and unpackaged development builds keep the menu command available but explain that public update checks are unavailable.
 
-Each desktop update replaces the complete application, including its tested DSH runtime. Upstream Harness releases do not modify an installed application directly: the scheduled upstream workflow first pushes a review branch and opens a tracking issue with a prefilled PR link, and a maintainer later reviews that PR before creating and publishing a separately versioned desktop release.
+Each desktop update replaces the complete application, including its tested DSH runtime. Every published upstream Harness release enters the downstream queue automatically. After the exact upstream tag merges and the desktop, build, type, documentation, and source-drift checks pass, the workflow publishes the correspondingly versioned signed desktop Release. Publication only makes the version discoverable; preview replacement and stable download or installation remain under user control.
 
 ## Security and local data
 
@@ -70,14 +70,16 @@ The root [contributor guide](../../CONTRIBUTING.md) defines remotes, branches, c
 
 ## Preview and stable releases
 
-Desktop versions use semantic tags independently of the root Harness package version. A prerelease tag such as `desktop-v0.2.0-preview.1` selects the manual preview channel; a stable tag such as `desktop-v0.2.0` additionally selects the automatic update channel. Both paths build Developer ID-signed and notarized native arm64 and x64 DMGs from a reviewed `main` commit and create a draft Release so a maintainer remains the publishing authority.
+Automated desktop versions mirror the adopted Harness Release exactly: `dsh-vX.Y.Z[-suffix]` becomes `desktop-vX.Y.Z[-suffix]`. A prerelease suffix selects the manual preview channel; a stable version additionally selects the automatic update channel. Both paths build Developer ID-signed and notarized native arm64 and x64 DMGs from the tagged `main` commit. The upstream-adoption dispatch publishes after all release checks pass; a manually pushed `desktop-v*` tag remains an exceptional draft-only path.
 
 Every public desktop tag requires these encrypted GitHub Actions secrets:
 
 - `MACOS_CERTIFICATE_P12_BASE64` and `MACOS_CERTIFICATE_PASSWORD` for the Developer ID Application certificate.
 - `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` for App Store Connect notarization.
 
-Create a prerelease tag after those credentials are configured:
+No tag or publication action is required for an ordinary upstream Release. The adoption workflow queues it, updates [the recorded state](../../.github/upstream-sync-state.json), pushes the mapped desktop tag, and dispatches this workflow with the upstream tag and commit for the generated Release notes.
+
+For an exceptional desktop-only prerelease, create a tag after those credentials are configured:
 
 ```sh
 git switch main
@@ -86,9 +88,9 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-The workflow forces signing, submits both preview architectures for notarization, verifies their Developer ID identities and stapled tickets, creates the two DMGs and their SHA-256 checksums, and marks the GitHub Release draft as a prerelease. Before publishing, replace every placeholder in its release notes, record the embedded Harness tag or commit, verify both downloads and checksums, and exercise every affected native capability from an installed artifact. Published preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
+The workflow forces signing, submits both preview architectures for notarization, verifies their Developer ID identities and stapled tickets, and creates the two DMGs and their SHA-256 checksums. An automated run publishes the GitHub prerelease immediately and records the embedded Harness tag, upstream commit, and desktop source commit. A manual tag creates the same signed artifacts as a draft. Public preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
 
-Create the stable tag after the same credential and artifact checks pass:
+For an exceptional desktop-only stable release, create the stable tag after the same credential and artifact checks pass:
 
 ```sh
 git switch main
@@ -97,10 +99,22 @@ git tag -s desktop-v0.1.0 -m "DSH Desktop Mint 0.1.0"
 git push origin desktop-v0.1.0
 ```
 
-For a stable tag, [`desktop-release.yml`](../../.github/workflows/desktop-release.yml) additionally uploads both architecture ZIPs and blockmaps plus one combined `latest-mac.yml` to the signed DMGs and SHA-256 checksums in the draft GitHub Release. Drafts are invisible to installed clients. A maintainer tests both architectures and manually publishes the draft; publication is the action that activates automatic updates. Stable release notes must state the embedded Harness version plus any migration or compatibility requirement.
+For a stable tag, [`desktop-release.yml`](../../.github/workflows/desktop-release.yml) additionally uploads both architecture ZIPs and blockmaps plus one combined `latest-mac.yml` beside the signed DMGs and SHA-256 checksums. Automatic upstream runs publish the Release as Latest; manual tag runs leave it as a draft that installed clients cannot see.
+
+## Withdraw and restore a release
+
+Dispatch [`desktop-release-withdraw.yml`](../../.github/workflows/desktop-release-withdraw.yml) from GitHub Actions, or run:
+
+```sh
+gh workflow run desktop-release-withdraw.yml \
+  -f release_tag=desktop-vX.Y.Z \
+  -f reason='Describe the observed problem'
+```
+
+Withdrawal converts the public Release back to a draft without deleting its immutable tag or assets. For a stable release, the workflow also marks the newest remaining public stable release as Latest. It opens or updates a `Desktop release withdrawn: ...` issue containing each withdrawal reason and run, the fallback version, restoration command, and the explicit handoff fact that installed applications are not remotely downgraded. Reinstall an earlier DMG manually when an already-installed copy must roll back. To restore a retained release, publish its draft with `gh release edit desktop-vX.Y.Z --repo mintgao/dsh-desktop --draft=false`; add `--latest` for a stable release.
 
 ## Development ownership
 
 [`src/backend.ts`](src/backend.ts) owns readiness parsing and bounded process shutdown. [`src/navigation.ts`](src/navigation.ts) is the pure URL policy. [`src/updates.ts`](src/updates.ts) owns signed update decisions, while [`src/electron-updates.ts`](src/electron-updates.ts) adapts the signed transport. [`src/manual-updates.ts`](src/manual-updates.ts) owns prerelease reminders, [`src/github-releases.ts`](src/github-releases.ts) validates the public Release API, and [`src/manual-update-preferences.ts`](src/manual-update-preferences.ts) stores those choices atomically. [`src/main.ts`](src/main.ts) selects the channel from the application version and owns native presentation. [`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) stages the source-built runtime closure; [`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) validates and combines signed per-architecture metadata; [`electron-builder.yml`](electron-builder.yml) owns the macOS bundle layout and public feed identity. Run `pnpm run test:desktop` for the focused desktop tests.
 
-The runtime decision and alternatives are recorded in [Electron desktop shell](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.md). The update lifecycles are recorded in [Manual preview release awareness](../../.agents/notes/implemented/feature/2026-08-24-desktop-manual-preview-updates.md) and [User-controlled signed desktop updates](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.md). The downstream repository, cross-device, and release decision is recorded in [Mint desktop downstream development](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md).
+The runtime decision and alternatives are recorded in [Electron desktop shell](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.md). The update lifecycles are recorded in [Manual preview release awareness](../../.agents/notes/implemented/feature/2026-08-24-desktop-manual-preview-updates.md) and [User-controlled signed desktop updates](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.md). The repository model is recorded in [Mint desktop downstream development](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md), while [Automatic upstream desktop releases](../../.agents/notes/implemented/process/2026-08-27-automatic-upstream-desktop-releases.md) owns adoption, publication, withdrawal, and cross-Agent records.

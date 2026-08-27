@@ -14,11 +14,11 @@ Public preview artifacts are also product artifacts: users install them under th
 
 Every public `desktop-v*` artifact is signed with a Developer ID Application certificate and notarized. A prerelease suffix controls update behavior and asset selection, not trust level: preview tags create signed and notarized DMGs for manual replacement, while stable tags additionally create the ZIPs, blockmaps, and combined metadata used by `electron-updater`.
 
-[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) requires the certificate and App Store Connect API-key secrets for both channels. Each native build forces code signing and notarization, verifies the complete bundle with `codesign`, rejects a missing Developer ID Application authority or an ad-hoc signature, validates the stapled DMG ticket, and creates only a draft Release. A maintainer publishes after testing the installed artifact.
+[`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml) requires the certificate and App Store Connect API-key secrets for both channels. Each native build forces code signing and notarization, verifies the complete bundle with `codesign`, rejects a missing Developer ID Application authority or an ad-hoc signature, and validates the stapled DMG ticket. An [automatic upstream adoption](2026-08-27-automatic-upstream-desktop-releases.md) publishes only after those checks and every required source check pass. A manually pushed desktop tag still creates a draft for exceptional releases.
 
 Unsigned local builds remain available for source iteration and package smoke. They are never public release artifacts and cannot provide acceptance evidence for notifications, updates, Keychain behavior, or another macOS capability that depends on stable application identity. The repository's [Mint feature workflow](../../../skills/dsh-mint-client-feature/SKILL.md) requires the relevant macOS interaction from a signed and notarized artifact.
 
-This decision supersedes only the unsigned-preview portion of [Mint desktop downstream development](2026-08-24-mint-desktop-downstream-development.md) and [manual preview release awareness](../feature/2026-08-24-desktop-manual-preview-updates.md). The downstream repository model, manual preview update flow, signed stable updater, and maintainer-controlled draft publication remain unchanged.
+This decision supersedes only the unsigned-preview portion of [Mint desktop downstream development](2026-08-24-mint-desktop-downstream-development.md) and [manual preview release awareness](../feature/2026-08-24-desktop-manual-preview-updates.md). The downstream repository model, manual preview update flow, signed stable updater, and signing requirements remain unchanged. The later automatic-upstream decision replaces maintainer-controlled draft publication for upstream-driven versions without weakening this identity requirement.
 
 ## Alternatives considered
 
@@ -32,7 +32,7 @@ This decision supersedes only the unsigned-preview portion of [Mint desktop down
 
 ## Verification
 
-Workflow contract tests require signing secrets, forced signing, notarization, Developer ID identity inspection, and ticket validation on both preview and stable paths while proving that only stable releases contain automatic-update assets. Documentation checks keep the public release and local-build limitations synchronized in both languages.
+Workflow tests require signing secrets, forced signing, notarization, Developer ID identity inspection, and ticket validation on both preview and stable paths while proving that only stable releases contain automatic-update assets. They also distinguish immediate automatic publication from the manual tag's draft fallback. Documentation checks keep the public release and local-build limitations synchronized in both languages.
 
 Release acceptance installs a workflow-produced DMG, confirms the bundle identity and notarization ticket, runs the packaged smoke, enables the relevant setting, completes a real task while the application is in the background, observes the macOS notification, and activates it to return to the matching task. Renderer shims and unsigned local builds remain lower-tier evidence and never replace this interaction.
 
