@@ -22,7 +22,7 @@
 
 每次稳定版 `desktop-vX.Y.Z` 构建都会为 arm64 和 x64 分别生成经过签名和公证的 DMG，以及 ZIP 与 blockmap。发布工作流保留 electron-builder 按架构生成的元数据，校验其中的版本与必需的架构标记 ZIP，再合并成一份 `latest-mac.yml`。合并后的更新源保留两种文件哈希，使 MacUpdater 能选择当前运行架构。自动上游触发会在所有发布检查通过后公开 Release 并启用稳定更新源；手工推送的桌面标签会保留草稿，直到明确发布。应用只包含公开仓库身份，不包含 GitHub token。
 
-桌面应用与内置 DSH 运行时会作为一个经过配套测试的应用单元一起更新。[自动引入上游并发布桌面版](../process/2026-08-27-automatic-upstream-desktop-releases.zh.md)流程会观察上游已经公开的 `dsh-v*` Release，按顺序引入，运行必需检查，把每个版本映射成桌面标签，并公开签名应用。失败会在引入推送前停止，并记录阻塞 Issue。撤回会让问题 Release 不再被更新发现，但不会删除标签或产物；已经安装的应用绝不会被远程降级。
+桌面应用与内置 DSH 运行时会作为一个经过配套测试的应用单元一起更新。在显式启用的签名模式下，[自动引入上游并发布桌面版](../process/2026-08-27-automatic-upstream-desktop-releases.zh.md)流程会观察上游已经公开的 `dsh-v*` Release，按顺序引入，运行必需检查，把每个版本映射成准确的桌面标签，并公开签名应用。[申请证书前阶段](../process/2026-08-27-pre-certificate-unsigned-desktop-previews.zh.md)使用带后缀的手工预览版，不能进入此更新源。失败会在引入推送前停止，并记录阻塞 Issue。撤回会让问题 Release 不再被更新发现，但不会删除标签或产物；已经安装的应用绝不会被远程降级。
 
 ### 安装时关闭
 

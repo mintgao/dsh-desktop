@@ -42,7 +42,7 @@ Run the focused package tests and coverage for the changed implementation. Prove
 - the `desktop-mint` Profile contains the Mint Bundle and each selected row exactly once;
 - a real keyless browser scenario observes user-visible Client behavior;
 - a native change passes desktop tests, the packaged-application smoke, and the relevant macOS interaction;
-- a macOS capability that depends on stable application identity passes its interaction test from a Developer ID-signed and notarized artifact; unsigned and ad-hoc-signed builds are local development evidence only;
+- a macOS capability that depends on stable application identity passes its interaction test from a Developer ID-signed and notarized artifact; unsigned and ad-hoc-signed builds, including pre-certificate public previews, prove only source, package, and identity-independent behavior;
 - packaged runtime-closure checks resolve every Mint Bundle dependency.
 
 Use `dsh-pre-push-checks` before publication. Do not push, merge, publish a Release, or replace an installed application unless the user explicitly authorizes that external action.
