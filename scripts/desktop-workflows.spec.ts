@@ -123,10 +123,20 @@ describe('desktop upstream workflow', () => {
   it('adopts each published upstream release and dispatches its desktop release', () => {
     const workflow = workflowDocument('.github/workflows/upstream-sync.yml')
     const adopt = workflowJob(workflow, 'adopt')
-    const commands = workflowSteps(adopt).map(stepCommand).join('\n')
+    const steps = workflowSteps(adopt)
+    const commands = steps.map(stepCommand).join('\n')
+    const secretStep = namedStep(steps, 'Validate desktop release secrets')
 
     expect(workflow.permissions).toEqual({ actions: 'write', contents: 'write', issues: 'write' })
     expect(adopt.if).toBe("github.repository == 'mintgao/dsh-desktop'")
+    expect(secretStep.env).toEqual({
+      MACOS_CERTIFICATE_P12_BASE64: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
+      MACOS_CERTIFICATE_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
+      APPLE_API_KEY_P8_BASE64: '${{ secrets.APPLE_API_KEY_P8_BASE64 }}',
+      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
+      APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
+    })
+    expect(String(secretStep.run)).toContain('Missing required desktop release secrets:')
     expect(commands).toContain('.github/upstream-sync-state.json')
     expect(commands).toContain('gh release list')
     expect(commands).toContain('git merge --no-ff')

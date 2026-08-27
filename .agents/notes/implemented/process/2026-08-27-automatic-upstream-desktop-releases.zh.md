@@ -12,7 +12,7 @@ DSH Desktop 是个人和小范围使用的发行版，明确选择跟随 DeepSee
 
 [`upstream-sync.yml`](../../../../.github/workflows/upstream-sync.yml) 每小时两次检查 `deepseek-ai/deepseek-harness` 的公开 Release。[`.github/upstream-sync-state.json`](../../../../.github/upstream-sync-state.json) 记录最近一次引入的上游标签、提交与发布时间，以及对应的下游桌面标签。初始记录指向下游已经包含的上游 Release 及其现有桌面版本，避免重新发布历史版本。工作流按发布时间排列公开且非草稿的 `dsh-v*` Release，每次只处理队首的下一个版本。手工触发可以选择这个队首版本，但不能跳过中间版本。
 
-工作流取得准确的上游标签，把对应提交直接合入处于可发布状态的 `main`。推送前，它会安装锁定依赖，并运行桌面测试、桌面构建、仓库类型检查、文档检查和生成源码差异检查。发生冲突或检查失败时，工作流会在任何远端更新前停止，并创建或更新包含运行链接的 `Blocked: adopt DeepSeek Harness ...` Issue。维护者应在普通分支上解决这个准确版本的引入，通过正常流程合入修复，再重新运行工作流。
+工作流会先要求所有桌面签名与公证 Secret，再取得准确的上游标签，并把对应提交直接合入处于可发布状态的 `main`。推送前，它会安装锁定依赖，并运行桌面测试、桌面构建、仓库类型检查、文档检查和生成源码差异检查。缺少 Secret、发生冲突或检查失败时，工作流会在任何远端更新前停止，并创建或更新包含运行链接的 `Blocked: adopt DeepSeek Harness ...` Issue。维护者应恢复前置条件，或在普通分支上解决这个准确版本的引入，通过正常流程合入修复，再重新运行工作流。
 
 每个上游 `dsh-vX.Y.Z[-suffix]` Release 都映射为 `desktop-vX.Y.Z[-suffix]`。验证通过后，工作流会在一条专用引入提交中更新状态文件，创建带注释的桌面标签，并原子推送 `main` 与该标签。随后，它带着上游标签和提交显式触发 [`desktop-release.yml`](../../../../.github/workflows/desktop-release.yml)。显式触发避免依赖 GitHub token 推送去触发另一个工作流。发布工作流会检出标签，构建、签名、公证、检查并打包两种原生架构。上游驱动的任务会在所有检查通过后立即公开；预发布版标记为 Pre-release，稳定版成为 Latest。手工推送的桌面标签仍会为例外的桌面专用版本创建草稿。
 
