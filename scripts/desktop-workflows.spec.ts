@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 const root = resolve(import.meta.dirname, '..')
 
 describe('desktop release workflow', () => {
-  it('keeps stable releases signed and can publish both native update ZIPs automatically', () => {
+  it('keeps explicitly enabled stable releases signed and can publish both native update ZIPs automatically', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release.yml')
     const triggers = asRecord(workflow.on, 'workflow triggers')
     const build = workflowJob(workflow, 'build')
@@ -15,20 +15,24 @@ describe('desktop release workflow', () => {
     const releaseSteps = workflowSteps(release)
     const secretStep = namedStep(buildSteps, 'Validate signing secrets')
     const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
-    const packageStep = namedStep(buildSteps, 'Build, sign, and notarize DMG and update ZIP')
+    const packageStep = namedStep(buildSteps, 'Build, sign, and notarize stable DMG and update ZIP')
     const packageSmokeStep = namedStep(buildSteps, 'Smoke packaged updater module')
     const signatureStep = namedStep(buildSteps, 'Verify Developer ID application signature')
     const notarizationStep = namedStep(buildSteps, 'Verify notarization ticket')
     const metadataStep = namedStep(releaseSteps, 'Merge architecture update metadata')
-    const checksumStep = namedStep(releaseSteps, 'Write signed release checksums')
+    const checksumStep = namedStep(releaseSteps, 'Write stable release checksums')
     const notesStep = namedStep(releaseSteps, 'Write release notes')
     const releaseStep = namedStep(releaseSteps, 'Create GitHub release')
 
     expect(triggers).toHaveProperty('workflow_dispatch')
     expect(build.env).toBeUndefined()
+    expect(String(namedStep(workflowSteps(workflowJob(workflow, 'prepare')), 'Validate desktop tag').run)).toContain(
+      'RELEASE_SIGNING_MODE:-unsigned-preview',
+    )
+    expect(secretStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
     expect(secretStep.env).toEqual({
-      CSC_LINK: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
-      CSC_KEY_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
+      MACOS_CERTIFICATE_P12_BASE64: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
+      MACOS_CERTIFICATE_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
       APPLE_API_KEY_P8_BASE64: '${{ secrets.APPLE_API_KEY_P8_BASE64 }}',
       APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
       APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
@@ -48,7 +52,9 @@ describe('desktop release workflow', () => {
     expect(String(packageSmokeStep.run)).toContain('--dsh-package-smoke')
     expect(String(signatureStep.run)).toContain('Authority=Developer ID Application:')
     expect(String(signatureStep.run)).toContain('Signature=adhoc')
-    expect(notarizationStep.if).toBeUndefined()
+    expect(packageStep.if).toBe("needs.prepare.outputs.mode == 'signed-stable'")
+    expect(signatureStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
+    expect(notarizationStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
     expect(String(metadataStep.run)).toContain('latest-mac-arm64.yml')
     expect(String(metadataStep.run)).toContain('latest-mac-x64.yml')
     expect(String(checksumStep.run)).toContain('cd release-assets')
@@ -61,44 +67,58 @@ describe('desktop release workflow', () => {
     expect(String(releaseStep.run)).toContain('if [[ "$PUBLISH" != true ]]')
   })
 
-  it('requires Apple credentials for prerelease tags and creates a signed preview release', () => {
+  it('builds unsigned prereleases by default without Apple credentials', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release.yml')
     const prepareSteps = workflowSteps(workflowJob(workflow, 'prepare'))
     const build = workflowJob(workflow, 'build')
     const buildSteps = workflowSteps(build)
     const releaseSteps = workflowSteps(workflowJob(workflow, 'release'))
     const channelStep = namedStep(prepareSteps, 'Validate desktop tag')
-    const secretStep = namedStep(buildSteps, 'Validate signing secrets')
-    const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
-    const previewBuild = namedStep(buildSteps, 'Build, sign, and notarize preview DMG')
+    const unsignedBuild = namedStep(buildSteps, 'Build unsigned preview DMG')
+    const unsignedIdentity = namedStep(buildSteps, 'Verify unsigned preview identity')
     const signatureStep = namedStep(buildSteps, 'Verify Developer ID application signature')
     const notarizationStep = namedStep(buildSteps, 'Verify notarization ticket')
     const checksumStep = namedStep(releaseSteps, 'Write preview release checksums')
     const previewRelease = namedStep(releaseSteps, 'Create GitHub release')
+    const unsignedNotes = readFileSync(resolve(root, '.github/desktop-unsigned-preview-release-notes.md'), 'utf8')
 
     expect(build.env).toBeUndefined()
-    expect(String(channelStep.run)).toContain('mode=preview')
-    expect(secretStep.if).toBeUndefined()
-    expect(keyStep.if).toBeUndefined()
-    expect(previewBuild.if).toBe("needs.prepare.outputs.mode == 'preview'")
-    expect(previewBuild.env).toEqual({
-      CSC_LINK: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
-      CSC_KEY_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
-      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
-      APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
-    })
-    expect(String(previewBuild.run)).toContain('--mac dmg')
-    expect(String(previewBuild.run)).not.toContain('--mac dmg zip')
-    expect(String(previewBuild.run)).toContain('--config.forceCodeSigning=true')
-    expect(String(previewBuild.run)).toContain('--config.mac.notarize=true')
-    expect(String(signatureStep.run)).toContain('Authority=Developer ID Application:')
-    expect(notarizationStep.if).toBeUndefined()
+    expect(channelStep.env).toHaveProperty('RELEASE_SIGNING_MODE', '${{ vars.DESKTOP_RELEASE_SIGNING_MODE }}')
+    expect(String(channelStep.run)).toContain('mode=unsigned-preview')
+    expect(String(channelStep.run)).toContain('A desktop tag without the unsigned.1 marker requires')
+    expect(unsignedBuild.if).toBe("needs.prepare.outputs.mode == 'unsigned-preview'")
+    expect(unsignedBuild.env).toEqual({ CSC_IDENTITY_AUTO_DISCOVERY: 'false' })
+    expect(String(unsignedBuild.run)).toContain('--config.mac.notarize=false')
+    expect(String(unsignedBuild.run)).toContain('--mac dmg')
+    expect(String(unsignedBuild.run)).not.toContain('--mac dmg zip')
+    expect(unsignedIdentity.if).toBe("needs.prepare.outputs.mode == 'unsigned-preview'")
+    expect(String(unsignedIdentity.run)).toContain('unexpectedly carries a Developer ID Application identity')
+    expect(signatureStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
+    expect(notarizationStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
     expect(String(checksumStep.run)).toContain('cd release-assets')
     expect(String(checksumStep.run)).toContain('sha256sum *.dmg > SHA256SUMS.txt')
     expect(String(checksumStep.run)).not.toContain('sha256sum release-assets/')
     expect(String(channelStep.run)).toContain('An automatic publication requires its upstream tag and commit.')
     expect(String(previewRelease.run)).toContain('options+=(--prerelease)')
+    expect(String(previewRelease.run)).toContain('(Unsigned Preview)')
     expect(String(previewRelease.run)).toContain('options+=(--draft)')
+    expect(unsignedNotes).toContain('unsigned preview for personal and small-group use')
+    expect(unsignedNotes).toContain('macOS Gatekeeper may require')
+    expect(unsignedNotes).toContain('never enters the signed stable update feed')
+  })
+
+  it('requires Apple credentials only after signed release mode is explicitly enabled', () => {
+    const workflow = workflowDocument('.github/workflows/desktop-release.yml')
+    const buildSteps = workflowSteps(workflowJob(workflow, 'build'))
+    const secretStep = namedStep(buildSteps, 'Validate signing secrets')
+    const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
+    const previewBuild = namedStep(buildSteps, 'Build, sign, and notarize preview DMG')
+
+    expect(secretStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
+    expect(keyStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
+    expect(previewBuild.if).toBe("needs.prepare.outputs.mode == 'signed-preview'")
+    expect(String(previewBuild.run)).toContain('--config.forceCodeSigning=true')
+    expect(String(previewBuild.run)).toContain('--config.mac.notarize=true')
   })
 
   it('loads the updater adapter from both native package-smoke artifacts', () => {
@@ -125,19 +145,13 @@ describe('desktop upstream workflow', () => {
     const adopt = workflowJob(workflow, 'adopt')
     const steps = workflowSteps(adopt)
     const commands = steps.map(stepCommand).join('\n')
-    const secretStep = namedStep(steps, 'Validate desktop release secrets')
 
     expect(workflow.permissions).toEqual({ actions: 'write', contents: 'write', issues: 'write' })
     expect(adopt.if).toBe("github.repository == 'mintgao/dsh-desktop'")
-    expect(secretStep.env).toEqual({
-      MACOS_CERTIFICATE_P12_BASE64: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
-      MACOS_CERTIFICATE_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
-      APPLE_API_KEY_P8_BASE64: '${{ secrets.APPLE_API_KEY_P8_BASE64 }}',
-      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
-      APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
-    })
-    expect(String(secretStep.run)).toContain('Missing required desktop release secrets:')
     expect(commands).toContain('.github/upstream-sync-state.json')
+    expect(commands).toContain('DESKTOP_RELEASE_SIGNING_MODE must be unsigned-preview or signed.')
+    expect(commands).toContain('desktop_version="${desktop_version}.unsigned.1"')
+    expect(commands).toContain('desktop_version="${desktop_version}-unsigned.1"')
     expect(commands).toContain('gh release list')
     expect(commands).toContain('git merge --no-ff')
     expect(commands).toContain('pnpm run test:desktop')
@@ -151,6 +165,7 @@ describe('desktop upstream workflow', () => {
     expect(commands).not.toContain('gh pr create')
     expect(commands).not.toContain('gh pr merge')
     expect(commands).not.toContain('gh release create')
+    expect(commands).not.toContain('Missing required desktop release secrets:')
   })
 
   it('records the adopted upstream release and desktop baseline for idempotent handoff', () => {

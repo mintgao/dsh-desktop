@@ -53,7 +53,7 @@ pnpm run build:desktop
 
 ## 同步上游
 
-[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) 每小时两次检查上游已经公开的 `dsh-v*` Release，并按发布时间逐个引入。对于每个版本，它会先要求所有桌面签名与公证 Secret，再取得准确标签，直接合并到 `main`，运行桌面测试与构建、仓库类型检查、文档检查和生成差异检查，并把引入结果写入 [`.github/upstream-sync-state.json`](.github/upstream-sync-state.json)。它把 `dsh-vX.Y.Z[-suffix]` 映射为 `desktop-vX.Y.Z[-suffix]`，原子推送引入提交与标签，并显式触发签名桌面工作流立即公开发布。预发布版本仍是公开预览版；稳定版会成为 Latest 稳定版。
+[`upstream-sync.yml`](.github/workflows/upstream-sync.yml) 每小时两次检查上游已经公开的 `dsh-v*` Release，并按发布时间逐个引入。对于每个版本，它会取得准确标签，直接合并到 `main`，运行桌面测试与构建、仓库类型检查、文档检查和生成差异检查，并把引入结果写入 [`.github/upstream-sync-state.json`](.github/upstream-sync-state.json)。默认的 `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview` 阶段会追加 `unsigned.1` 预发布后缀，原子推送引入提交与标签，并把未签名的 arm64、x64 DMG 发布为 GitHub Pre-release。只有维护者明确确认并切换到 `signed` 后，工作流才会恢复准确版本映射、要求 Apple 签名与公证 Secret，并允许稳定更新产物或 Latest 发布。
 
 工作流每次只推进一个上游 Release。合并冲突或检查失败会在任何下游推送前停止，并创建或更新带失败运行链接的 `Blocked: adopt DeepSeek Harness ...` Issue。应在普通分支上修复这个准确版本，把修复合入 `main` 后重新运行工作流；如果标签已经推送而发布中断，下一次运行会重新触发缺失的 Release。状态文件、Git 历史、工作流运行、Release 说明和阻塞 Issue 共同组成跨机器、跨 Agent 的交接记录。
 
@@ -73,4 +73,4 @@ git merge --no-ff upstream/master
 
 - 在 Pull Request 模板中说明用户可见结果，只列出实际运行的检查，并标记受影响的 Mac 架构。
 - 无关变更应拆成不同 Pull Request。每项非平凡的代码、流程或发布决策都要更新其所属文档与 Agent Note。
-- 本地打包、签名预览版与稳定版、已安装客户端更新和版本撤回流程见[桌面应用参考](apps/desktop/README.zh.md)。由上游驱动的标签会在签名、公证、产物和源码检查全部通过后自动公开发布；手工推送的桌面标签仍会为例外发布创建草稿。
+- 本地打包、未签名小范围预览版、显式签名发布切换、已安装客户端更新和版本撤回流程见[桌面应用参考](apps/desktop/README.zh.md)。由上游驱动的标签会在当前发布阶段要求的检查全部通过后自动公开发布；手工推送的桌面标签仍会为例外发布创建草稿。

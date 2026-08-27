@@ -30,7 +30,7 @@ pnpm run desktop:app:mac
 
 每条命令都会执行官方客户端构建，打包当前本地 DSH 与 vendored 包，向隔离的资源目录安装选定运行时闭包，拒绝逃逸该目录的链接，再调用 electron-builder。因此，尚未发布的本地后端变更会进入应用，而不会被 npm 上的同版本替换。
 
-本地命令会关闭签名身份自动发现，而且绝不会生成受支持的公开版本。Electron 43 无法从未签名或 ad-hoc 签名的应用发送 macOS 通知，因此本地产物不能验证任务通知或其他依赖稳定应用身份的原生能力；这些验收必须使用经过 Developer ID 签名与公证的产物。可以使用以下命令为当前用户安装本地 Apple Silicon 版本：
+本地命令会关闭签名身份自动发现，也不会发布 Release。Electron 43 无法从未签名或 ad-hoc 签名的应用发送 macOS 通知，因此本地产物和申请证书前的公开预览版都不能验证任务通知或其他依赖稳定应用身份的原生能力；这些验收必须使用经过 Developer ID 签名与公证的产物。可以使用以下命令为当前用户安装本地 Apple Silicon 版本：
 
 ```sh
 ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desktop.app"
@@ -48,13 +48,13 @@ Electron 主进程以 Node 模式运行自己的可执行文件，带上应用�
 
 经过打包的预览版（例如 `0.2.0-preview.1`）会在启动三十秒后检查 `mintgao/dsh-desktop` 的公开 GitHub Releases，之后每六小时检查一次。它使用匿名条件请求，只选择包含本机架构 DMG 的最高语义化桌面版本，而且绝不下载代码。**DSH Desktop > 检查更新…** 可以随时执行同一检查。
 
-首次在后台发现某一版本时，客户端会发送一次原生通知并显示提醒徽标。点击通知或选择**前往 Release 下载**会打开经过校验的确切 Release 页面，并提示应下载 arm64 还是 x64 DMG。**明天提醒我**会把一次提醒推迟 24 小时，**跳过此版本**只会屏蔽当前版本，不会隐藏后续版本。这些选择与 GitHub ETag 保存在应用 user-data 目录，不会保存 GitHub 凭据。后台错误只写入桌面日志；手工检查失败时会提供公开 Releases 页面。
+首次在后台发现某一版本时，客户端会显示提醒徽标；已签名应用还会发送一次原生通知。未签名预览版仍会提供菜单与手工检查，但可能收不到 macOS 横幅。点击通知或选择**前往 Release 下载**会打开经过校验的确切 Release 页面，并提示应下载 arm64 还是 x64 DMG。**明天提醒我**会把一次提醒推迟 24 小时，**跳过此版本**只会屏蔽当前版本，不会隐藏后续版本。这些选择与 GitHub ETag 保存在应用 user-data 目录，不会保存 GitHub 凭据。后台错误只写入桌面日志；手工检查失败时会提供公开 Releases 页面。
 
-预发布版本的 DMG 虽然已经过 Developer ID 签名与公证，仍使用手工安装。用户需要先退出 DSH Desktop，再用下载的 DMG 替换应用；设置、凭据、workspace 和会话仍保存在普通 DSH 主目录，不会随应用替换。预览版可以通过这条手工路径发现后续预览版或首个稳定版；手工安装该稳定版后，后续更新会切换到下述自动通道。
+预发布版本使用手工安装。启用签名前，其 DMG 没有签名，macOS 可能要求明确选择**仍要打开**，依赖应用身份的原生功能也不可用；启用签名后，签名预发布版仍沿用相同的手工替换路径。用户需要先退出 DSH Desktop，再用下载的 DMG 替换应用；设置、凭据、workspace 和会话仍保存在普通 DSH 主目录，不会随应用替换。预览版可以通过这条手工路径发现后续预览版或首个已签名稳定版；手工安装该稳定版后，后续更新会切换到下述自动通道。
 
 经过签名的稳定版会在启动十秒后检查公开的稳定更新源，之后每六小时检查一次。发现新版本后绝不会静默下载。原生对话框提供 **Download Update**、**Later** 与 **View Release Notes**，应用菜单、Dock 和窗口会显示下载状态。通过签名校验的下载完成后，用户可以选择 **Restart and Install**、**Install on Quit** 或 **Later**。立即安装会先停止本地 DSH 后端，任何更新都不会强制应用重启。源码构建与未打包的开发构建仍保留菜单命令，但会说明无法检查公开更新。
 
-每次桌面更新都会替换整个应用，包括经过配套测试的 DSH 运行时。每个已经公开的上游 Harness Release 都会自动进入下游队列。准确的上游标签合并，并且桌面、构建、类型、文档与源码差异检查通过后，工作流会发布相应版本的已签名桌面 Release。公开发布只会让客户端发现版本；预览版替换、稳定版下载或安装仍由用户控制。
+每次桌面更新都会替换整个应用，包括经过配套测试的 DSH 运行时。每个已经公开的上游 Harness Release 都会自动进入下游队列。准确的上游标签合并，并且桌面、构建、类型、文档与源码差异检查通过后，工作流会发布默认的未签名小范围 Pre-release，或在显式启用签名后发布相应的已签名桌面 Release。公开发布只会让客户端发现版本；预览版替换、稳定版下载或安装仍由用户控制。
 
 ## 安全与本地数据
 
@@ -68,16 +68,16 @@ renderer（渲染进程）启用沙箱、上下文隔离与 Web 安全，不启�
 
 [`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) 会在 Pull Request 与 `main` 上运行桌面测试、桌面构建、仓库类型检查和文档检查。手动打包冒烟测试会分别使用 GitHub 原生的 arm64 与 x64 macOS runner，并在接受任一应用 bundle 前通过发布的可执行文件加载打包后的 Electron 主进程。DeepSeek Harness 官方工作流保留仓库保护条件，不会在这个下游仓库分配其组织专用任务。
 
-## 预览版与稳定版发布
+## 未签名预览版与签名发布
 
-自动桌面版本与所引入的 Harness Release 准确对应：`dsh-vX.Y.Z[-suffix]` 映射为 `desktop-vX.Y.Z[-suffix]`。预发布后缀选择手工预览通道，稳定版本还会选择自动更新通道。两条路径都会从带标签的 `main` 提交构建经过 Developer ID 签名与公证的原生 arm64、x64 DMG。上游引入任务会在所有发布检查通过后公开发布；手工推送的 `desktop-v*` 标签仍只用于例外的草稿路径。
+仓库初始使用 `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview`。在维护者明确确认 Apple Developer 已准备就绪并把该仓库变量改为 `signed` 前，自动引入会把 `dsh-vX.Y.Z` 映射为 `desktop-vX.Y.Z-unsigned.1`，已有上游预发布后缀则追加 `.unsigned.1`。发布工作流会在不发现签名身份的前提下构建原生 arm64、x64 DMG，验证它们不带 Developer ID Application 身份，再与 SHA-256 校验和一起发布为 GitHub Pre-release。这些产物只供个人与小范围手工安装，不会进入稳定更新源，也不能验证依赖应用身份的原生功能。
 
-每个公开桌面标签都需要以下加密 GitHub Actions Secrets：
+维护者明确确认 Apple Developer 资格与发布凭据已经就绪后，把 `DESKTOP_RELEASE_SIGNING_MODE` 设为 `signed`。后续自动版本会恢复与所引入 Harness Release 的准确对应：`dsh-vX.Y.Z[-suffix]` 映射为 `desktop-vX.Y.Z[-suffix]`。预发布后缀选择经过签名的手工预览 DMG；稳定版本还会发布经过签名的更新 ZIP、blockmap、合并更新元数据与 Latest 状态。签名模式要求以下加密 GitHub Actions Secrets：
 
 - `MACOS_CERTIFICATE_P12_BASE64` 与 `MACOS_CERTIFICATE_PASSWORD`，用于 Developer ID Application 证书。
 - `APPLE_API_KEY_P8_BASE64`、`APPLE_API_KEY_ID` 与 `APPLE_API_ISSUER`，用于 App Store Connect 公证。
 
-普通上游 Release 不需要人工创建标签或发布。引入工作流会把它加入队列，更新[状态记录](../../.github/upstream-sync-state.json)，推送映射后的桌面标签，并带上游标签与提交触发发布工作流，以生成 Release 说明。
+普通上游 Release 不需要人工创建标签或发布。引入工作流会把它加入队列，更新[状态记录](../../.github/upstream-sync-state.json)，推送当前发布阶段映射出的桌面标签，并带上游标签与提交触发发布工作流，以生成 Release 说明。手工推送的 `desktop-v*` 标签仍只用于例外的草稿路径。
 
 对于例外的桌面专用预发布版本，可以在配置这些凭据后创建标签：
 
@@ -88,7 +88,7 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-工作流会强制签名，分别提交两个预览架构进行公证，验证 Developer ID 身份与已装订票据，并生成两份 DMG 与 SHA-256 校验和。自动运行会立即公开 GitHub Pre-release，并记录内置 Harness 标签、上游提交和桌面源码提交。手工标签会生成相同的签名产物，但保留为草稿。公开预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
+在签名模式下，工作流会强制签名，分别提交两个预览架构进行公证，验证 Developer ID 身份与已装订票据，并生成两份 DMG 与 SHA-256 校验和。自动运行会立即公开 GitHub Pre-release，并记录内置 Harness 标签、上游提交和桌面源码提交。手工标签会生成相同的签名产物，但保留为草稿。公开预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
 
 对于例外的桌面专用稳定版，可以在相同凭据与产物检查通过后创建稳定标签：
 
@@ -117,4 +117,4 @@ gh workflow run desktop-release-withdraw.yml \
 
 [`src/backend.ts`](src/backend.ts) 持有就绪解析与有界进程关闭。[`src/navigation.ts`](src/navigation.ts) 是纯 URL 策略。[`src/updates.ts`](src/updates.ts) 持有签名更新决策，[`src/electron-updates.ts`](src/electron-updates.ts) 适配签名传输。[`src/manual-updates.ts`](src/manual-updates.ts) 持有预览版提醒，[`src/github-releases.ts`](src/github-releases.ts) 校验公开 Release API，[`src/manual-update-preferences.ts`](src/manual-update-preferences.ts) 以原子方式保存相应选择。[`src/main.ts`](src/main.ts) 根据应用版本选择通道并持有原生展示。[`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) 暂存由源码构建的运行时闭包；[`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) 校验并合并签名版的分架构元数据；[`electron-builder.yml`](electron-builder.yml) 持有 macOS bundle 布局与公开更新源身份。运行 `pnpm run test:desktop` 可执行聚焦的桌面测试。
 
-运行时决策与备选方案记录在 [Electron 桌面壳](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.zh.md)。两种更新生命周期分别记录在[预览版手工更新提醒](../../.agents/notes/implemented/feature/2026-08-24-desktop-manual-preview-updates.zh.md)与[由用户控制的桌面版签名更新](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.zh.md)。仓库模型记录在 [Mint 桌面下游开发](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.zh.md)中；[自动引入上游并发布桌面版](../../.agents/notes/implemented/process/2026-08-27-automatic-upstream-desktop-releases.zh.md)持有引入、发布、撤回和跨 Agent 记录。
+运行时决策与备选方案记录在 [Electron 桌面壳](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.zh.md)。两种更新生命周期分别记录在[预览版手工更新提醒](../../.agents/notes/implemented/feature/2026-08-24-desktop-manual-preview-updates.zh.md)与[由用户控制的桌面版签名更新](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.zh.md)。仓库模型记录在 [Mint 桌面下游开发](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.zh.md)中；[申请证书前的未签名桌面预览版](../../.agents/notes/implemented/process/2026-08-27-pre-certificate-unsigned-desktop-previews.zh.md)持有默认信任阶段，[自动引入上游并发布桌面版](../../.agents/notes/implemented/process/2026-08-27-automatic-upstream-desktop-releases.zh.md)持有引入、发布、撤回和跨 Agent 记录。

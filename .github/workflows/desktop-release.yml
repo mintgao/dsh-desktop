@@ -36,7 +36,7 @@ env:
 
 jobs:
   prepare:
-    name: Select release channel
+    name: Select release trust and update channel
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.release.outputs.mode }}
@@ -51,6 +51,7 @@ jobs:
         shell: bash
         env:
           PUBLISH_REQUESTED: ${{ inputs.publish }}
+          RELEASE_SIGNING_MODE: ${{ vars.DESKTOP_RELEASE_SIGNING_MODE }}
           REQUESTED_TAG: ${{ inputs.release_tag }}
           UPSTREAM_COMMIT: ${{ inputs.upstream_commit }}
           UPSTREAM_REF: ${{ inputs.upstream_ref }}
@@ -66,9 +67,21 @@ jobs:
             echo 'An automatic publication requires its upstream tag and commit.' >&2
             exit 1
           fi
-          mode=signed
-          if [[ "$version" == *-* ]]; then
-            mode=preview
+          signing_mode="${RELEASE_SIGNING_MODE:-unsigned-preview}"
+          if [[ "$signing_mode" != unsigned-preview && "$signing_mode" != signed ]]; then
+            echo "DESKTOP_RELEASE_SIGNING_MODE must be unsigned-preview or signed." >&2
+            exit 1
+          fi
+          mode=unsigned-preview
+          if [[ "$version" == *-unsigned.1 || "$version" == *.unsigned.1 ]]; then
+            mode=unsigned-preview
+          elif [[ "$signing_mode" != signed ]]; then
+            echo "A desktop tag without the unsigned.1 marker requires DESKTOP_RELEASE_SIGNING_MODE=signed." >&2
+            exit 1
+          elif [[ "$version" == *-* ]]; then
+            mode=signed-preview
+          else
+            mode=signed-stable
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "publish=${PUBLISH_REQUESTED:-false}" >> "$GITHUB_OUTPUT"
@@ -104,16 +117,17 @@ jobs:
           cache: pnpm
 
       - name: Validate signing secrets
+        if: needs.prepare.outputs.mode != 'unsigned-preview'
         env:
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
+          for name in MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
             if [[ -z "${!name}" ]]; then
               echo "Missing required release secret: $name" >&2
               exit 1
@@ -124,6 +138,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Materialize App Store Connect API key
+        if: needs.prepare.outputs.mode != 'unsigned-preview'
         env:
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -138,8 +153,8 @@ jobs:
       - name: Stage source-built DSH runtime
         run: pnpm run desktop:stage
 
-      - name: Build, sign, and notarize DMG and update ZIP
-        if: needs.prepare.outputs.mode == 'signed'
+      - name: Build, sign, and notarize stable DMG and update ZIP
+        if: needs.prepare.outputs.mode == 'signed-stable'
         env:
           CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -156,7 +171,7 @@ jobs:
           --publish never
 
       - name: Build, sign, and notarize preview DMG
-        if: needs.prepare.outputs.mode == 'preview'
+        if: needs.prepare.outputs.mode == 'signed-preview'
         env:
           CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -168,6 +183,19 @@ jobs:
           --config.extraMetadata.version=${{ needs.prepare.outputs.version }}
           --config.forceCodeSigning=true
           --config.mac.notarize=true
+          --mac dmg
+          --${{ matrix.arch }}
+          --publish never
+
+      - name: Build unsigned preview DMG
+        if: needs.prepare.outputs.mode == 'unsigned-preview'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: >-
+          pnpm exec electron-builder
+          --config apps/desktop/electron-builder.yml
+          --config.extraMetadata.version=${{ needs.prepare.outputs.version }}
+          --config.mac.notarize=false
           --mac dmg
           --${{ matrix.arch }}
           --publish never
@@ -185,6 +213,7 @@ jobs:
           "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke
 
       - name: Verify Developer ID application signature
+        if: needs.prepare.outputs.mode != 'unsigned-preview'
         shell: bash
         run: |
           set -euo pipefail
@@ -202,6 +231,7 @@ jobs:
           fi
 
       - name: Verify notarization ticket
+        if: needs.prepare.outputs.mode != 'unsigned-preview'
         shell: bash
         run: |
           set -euo pipefail
@@ -209,8 +239,21 @@ jobs:
           xcrun stapler validate "$dmg_path"
           spctl --assess --verbose=2 --type open "$dmg_path"
 
+      - name: Verify unsigned preview identity
+        if: needs.prepare.outputs.mode == 'unsigned-preview'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
+          test -n "$app_path"
+          signing_details="$(codesign -dvvv --verbose=4 "$app_path" 2>&1 || true)"
+          if [[ "$signing_details" == *"Authority=Developer ID Application:"* ]]; then
+            echo "Unsigned preview unexpectedly carries a Developer ID Application identity." >&2
+            exit 1
+          fi
+
       - name: Preserve architecture update metadata
-        if: needs.prepare.outputs.mode == 'signed'
+        if: needs.prepare.outputs.mode == 'signed-stable'
         shell: bash
         run: |
           set -euo pipefail
@@ -245,16 +288,16 @@ jobs:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - uses: pnpm/action-setup@v4
-        if: needs.prepare.outputs.mode == 'signed'
+        if: needs.prepare.outputs.mode == 'signed-stable'
 
       - uses: actions/setup-node@v6
-        if: needs.prepare.outputs.mode == 'signed'
+        if: needs.prepare.outputs.mode == 'signed-stable'
         with:
           node-version-file: .node-version
           cache: pnpm
 
       - name: Install immutable dependencies
-        if: needs.prepare.outputs.mode == 'signed'
+        if: needs.prepare.outputs.mode == 'signed-stable'
         run: pnpm install --frozen-lockfile
 
       - uses: actions/download-artifact@v5
@@ -264,7 +307,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge architecture update metadata
-        if: needs.prepare.outputs.mode == 'signed'
+        if: needs.prepare.outputs.mode == 'signed-stable'
         shell: bash
         run: |
           set -euo pipefail
@@ -274,14 +317,14 @@ jobs:
             release-assets/latest-mac-arm64.yml \
             release-assets/latest-mac-x64.yml
 
-      - name: Write signed release checksums
-        if: needs.prepare.outputs.mode == 'signed'
+      - name: Write stable release checksums
+        if: needs.prepare.outputs.mode == 'signed-stable'
         run: |
           cd release-assets
           sha256sum *.dmg *.zip > SHA256SUMS.txt
 
       - name: Write preview release checksums
-        if: needs.prepare.outputs.mode == 'preview'
+        if: needs.prepare.outputs.mode != 'signed-stable'
         shell: bash
         run: |
           set -euo pipefail
@@ -300,10 +343,12 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          template=.github/desktop-stable-release-notes.md
-          if [[ "$RELEASE_MODE" == preview ]]; then
-            template=.github/desktop-preview-release-notes.md
-          fi
+          case "$RELEASE_MODE" in
+            signed-stable) template=.github/desktop-stable-release-notes.md ;;
+            signed-preview) template=.github/desktop-preview-release-notes.md ;;
+            unsigned-preview) template=.github/desktop-unsigned-preview-release-notes.md ;;
+            *) echo "Unsupported desktop release mode: $RELEASE_MODE" >&2; exit 1 ;;
+          esac
           source_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
           sed \
             -e "s|__VERSION__|$VERSION|g" \
@@ -326,13 +371,17 @@ jobs:
             release-assets/*.dmg
             release-assets/SHA256SUMS.txt
           )
+          release_title="DSH Desktop Mint $VERSION"
+          if [[ "$RELEASE_MODE" == unsigned-preview ]]; then
+            release_title="$release_title (Unsigned Preview)"
+          fi
           options=(
             --repo "$GITHUB_REPOSITORY"
             --verify-tag
-            --title "DSH Desktop Mint $VERSION"
+            --title "$release_title"
             --notes-file release-notes.md
           )
-          if [[ "$RELEASE_MODE" == signed ]]; then
+          if [[ "$RELEASE_MODE" == signed-stable ]]; then
             assets+=(
               release-assets/*.zip
               release-assets/*.blockmap
