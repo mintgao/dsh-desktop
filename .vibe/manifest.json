@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "framework_version": "0.3.0",
+  "managed_files": {
+    ".agents/skills/vibe-debug-flow/SKILL.md": "d8749aa5494266dbafab5caeec6626451f4e7f3359e2886b3becd2e4fa4f7019",
+    ".agents/skills/vibe-design-flow/SKILL.md": "1fe7c5ddbca5c124986086dcbfb54f94c1efd990bd303d346312925f59623502",
+    ".agents/skills/vibe-feature-flow/SKILL.md": "9d5c1d05e71bcdca4b2415e7a96b0c0ee3317afbf458cfccfa5a62204dde7cfc",
+    ".agents/skills/vibe-feedback-flow/SKILL.md": "bf2e222f57750ae392f9eef0ddaa44f2dd47f80dfe252d700ae7556e04a31a46",
+    ".agents/skills/vibe-feedback-flow/agents/openai.yaml": "94a66f97a34e3af32054520049cd67cd9c12f1b70d2d2e011c309ac174afa0a6",
+    ".agents/skills/vibe-implementation-flow/SKILL.md": "7b62a22898f6f91be029552749c1fed06222d8c15a9315ff87ac734a5a399b90",
+    ".agents/skills/vibe-project-onboarding/SKILL.md": "18f1a50d9fcfb448e006f28d143b1f8b930f859d5bce2ca4cb621af6a94f0e1a",
+    ".agents/skills/vibe-verification-flow/SKILL.md": "d011ff30e9696a68ab93d66d570e603c653acf456852a93a1f85d2ad5bf0b8a5",
+    ".codex/agents/vibe-investigator.toml": "1b2a0b76178d5d232b9cfbe67d3a787b7069095f2b2465ebeb7f74c0cf1f811e",
+    ".codex/agents/vibe-pm.toml": "46d75bb09d0a4fa2c3a0065668bc66a3bd0e2a5cb9b6bda6ac71d8a423b43aed",
+    ".codex/agents/vibe-qa.toml": "18b6099636761b3123ffe80713a407969206fa5cb99922d073f9fb45bb213057",
+    ".codex/agents/vibe-rd.toml": "2d5a701ca838a09b3579f0c98f4742511161000632c2630a27a7ca7a09d0420b",
+    ".codex/agents/vibe-ux.toml": "3851c043ac8a27263543fa62c129caf5c2ed94e253307ac11154f5f6981693ff",
+    ".vibe/core/feedback.json": "2d215b28d1edf2069b9eebdd80b3ea14136d074cd7bd1f3848f95136a69459c0",
+    ".vibe/core/operating-model.md": "7c6a982285854e2fd4cc66bea10a8089c96d83a8f591e6de4c1d4dc1bab67bba",
+    ".vibe/core/protocol.json": "a48907618528302d752207c2f0dd74f878f2289d028ec35085cc706fa1a2879d",
+    ".vibe/core/quality-gates.md": "703b7c187022b525c10805f761bacb6f2a2352c1e60963941a050a5d666a498e",
+    ".vibe/core/templates/work-item-brief.md": "9b465e134761fc10d50fafd2cbef6cffe80a75f656e7dbe4fed6c384d786e224",
+    ".vibe/core/templates/work-item-verification.md": "f6b0b9f58aeb911180ffaa366e5c976c48348df616d3adb8ada882b111a530ec",
+    ".vibe/core/version": "d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0",
+    "bin/vibe": "ceeeae2a4d97a4eda1201dd4c0feb177e40efce0a74566e28f10e265582aa8bd"
+  },
+  "agents_block_hash": "cb49adced3fc7c77e0e20df98d06db5c8857463d62f629b26047c8ee6a091d2d"
+}
