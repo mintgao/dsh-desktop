@@ -18,6 +18,7 @@
 - State Finalizer App 是 `refs/heads/automation/upstream-adoption-state`、`main` fast-forward 以及 `desktop-v*` tag 创建的唯一自动化写入者。
 - Publisher App 只能修改 GitHub Release。它没有 branch / tag bypass，也没有 Apple 签名凭证。
 - `mint-finalizer`、`mint-publication` 与 `mint-signing` environment 只允许 protected branch。手工 validation 与 publication workflow 必须从 `main` dispatch；把 desktop tag 选作 workflow ref 无法进入包含 secret 的 job。
+- 每个 policy-verification step 都提供其 token-minting step 所用的同一 App ID 与 private-key secret。runtime facts 使用内存中的 App JWT 读取 repository-installation identity 与 permission，repository 操作则继续使用 installation token。
 - 持久化 failure fingerprint 会让未变化的确定性轮询成为成功 no-op。Controller 只在 phase 或 fingerprint 变化时编辑同一个 blocker Issue，并且只在公开 Release 与受保护 cursor 都验证通过后关闭它。
 - Candidate 归属由准确 head 上、Controller App 创建的 commit status 认证，而不是由 Git author 文本判断。其他任何 head、任何 protected-path 变更或已解决冲突，都需要具备 `maintain` 或 `admin` 权限的 collaborator 对当前 head 给出 approval；approval 变化是只唤醒 Controller 一次的权威输入。
 - Observer 只会在 publication workflow 真正成功结束后触发完成动作。Finalizer 随后下载全部公开 asset，重新校验 digest 与公开 release notes，再推进 cursor；因此已经公开且有效的 Release 可以不重建而恢复。

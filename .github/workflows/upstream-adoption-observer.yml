@@ -207,6 +207,8 @@ jobs:
           CLEANUP_FAILURE: ${{ steps.inspect.outputs.cleanup_failure }}
           FINALIZER_TOKEN: ${{ steps.finalizer-token.outputs.token }}
           GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GITHUB_APP_ID: ${{ vars.MINT_FINALIZER_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
           SOURCE_RUN: ${{ github.event.workflow_run.id }}
         run: |
           echo 'durable=false' >> "$GITHUB_OUTPUT"

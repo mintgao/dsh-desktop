@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .github/upstream-adoption/README.md
-README.md: e8381705ee728a8f37165a7c30c05789306000c7
-README.zh.md: 8039bd7255bdea43c8f7945983407ca44e84d0c3
+README.md: d22caddbc61bb9dc95e1a6e32eaa8eabb592b149
+README.zh.md: fa0a9dc61aec6159e573f3516d19ac6c9c8cb3d3

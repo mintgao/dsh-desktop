@@ -258,6 +258,8 @@ jobs:
       - name: Verify owner-authenticated policy receipt
         env:
           GH_TOKEN: ${{ steps.publisher-token.outputs.token }}
+          GITHUB_APP_ID: ${{ vars.MINT_PUBLISHER_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.MINT_PUBLISHER_APP_PRIVATE_KEY }}
         run: |
           pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts .github/release-policy/activation.json .github/release-policy/receipt.json publisher "$RUNNER_TEMP/runtime-policy-facts.json"
           pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy .github/release-policy/activation.json .github/release-policy/receipt.json .github/release-policy/receipt.json.sig "$RUNNER_TEMP/runtime-policy-facts.json"

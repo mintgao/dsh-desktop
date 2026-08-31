@@ -245,6 +245,8 @@ jobs:
       - name: Verify owner-authenticated policy receipt
         env:
           GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GITHUB_APP_ID: ${{ vars.MINT_FINALIZER_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
         run: |
           pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts \
             .github/release-policy/activation.json \
@@ -455,6 +457,8 @@ jobs:
       - name: Verify policy, public Release, and qualified bundle
         env:
           GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GITHUB_APP_ID: ${{ vars.MINT_FINALIZER_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
           PUBLICATION_RUN: ${{ github.event.client_payload.publication_run }}
         run: |
           test -n "$PUBLICATION_RUN"

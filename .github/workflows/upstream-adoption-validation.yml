@@ -265,6 +265,8 @@ jobs:
       - name: Authorize Apple credential use with the current owner policy
         env:
           GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GITHUB_APP_ID: ${{ vars.MINT_FINALIZER_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
         run: |
           pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts .github/release-policy/activation.json .github/release-policy/receipt.json finalizer "$RUNNER_TEMP/runtime-policy-facts.json"
           pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy .github/release-policy/activation.json .github/release-policy/receipt.json .github/release-policy/receipt.json.sig "$RUNNER_TEMP/runtime-policy-facts.json"

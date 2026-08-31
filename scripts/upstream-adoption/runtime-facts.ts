@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { githubAppJwtFromPrivateKey } from './github-app-auth.ts'
 import {
   byteDigest,
   parsePolicyActivation,
@@ -24,8 +25,19 @@ if (role !== 'controller' && role !== 'finalizer' && role !== 'publisher') {
   throw new Error('Runtime App role must be controller, finalizer, or publisher.')
 }
 const token = process.env.GH_TOKEN
+const appIdValue = process.env.GITHUB_APP_ID
+const appPrivateKey = process.env.GITHUB_APP_PRIVATE_KEY
 const repositoryName = process.env.GITHUB_REPOSITORY
-if (token === undefined || repositoryName === undefined) throw new Error('GH_TOKEN and GITHUB_REPOSITORY are required.')
+if (
+  token === undefined
+  || appIdValue === undefined
+  || appPrivateKey === undefined
+  || repositoryName === undefined
+) {
+  throw new Error('GH_TOKEN, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_REPOSITORY are required.')
+}
+const appId = positiveIntegerString(appIdValue, 'GITHUB_APP_ID')
+const appToken = githubAppJwtFromPrivateKey(appId, appPrivateKey)
 
 const activationBytes = readFileSync(activationPath)
 const activation = parsePolicyActivation(JSON.parse(activationBytes.toString('utf8')) as unknown)
@@ -35,8 +47,12 @@ const receipt = parsePolicyReceipt(JSON.parse(receiptBytes.toString('utf8')) as 
 readFileSync(`${receiptPath}.sig`)
 const repositoryValue = object(await api(`/repos/${repositoryName}`), 'repository')
 const repository = repositoryIdentity(repositoryValue)
-const installation = object(await api('/installation'), 'installation')
-const installationApp = object(installation.app, 'installation.app')
+const installation = object(
+  await api(`/repos/${repositoryName}/installation`, appToken),
+  'repository installation',
+)
+const installedAppId = integer(installation.app_id, 'installation.app_id')
+if (installedAppId !== appId) throw new Error('Configured GitHub App ID does not own the repository installation.')
 const mainRef = object(await api(`/repos/${repositoryName}/git/ref/heads/main`), 'main ref')
 const mainCommit = string(object(mainRef.object, 'main ref object').sha, 'main ref sha')
 const activationAuthorization = await authorizationFacts(activation.authorizationPr, mainCommit)
@@ -88,8 +104,8 @@ const facts: RuntimePolicyFacts = {
   receiptAuthorization,
   executingApp: {
     role,
-    slug: string(installationApp.slug, 'installation.app.slug'),
-    id: integer(installationApp.id, 'installation.app.id'),
+    slug: string(installation.app_slug, 'installation.app_slug'),
+    id: installedAppId,
     installationId: integer(installation.id, 'installation.id'),
     permissions: stringMap(installation.permissions, 'installation.permissions'),
   },
@@ -171,8 +187,8 @@ async function repositoryFile(path: string, ref: string): Promise<Buffer> {
   return Buffer.from(string(value.content, `repository file ${path} content`).replaceAll('\n', ''), 'base64')
 }
 
-async function api(path: string): Promise<unknown> {
-  const response = await request(path)
+async function api(path: string, authorization = token as string): Promise<unknown> {
+  const response = await request(path, authorization)
   if (!response.ok) throw new Error(`GitHub API ${String(response.status)} for ${path}.`)
   return await json(response)
 }
@@ -183,8 +199,8 @@ async function publicApi(path: string): Promise<unknown> {
   return await json(response)
 }
 
-async function request(path: string): Promise<Response> {
-  return await fetch(`https://api.github.com${path}`, { headers: headers(token as string) })
+async function request(path: string, authorization = token as string): Promise<Response> {
+  return await fetch(`https://api.github.com${path}`, { headers: headers(authorization) })
 }
 
 async function json(response: Response): Promise<unknown> {
@@ -247,6 +263,13 @@ function string(value: unknown, name: string): string {
 function integer(value: unknown, name: string): number {
   if (!Number.isInteger(value)) throw new Error(`${name} must be an integer.`)
   return Number(value)
+}
+
+function positiveIntegerString(value: string, name: string): number {
+  if (!/^[1-9]\d*$/u.test(value)) throw new Error(`${name} must be a positive integer.`)
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${name} must be a safe positive integer.`)
+  return parsed
 }
 
 function stringMap(value: unknown, name: string): Readonly<Record<string, string>> {
