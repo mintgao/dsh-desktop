@@ -9,7 +9,7 @@ This directory owns the owner-authenticated policy files that gate irreversible 
 - `activation.json` is the durable bootstrap record. The checked-in default stays `{"schemaVersion":1,"status":"unconfigured"}` until a restricted activation PR introduces the real signer identity.
 - `receipt.json` and `receipt.json.sig` are not committed by default. Production activation adds them through the same repository and a squash-merged owner-authorized PR.
 - `receipt.example.json` is the schema-shaped example for local tests and operator review. It never carries live IDs, secrets, or signer material.
-- `generator.example.json` is the input shape for the live-fact generator. Copy it outside the committed tree, replace every placeholder, and never add private key material.
+- `generator.example.json` is the input shape for the live-fact generator. Copy it outside the committed tree, replace every placeholder, and point each `privateKeyPath` at an operator-held App key outside the repository; the config never contains key material.
 
 ## Authorization and renewal rules
 
@@ -21,7 +21,7 @@ This directory owns the owner-authenticated policy files that gate irreversible 
 ## Operator checklist
 
 1. Prepare the restricted PR that changes only `activation.json`, `receipt.json`, and `receipt.json.sig` for the first activation, or only `receipt.json` and `receipt.json.sig` for a renewal.
-2. With an administrator-scoped `GH_TOKEN`, run `pnpm exec tsx scripts/upstream-adoption/generate-policy-bundle.ts <config> .github/release-policy/activation.json .github/release-policy/receipt.json`. The generator reads the current repository, App installations, protected environments, secret names, rulesets including bypass actors, and workflow bytes; it never reads secret values.
+2. With an administrator-scoped `GH_TOKEN` and the three outside-repository App key paths in the config, run `pnpm exec tsx scripts/upstream-adoption/generate-policy-bundle.ts <config> .github/release-policy/activation.json .github/release-policy/receipt.json`. The generator creates only short-lived local App JWTs, verifies each App installation and its access to this repository, and reads the current repository, protected environments, secret names, rulesets including bypass actors, and workflow bytes. It never uploads or persists App key values and never reads GitHub secret values. Delete transient local App-key copies after generation; a later renewal may use newly generated temporary App keys without changing the runtime keys stored in protected environments.
 3. Sign the exact receipt bytes with `ssh-keygen -Y sign -f <private-key> -n dsh-mint-release-policy-v1 .github/release-policy/receipt.json`. Keep the private key outside the repository and GitHub environments.
    For a rotation, first generate the approval payload with `pnpm exec tsx scripts/upstream-adoption/cli.ts rotation-statement .github/release-policy/activation.json <output>`, sign those exact bytes with the prior key and namespace `dsh-mint-release-policy-rotation-v1`, then store the armored signature in `previousActivation.approvalSignature` and regenerate the bundle.
 4. Merge the restricted PR with GitHub squash merge as the current personal repository owner. For initial activation, create the PR first with placeholders so its number can be bound, then replace and sign the generated files before approval.

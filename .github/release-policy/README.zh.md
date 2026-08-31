@@ -9,7 +9,7 @@
 - `activation.json` 是持久 bootstrap record。已提交的默认值保持为 `{"schemaVersion":1,"status":"unconfigured"}`，直到受限 activation PR 引入真实 signer identity。
 - `receipt.json` 与 `receipt.json.sig` 默认不提交。生产 activation 会通过同一仓库内、由 owner 授权并使用 squash merge 的 PR 引入它们。
 - `receipt.example.json` 是给本地测试和运维评审使用的 schema 形状示例。它绝不携带真实 ID、secret 或 signer 材料。
-- `generator.example.json` 是实时事实生成器的输入形状。请把它复制到提交树之外，替换所有占位符，且绝不加入 private key 材料。
+- `generator.example.json` 是实时事实生成器的输入形状。请把它复制到提交树之外，替换所有占位符，并让每个 `privateKeyPath` 指向仓库外由 operator 持有的 App key；config 本身绝不包含 key 材料。
 
 ## 授权与续期规则
 
@@ -21,7 +21,7 @@
 ## 运维检查表
 
 1. 首次 activation 时，准备一个只改动 `activation.json`、`receipt.json` 和 `receipt.json.sig` 的受限 PR；续期时则只改 `receipt.json` 和 `receipt.json.sig`。
-2. 使用具备 administrator 范围的 `GH_TOKEN` 运行 `pnpm exec tsx scripts/upstream-adoption/generate-policy-bundle.ts <config> .github/release-policy/activation.json .github/release-policy/receipt.json`。生成器会读取当前 repository、App installation、受保护 environment、secret name、含 bypass actor 的 ruleset 及 workflow 字节，但绝不读取 secret 值。
+2. 使用具备 administrator 范围的 `GH_TOKEN`，并在 config 中提供三个仓库外 App key path，然后运行 `pnpm exec tsx scripts/upstream-adoption/generate-policy-bundle.ts <config> .github/release-policy/activation.json .github/release-policy/receipt.json`。生成器只创建短期本地 App JWT，验证每个 App installation 及其对本仓库的访问，并读取当前 repository、受保护 environment、secret name、含 bypass actor 的 ruleset 及 workflow 字节。它绝不上传或持久化 App key value，也绝不读取 GitHub secret value。生成完成后删除临时本地 App key 副本；后续续期可以使用新生成的临时 App key，不改变存放在受保护 environment 中的 runtime key。
 3. 运行 `ssh-keygen -Y sign -f <private-key> -n dsh-mint-release-policy-v1 .github/release-policy/receipt.json` 对准确的 receipt 字节签名。private key 必须留在 repository 和 GitHub environment 之外。
    轮换时，先运行 `pnpm exec tsx scripts/upstream-adoption/cli.ts rotation-statement .github/release-policy/activation.json <output>` 生成 approval payload，使用旧 key 与 `dsh-mint-release-policy-rotation-v1` namespace 签署准确字节，把 armored signature 写入 `previousActivation.approvalSignature`，再重新生成 bundle。
 4. 由当前个人仓库 owner 使用 GitHub squash merge 合并受限 PR。首次 activation 时，先用占位文件创建 PR 以取得待绑定的编号，再在批准前替换并签名生成文件。

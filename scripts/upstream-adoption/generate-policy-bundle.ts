@@ -1,8 +1,9 @@
 /** Generate owner-reviewable activation and receipt bytes from live administrator facts. */
 
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { githubAppJwt } from './github-app-auth.ts'
 import { policyWorkflowPaths } from './policy.ts'
 
 interface GeneratorConfig {
@@ -34,6 +35,7 @@ interface GeneratorConfig {
     readonly id: number
     readonly installationId: number
     readonly displayName: string
+    readonly privateKeyPath: string
   }[]
   readonly repositoryRoles: Readonly<Record<string, string>>
 }
@@ -75,13 +77,25 @@ if (owner.type !== 'User') throw new Error('Activation supports only a personal 
 
 const apps = []
 const appNames = new Map<number, string>()
+const repositoryRoot = realpathSync(resolve('.'))
 for (const expected of config.apps) {
-  const installation = object(await api(`/user/installations/${String(expected.installationId)}`), `${expected.role} installation`)
+  const privateKeyPath = realpathSync(resolve(string(expected.privateKeyPath, `${expected.role} private-key path`)))
+  if (privateKeyPath === repositoryRoot || privateKeyPath.startsWith(`${repositoryRoot}/`)) {
+    throw new Error(`${expected.role} private key must remain outside the repository.`)
+  }
+  const appToken = githubAppJwt(expected.id, privateKeyPath)
+  const installation = object(
+    await api(`/app/installations/${String(expected.installationId)}`, appToken),
+    `${expected.role} installation`,
+  )
   if (installation.id !== expected.installationId || installation.app_id !== expected.id || installation.app_slug !== expected.slug) {
     throw new Error(`${expected.role} installation identity changed.`)
   }
-  const repositories = array(await paginated(`/user/installations/${String(expected.installationId)}/repositories`, 'repositories'), 'repositories')
-  if (!repositories.some(value => object(value, 'installed repository').id === repository.id)) {
+  const repositoryInstallation = object(
+    await api(`/repos/${config.repository}/installation`, appToken),
+    `${expected.role} repository installation`,
+  )
+  if (repositoryInstallation.id !== expected.installationId) {
     throw new Error(`${expected.role} installation does not include ${config.repository}.`)
   }
   appNames.set(expected.id, expected.displayName)
@@ -179,21 +193,11 @@ const receipt = {
 writeFileSync(activationPath, `${JSON.stringify(activation, null, 2)}\n`)
 writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`)
 
-async function paginated(path: string, field: string): Promise<unknown[]> {
-  const result: unknown[] = []
-  for (let page = 1; ; page += 1) {
-    const response = object(await api(`${path}?per_page=100&page=${String(page)}`), field)
-    const batch = array(response[field], field)
-    result.push(...batch)
-    if (batch.length < 100) return result
-  }
-}
-
-async function api(path: string): Promise<unknown> {
+async function api(path: string, authorization = token): Promise<unknown> {
   const response = await fetch(`https://api.github.com${path}`, {
     headers: {
       Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${authorization}`,
       'X-GitHub-Api-Version': '2022-11-28',
     },
   })
