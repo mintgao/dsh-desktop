@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "apps": {
+    "controller": {
+      "slugVariable": "MINT_CONTROLLER_APP_SLUG",
+      "idVariable": "MINT_CONTROLLER_APP_ID",
+      "privateKeySecret": "MINT_CONTROLLER_APP_PRIVATE_KEY",
+      "permissions": {
+        "actions": "write",
+        "contents": "write",
+        "issues": "write",
+        "metadata": "read",
+        "pull_requests": "write",
+        "statuses": "write",
+        "workflows": "write"
+      }
+    },
+    "finalizer": {
+      "slugVariable": "MINT_FINALIZER_APP_SLUG",
+      "idVariable": "MINT_FINALIZER_APP_ID",
+      "privateKeySecret": "MINT_FINALIZER_APP_PRIVATE_KEY",
+      "environment": "mint-finalizer",
+      "permissions": {
+        "actions": "write",
+        "contents": "write",
+        "metadata": "read",
+        "workflows": "write"
+      }
+    },
+    "publisher": {
+      "slugVariable": "MINT_PUBLISHER_APP_SLUG",
+      "idVariable": "MINT_PUBLISHER_APP_ID",
+      "privateKeySecret": "MINT_PUBLISHER_APP_PRIVATE_KEY",
+      "environment": "mint-publication",
+      "permissions": {
+        "contents": "write",
+        "metadata": "read"
+      }
+    }
+  }
+}

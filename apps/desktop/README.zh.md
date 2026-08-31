@@ -77,7 +77,7 @@ renderer（渲染进程）启用沙箱、上下文隔离与 Web 安全，不启�
 - `MACOS_CERTIFICATE_P12_BASE64` 与 `MACOS_CERTIFICATE_PASSWORD`，用于 Developer ID Application 证书。
 - `APPLE_API_KEY_P8_BASE64`、`APPLE_API_KEY_ID` 与 `APPLE_API_ISSUER`，用于 App Store Connect 公证。
 
-普通上游 Release 不需要人工创建标签或发布。引入工作流会把它加入队列，更新[状态记录](../../.github/upstream-sync-state.json)，推送当前发布阶段映射出的桌面标签，并带上游标签与提交触发发布工作流，以生成 Release 说明。手工推送的 `desktop-v*` 标签仍只用于例外的草稿路径。
+普通上游 Release 不需要人工创建标签或发布。[事务化采纳控制平面](../../.github/upstream-adoption/README.zh.md)会在受保护状态 ref 上排队，在创建标签前校验准确 candidate 与两个原生架构，再原子推进 `main`、desktop tag 和状态，并在推进队列前验证公开 Release。未变化的确定性 blocker 会成为成功 no-op，并且只有 phase 或 fingerprint 变化时才更新同一个 Issue。
 
 对于例外的桌面专用预发布版本，可以在配置这些凭据后创建标签：
 
@@ -88,7 +88,9 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-在签名模式下，工作流会强制签名，分别提交两个预览架构进行公证，验证 Developer ID 身份与已装订票据，并生成两份 DMG 与 SHA-256 校验和。自动运行会立即公开 GitHub Pre-release，并记录内置 Harness 标签、上游提交和桌面源码提交。手工标签会生成相同的签名产物，但保留为草稿。公开预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
+推送标签本身不会发布。请使用该标签手工运行 `Validate and qualify upstream candidate`，等待它成功并取得 run ID，再使用相同标签和 validation run ID 运行 `Publish qualified DSH Desktop bundle`。两个 workflow 都会重新推导 tag commit 与 receipt provenance；publication 会保持为 draft。
+
+在签名模式下，qualification 会先验证当前 owner-authenticated release policy，并且不会向 candidate 暴露 Apple credential。独立 signing job 随后强制签名，分别提交两个预览架构进行公证，验证 Developer ID 身份与已装订票据，并生成两份 DMG 与 SHA-256 校验和。自动运行会公开 GitHub Pre-release，并记录内置 Harness 标签、上游提交和桌面源码提交。手工标签会生成相同的签名产物，但保留为草稿。公开预览版会被预览客户端发现，但不会进入 `electron-updater` 的稳定更新源。
 
 对于例外的桌面专用稳定版，可以在相同凭据与产物检查通过后创建稳定标签：
 

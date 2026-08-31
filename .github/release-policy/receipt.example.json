@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "replace-with-receipt-id",
+  "sequence": 1,
+  "authorizationPr": 1,
+  "predecessor": null,
+  "repository": {
+    "id": 1,
+    "name": "dsh-desktop",
+    "owner": {
+      "login": "mintgao",
+      "type": "User"
+    }
+  },
+  "issuedAt": "2026-08-31T00:00:00.000Z",
+  "expiresAt": "2026-09-29T00:00:00.000Z",
+  "issuer": {
+    "login": "mintgao",
+    "fingerprint": "SHA256:replace-with-signer-fingerprint"
+  },
+  "rotationOrdinal": 1,
+  "stateRef": "refs/heads/automation/upstream-adoption-state",
+  "apps": [
+    {
+      "role": "controller",
+      "slug": "replace-with-controller-app-slug",
+      "id": 1,
+      "installationId": 11,
+      "permissions": {
+        "actions": "write",
+        "contents": "write",
+        "issues": "write",
+        "metadata": "read",
+        "pull_requests": "write",
+        "statuses": "write",
+        "workflows": "write"
+      }
+    },
+    {
+      "role": "finalizer",
+      "slug": "replace-with-finalizer-app-slug",
+      "id": 2,
+      "installationId": 12,
+      "permissions": {
+        "actions": "write",
+        "contents": "write",
+        "metadata": "read",
+        "workflows": "write"
+      }
+    },
+    {
+      "role": "publisher",
+      "slug": "replace-with-publisher-app-slug",
+      "id": 3,
+      "installationId": 13,
+      "permissions": {
+        "contents": "write",
+        "metadata": "read"
+      }
+    }
+  ],
+  "environments": [
+    {
+      "id": 1,
+      "name": "mint-finalizer",
+      "protection": {
+        "deploymentBranchPolicy": {
+          "protectedBranches": true,
+          "customBranchPolicies": false
+        }
+      },
+      "secretNames": [
+        "MINT_FINALIZER_APP_PRIVATE_KEY"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "mint-publication",
+      "protection": {
+        "deploymentBranchPolicy": {
+          "protectedBranches": true,
+          "customBranchPolicies": false
+        }
+      },
+      "secretNames": [
+        "MINT_PUBLISHER_APP_PRIVATE_KEY"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "mint-signing",
+      "protection": {
+        "deploymentBranchPolicy": {
+          "protectedBranches": true,
+          "customBranchPolicies": false
+        }
+      },
+      "secretNames": [
+        "APPLE_API_ISSUER",
+        "APPLE_API_KEY_ID",
+        "APPLE_API_KEY_P8_BASE64",
+        "MACOS_CERTIFICATE_P12_BASE64",
+        "MACOS_CERTIFICATE_PASSWORD"
+      ]
+    }
+  ],
+  "rulesets": [
+    {
+      "id": 101,
+      "name": "Mint main finalization",
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": [
+            "~DEFAULT_BRANCH"
+          ],
+          "exclude": []
+        }
+      },
+      "rules": [
+        {
+          "type": "pull_request",
+          "parameters": {
+            "allowed_merge_methods": [
+              "merge",
+              "squash",
+              "rebase"
+            ],
+            "dismiss_stale_reviews_on_push": true,
+            "require_code_owner_review": false,
+            "require_last_push_approval": true,
+            "required_approving_review_count": 1,
+            "required_review_thread_resolution": true
+          }
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "updatedAt": "2026-08-31T00:00:00.000Z",
+      "bypassActors": [
+        {
+          "actorType": "Integration",
+          "displayName": "Mint State Finalizer",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Mint adoption state",
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": [
+            "refs/heads/automation/upstream-adoption-state"
+          ],
+          "exclude": []
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        },
+        {
+          "type": "pull_request",
+          "parameters": {
+            "allowed_merge_methods": [
+              "squash"
+            ],
+            "dismiss_stale_reviews_on_push": true,
+            "require_code_owner_review": false,
+            "require_last_push_approval": true,
+            "required_approving_review_count": 1,
+            "required_review_thread_resolution": true
+          }
+        }
+      ],
+      "updatedAt": "2026-08-31T00:00:00.000Z",
+      "bypassActors": [
+        {
+          "actorType": "Integration",
+          "displayName": "Mint State Finalizer",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "name": "Mint adoption candidates",
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": [
+            "refs/heads/automation/adopt/*"
+          ],
+          "exclude": []
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "updatedAt": "2026-08-31T00:00:00.000Z",
+      "bypassActors": [
+        {
+          "actorType": "Integration",
+          "displayName": "Mint Adoption Controller",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 104,
+      "name": "Mint desktop tag creation",
+      "target": "tag",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": [
+            "refs/tags/desktop-v*"
+          ],
+          "exclude": []
+        }
+      },
+      "rules": [
+        {
+          "type": "creation"
+        }
+      ],
+      "updatedAt": "2026-08-31T00:00:00.000Z",
+      "bypassActors": [
+        {
+          "actorType": "Integration",
+          "displayName": "Mint State Finalizer",
+          "bypassMode": "always"
+        },
+        {
+          "actorType": "RepositoryRole",
+          "displayName": "maintain",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 105,
+      "name": "Mint desktop tag immutability",
+      "target": "tag",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "include": [
+            "refs/tags/desktop-v*"
+          ],
+          "exclude": []
+        }
+      },
+      "rules": [
+        {
+          "type": "update"
+        },
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "updatedAt": "2026-08-31T00:00:00.000Z",
+      "bypassActors": []
+    }
+  ],
+  "workflowDigests": {
+    ".github/workflows/upstream-adoption-controller.yml": "0000000000000000000000000000000000000000000000000000000000000000",
+    ".github/workflows/upstream-adoption-finalizer.yml": "1111111111111111111111111111111111111111111111111111111111111111",
+    ".github/workflows/upstream-adoption-observer.yml": "5555555555555555555555555555555555555555555555555555555555555555",
+    ".github/workflows/upstream-adoption-preflight.yml": "2222222222222222222222222222222222222222222222222222222222222222",
+    ".github/workflows/upstream-adoption-validation.yml": "3333333333333333333333333333333333333333333333333333333333333333",
+    ".github/workflows/desktop-release.yml": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "generatorVersion": "dsh-release-policy-v1"
+}

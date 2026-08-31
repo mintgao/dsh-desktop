@@ -1,0 +1,23 @@
+{
+  "repository": "mintgao/dsh-desktop",
+  "activationAuthorizationPr": 1,
+  "receiptAuthorizationPr": 1,
+  "receiptId": "replace-with-unique-receipt-id",
+  "sequence": 1,
+  "predecessor": null,
+  "issuedAt": "2026-08-31T00:00:00.000Z",
+  "expiresAt": "2026-09-29T00:00:00.000Z",
+  "rotationOrdinal": 1,
+  "previousActivation": null,
+  "signer": {
+    "identity": "mintgao",
+    "publicKey": "ssh-ed25519 replace-with-public-key",
+    "fingerprint": "SHA256:replace-with-signer-fingerprint"
+  },
+  "apps": [
+    {"role": "controller", "slug": "replace-with-controller-app-slug", "id": 1, "installationId": 11, "displayName": "Mint Adoption Controller"},
+    {"role": "finalizer", "slug": "replace-with-finalizer-app-slug", "id": 2, "installationId": 12, "displayName": "Mint State Finalizer"},
+    {"role": "publisher", "slug": "replace-with-publisher-app-slug", "id": 3, "installationId": 13, "displayName": "Mint Release Publisher"}
+  ],
+  "repositoryRoles": {"4": "maintain"}
+}

@@ -1,0 +1,391 @@
+name: Observe upstream adoption outcomes
+
+on:
+  workflow_run:
+    workflows:
+      - Reconcile upstream adoption
+      - Finalize qualified upstream adoption
+      - Validate and qualify upstream candidate
+      - Publish qualified DSH Desktop bundle
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  finalize-success:
+    if: >-
+      github.repository == 'mintgao/dsh-desktop'
+      && github.event.workflow_run.name == 'Validate and qualify upstream candidate'
+      && github.event.workflow_run.event == 'repository_dispatch'
+      && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Dispatch finalization only after the validation run is complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          jq -e --argjson repository "$GITHUB_REPOSITORY_ID" '
+            .repository.id == $repository
+            and .path == ".github/workflows/upstream-adoption-validation.yml"
+            and .event == "repository_dispatch"
+            and .conclusion == "success"
+          ' "$RUNNER_TEMP/source-run.json"
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          git show "$state_ref:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          gh run download "$SOURCE_RUN" --name validation-attempt-context --dir "$RUNNER_TEMP/validation-attempt-context"
+          jq -e \
+            --argjson run "$SOURCE_RUN" \
+            --argjson attempt "$(jq -r '.run_attempt' "$RUNNER_TEMP/source-run.json")" \
+            --arg state_ref_commit "$(git rev-parse "$state_ref")" \
+            --argjson state_revision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+            --arg input_key "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+            --arg candidate_commit "$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")" \
+            --arg base_commit "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")" \
+            --arg upstream_commit "$(jq -r '.activeDelivery.upstream.commit' "$RUNNER_TEMP/state.json")" \
+            --arg desktop_tag "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" \
+            '
+              .schemaVersion == 1
+              and .kind == "validation"
+              and .runId == $run
+              and .runAttempt == $attempt
+              and .stateRefCommit == $state_ref_commit
+              and .stateRevision == $state_revision
+              and .inputKey == $input_key
+              and .candidateCommit == $candidate_commit
+              and .baseCommit == $base_commit
+              and .upstreamCommit == $upstream_commit
+              and .desktopTag == $desktop_tag
+            ' "$RUNNER_TEMP/validation-attempt-context/validation-attempt-context.json"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=upstream-adoption-finalize \
+            -f "client_payload[validation_run]=$SOURCE_RUN"
+
+  finalize-publication-success:
+    if: >-
+      github.repository == 'mintgao/dsh-desktop'
+      && github.event.workflow_run.name == 'Publish qualified DSH Desktop bundle'
+      && github.event.workflow_run.event == 'repository_dispatch'
+      && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Dispatch cursor advancement only after publication completes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          jq -e --argjson repository "$GITHUB_REPOSITORY_ID" '
+            .repository.id == $repository
+            and .path == ".github/workflows/desktop-release.yml"
+            and .event == "repository_dispatch"
+            and .conclusion == "success"
+          ' "$RUNNER_TEMP/source-run.json"
+          git fetch origin refs/heads/automation/upstream-adoption-state --tags
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          git show "$state_ref:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          phase="$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")"
+          [[ "$phase" == release-pending || "$phase" == publication-blocked ]]
+          release_tag="$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")"
+          source_commit="$(jq -r '.activeDelivery.artifacts.sourceCommit' "$RUNNER_TEMP/state.json")"
+          validation_run="$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")"
+          gh run download "$SOURCE_RUN" --name publication-attempt-context --dir "$RUNNER_TEMP/publication-attempt-context"
+          jq -e \
+            --argjson run "$SOURCE_RUN" \
+            --argjson attempt "$(jq -r '.run_attempt' "$RUNNER_TEMP/source-run.json")" \
+            --arg state_ref_commit "$(git rev-parse "$state_ref")" \
+            --argjson state_revision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+            --arg input_key "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+            --arg release_tag "$release_tag" \
+            --arg source_commit "$source_commit" \
+            --argjson validation_run "$validation_run" \
+            '.schemaVersion == 1 and .kind == "publication" and .runId == $run and .runAttempt == $attempt and .stateRefCommit == $state_ref_commit and .stateRevision == $state_revision and .inputKey == $input_key and .releaseTag == $release_tag and .sourceCommit == $source_commit and .validationRun == $validation_run' \
+            "$RUNNER_TEMP/publication-attempt-context/publication-attempt-context.json"
+          test "$(git rev-parse "$release_tag^{commit}")" = "$source_commit"
+          gh run download "$validation_run" --name desktop-bundle --dir "$RUNNER_TEMP/bundle"
+          gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,assets,body > "$RUNNER_TEMP/public-release.json"
+          jq -e --arg tag "$release_tag" --slurpfile manifest "$RUNNER_TEMP/bundle/artifact-manifest.json" '
+            .isDraft == false and .tagName == $tag
+            and ([.assets[].name] | sort) == ($manifest[0] | map(.name) | sort)
+          ' "$RUNNER_TEMP/public-release.json"
+          mkdir "$RUNNER_TEMP/public-assets"
+          gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/public-assets"
+          jq -r '.[] | [.sha256,.name] | @tsv' "$RUNNER_TEMP/bundle/artifact-manifest.json" | while IFS=$'\t' read -r sha name; do
+            test "$(sha256sum "$RUNNER_TEMP/public-assets/$name" | cut -d ' ' -f 1)" = "$sha"
+          done
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=upstream-adoption-publication-verified \
+            -f "client_payload[publication_run]=$SOURCE_RUN"
+
+  record-failure:
+    if: >-
+      github.repository == 'mintgao/dsh-desktop'
+      && github.event.workflow_run.conclusion != 'success'
+      && github.event.workflow_run.conclusion != 'skipped'
+    environment: mint-finalizer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: inspect
+        name: Verify the completed run and normalize failed checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          echo 'cleanup_failure=false' >> "$GITHUB_OUTPUT"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          jq -e --argjson repository "$GITHUB_REPOSITORY_ID" '
+            .repository.id == $repository
+            and (.conclusion != "success" and .conclusion != "skipped" and .conclusion != null)
+            and (.path == ".github/workflows/upstream-adoption-controller.yml"
+              or .path == ".github/workflows/upstream-adoption-finalizer.yml"
+              or .path == ".github/workflows/upstream-adoption-validation.yml"
+              or .path == ".github/workflows/desktop-release.yml")
+          ' "$RUNNER_TEMP/source-run.json"
+          if jq -e '(.path == ".github/workflows/upstream-adoption-validation.yml" or .path == ".github/workflows/desktop-release.yml") and .event == "workflow_dispatch"' "$RUNNER_TEMP/source-run.json" >/dev/null; then
+            echo 'eligible=false' >> "$GITHUB_OUTPUT"
+            echo 'Exceptional manual validation or publication runs do not project blocker state.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" --slurp \
+            | jq '[.[].jobs[]] | {
+                failedChecks: ([.[] | select(.conclusion != "success" and .conclusion != "skipped") as $job
+                  | (($job.steps // []) | map(select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null)
+                    | ($job.name + " / " + .name))) as $steps
+                  | if ($steps | length) == 0 then $job.name else $steps[] end] | unique | sort)
+              }' > "$RUNNER_TEMP/failure-input.json"
+          if jq -e '.path == ".github/workflows/upstream-adoption-controller.yml" and .event == "repository_dispatch"' "$RUNNER_TEMP/source-run.json" >/dev/null; then
+            if jq -e '.failedChecks[] | startswith("Verify delivery, close its Issue, and remove its candidate branch")' "$RUNNER_TEMP/failure-input.json" >/dev/null; then
+              echo 'cleanup_failure=true' >> "$GITHUB_OUTPUT"
+            else
+              echo 'eligible=false' >> "$GITHUB_OUTPUT"
+              echo 'Controller projection failures are not observed recursively.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+          fi
+          echo 'eligible=true' >> "$GITHUB_OUTPUT"
+
+      - uses: pnpm/action-setup@v4
+        if: steps.inspect.outputs.eligible == 'true'
+      - uses: actions/setup-node@v6
+        if: steps.inspect.outputs.eligible == 'true'
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - if: steps.inspect.outputs.eligible == 'true'
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        if: steps.inspect.outputs.eligible == 'true'
+        continue-on-error: true
+        id: finalizer-token
+        with:
+          app-id: ${{ vars.MINT_FINALIZER_APP_ID }}
+          private-key: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+
+      - id: record
+        name: Persist a deduplicated blocker on the protected state ref
+        if: steps.inspect.outputs.eligible == 'true' && steps.finalizer-token.outcome == 'success'
+        continue-on-error: true
+        env:
+          CLEANUP_FAILURE: ${{ steps.inspect.outputs.cleanup_failure }}
+          FINALIZER_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          echo 'durable=false' >> "$GITHUB_OUTPUT"
+          echo 'project=true' >> "$GITHUB_OUTPUT"
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          git show "$state_ref:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          source_path="$(jq -r '.path' "$RUNNER_TEMP/source-run.json")"
+          source_conclusion="$(jq -r '.conclusion' "$RUNNER_TEMP/source-run.json")"
+          source_attempt="$(jq -r '.run_attempt' "$RUNNER_TEMP/source-run.json")"
+          if [[ "$(jq -r '.activeDelivery == null' "$RUNNER_TEMP/state.json")" == true ]]; then
+            if [[ "$CLEANUP_FAILURE" == true && "$source_path" == .github/workflows/upstream-adoption-controller.yml ]]; then
+              queue_head="$(jq -r '.lastPublishedRelease.tag // empty' "$RUNNER_TEMP/state.json")"
+              if [[ -n "$queue_head" ]]; then
+                echo "phase=cleanup-blocked" >> "$GITHUB_OUTPUT"
+                echo "queue_head=$queue_head" >> "$GITHUB_OUTPUT"
+                echo 'Completed publication cleanup failed after cursor advancement; the Controller will retry exact cleanup debt on the next scheduled reconcile.' >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+            fi
+            echo 'No active queue head exists; the Controller will open a circuit-breaker Issue.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts \
+            .github/release-policy/activation.json \
+            .github/release-policy/receipt.json \
+            finalizer \
+            "$RUNNER_TEMP/runtime-policy-facts.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy \
+            .github/release-policy/activation.json \
+            .github/release-policy/receipt.json \
+            .github/release-policy/receipt.json.sig \
+            "$RUNNER_TEMP/runtime-policy-facts.json"
+          if [[ "$source_path" == .github/workflows/upstream-adoption-validation.yml ]]; then
+            if ! gh run download "$SOURCE_RUN" --name validation-attempt-context --dir "$RUNNER_TEMP/validation-attempt-context"; then
+              echo 'project=false' >> "$GITHUB_OUTPUT"
+              echo 'The failed validation run has no protected-attempt context and is not projected.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [[ "$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")" != candidate-open ]] \
+              || [[ "$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")" != '' ]] \
+              || [[ "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")" != "$(git rev-parse refs/remotes/origin/main)" ]]; then
+              echo 'project=false' >> "$GITHUB_OUTPUT"
+              echo 'The failed validation run no longer matches the current protected candidate state.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            candidate_branch="$(jq -r '.activeDelivery.candidate.branch' "$RUNNER_TEMP/state.json")"
+            candidate_head="$(git ls-remote origin "refs/heads/$candidate_branch" | cut -f 1)"
+            if [[ -z "$candidate_head" || "$candidate_head" != "$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")" ]]; then
+              echo 'project=false' >> "$GITHUB_OUTPUT"
+              echo 'The failed validation run no longer matches the current candidate branch head.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            jq -e \
+              --argjson run "$SOURCE_RUN" \
+              --argjson attempt "$source_attempt" \
+              --arg state_ref_commit "$(git rev-parse "$state_ref")" \
+              --argjson state_revision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+              --arg input_key "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+              --arg candidate_commit "$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")" \
+              --arg base_commit "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")" \
+              --arg upstream_commit "$(jq -r '.activeDelivery.upstream.commit' "$RUNNER_TEMP/state.json")" \
+              --arg desktop_tag "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" \
+              '.schemaVersion == 1 and .kind == "validation" and .runId == $run and .runAttempt == $attempt and .stateRefCommit == $state_ref_commit and .stateRevision == $state_revision and .inputKey == $input_key and .candidateCommit == $candidate_commit and .baseCommit == $base_commit and .upstreamCommit == $upstream_commit and .desktopTag == $desktop_tag' \
+              "$RUNNER_TEMP/validation-attempt-context/validation-attempt-context.json"
+          elif [[ "$source_path" == .github/workflows/desktop-release.yml ]]; then
+            if ! gh run download "$SOURCE_RUN" --name publication-attempt-context --dir "$RUNNER_TEMP/publication-attempt-context"; then
+              echo 'project=false' >> "$GITHUB_OUTPUT"
+              echo 'The failed publication run has no protected-attempt context and is not projected.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            current_phase="$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")"
+            if [[ "$current_phase" != release-pending && "$current_phase" != publication-blocked ]]; then
+              echo 'project=false' >> "$GITHUB_OUTPUT"
+              echo 'The failed publication run no longer matches the current protected release state.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            release_tag="$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")"
+            source_commit="$(jq -r '.activeDelivery.artifacts.sourceCommit' "$RUNNER_TEMP/state.json")"
+            if [[ "$(git rev-parse "$release_tag^{commit}")" != "$source_commit" ]]; then
+              echo 'project=false' >> "$GITHUB_OUTPUT"
+              echo 'The failed publication run no longer matches the current release tag target.' >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            jq -e \
+              --argjson run "$SOURCE_RUN" \
+              --argjson attempt "$source_attempt" \
+              --arg state_ref_commit "$(git rev-parse "$state_ref")" \
+              --argjson state_revision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+              --arg input_key "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+              --arg release_tag "$release_tag" \
+              --arg source_commit "$source_commit" \
+              --argjson validation_run "$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")" \
+              '.schemaVersion == 1 and .kind == "publication" and .runId == $run and .runAttempt == $attempt and .stateRefCommit == $state_ref_commit and .stateRevision == $state_revision and .inputKey == $input_key and .releaseTag == $release_tag and .sourceCommit == $source_commit and .validationRun == $validation_run' \
+              "$RUNNER_TEMP/publication-attempt-context/publication-attempt-context.json"
+          fi
+          case "$source_path" in
+            .github/workflows/upstream-adoption-controller.yml) stage=controller ;;
+            .github/workflows/upstream-adoption-finalizer.yml) stage=finalization ;;
+            .github/workflows/upstream-adoption-validation.yml) stage=validation ;;
+            .github/workflows/desktop-release.yml) stage=publication ;;
+          esac
+          current_phase="$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")"
+          if [[ "$current_phase" == release-pending || "$current_phase" == publication-blocked ]]; then
+            phase=publication-blocked
+          else
+            phase=adoption-blocked
+          fi
+          jq --arg phase "$phase" --arg stage "$stage" --arg failureClass "$source_conclusion" \
+            '. + {phase:$phase,stage:$stage,failureClass:$failureClass}' \
+            "$RUNNER_TEMP/failure-input.json" > "$RUNNER_TEMP/fingerprint-input.json"
+          fingerprint="$(pnpm exec tsx scripts/upstream-adoption/cli.ts failure-fingerprint "$RUNNER_TEMP/fingerprint-input.json")"
+          kind=deterministic
+          if [[ "$source_conclusion" == timed_out || "$source_conclusion" == cancelled ]]; then kind=transient; fi
+          if [[ "$source_path" == .github/workflows/upstream-adoption-validation.yml ]] \
+            && jq -e '.failedChecks[] | contains("prepare / Re-derive trusted validation context")' "$RUNNER_TEMP/failure-input.json" >/dev/null; then
+            kind=transient
+          fi
+          retry_count=0
+          if [[ "$kind" == transient && "$(jq -r '.activeDelivery.failure.fingerprint // empty' "$RUNNER_TEMP/state.json")" == "$fingerprint" ]]; then
+            retry_count="$(( $(jq -r '.activeDelivery.failure.retryCount' "$RUNNER_TEMP/state.json") + 1 ))"
+          fi
+          observed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          next_retry=null
+          if [[ "$kind" == transient ]]; then
+            next_retry="$(pnpm exec tsx scripts/upstream-adoption/cli.ts next-retry "$observed_at" "$retry_count")"
+            if [[ "$next_retry" == null ]]; then kind=deterministic; fi
+          fi
+          previous_epoch="$(date -u -d "$(jq -r '.updatedAt' "$RUNNER_TEMP/state.json")" +%s)"
+          observed_epoch="$(date -u -d "$observed_at" +%s)"
+          if (( observed_epoch <= previous_epoch )); then observed_at="$(date -u -d "@$((previous_epoch + 1))" +%Y-%m-%dT%H:%M:%SZ)"; fi
+          jq \
+            --arg phase "$phase" --arg kind "$kind" --arg stage "$stage" --arg failure_class "$source_conclusion" --arg fingerprint "$fingerprint" \
+            --argjson retry_count "$retry_count" --argjson next_retry "$next_retry" --arg updated_at "$observed_at" \
+            --arg updated_by "${{ vars.MINT_FINALIZER_APP_SLUG }}" --argjson observer_run "$GITHUB_RUN_ID" --argjson source_run "$SOURCE_RUN" --argjson source_attempt "$source_attempt" \
+            '.revision += 1
+              | .updatedAt=$updated_at | .updatedBy=$updated_by | .updateRunId=$observer_run
+              | .activeDelivery.phase=$phase
+              | .activeDelivery.failure={kind:$kind,stage:$stage,failureClass:$failure_class,fingerprint:$fingerprint,retryCount:$retry_count,nextRetryAt:$next_retry}
+              | if $phase=="publication-blocked" then .activeDelivery.publicationRun=$source_run
+                elif .activeDelivery.validation != null then .activeDelivery.validation.runId=$source_run | .activeDelivery.validation.runAttempt=$source_attempt
+                else . end' \
+            "$RUNNER_TEMP/state.json" > "$RUNNER_TEMP/next-state.json"
+          input_key="$(pnpm exec tsx scripts/upstream-adoption/cli.ts input-key "$RUNNER_TEMP/next-state.json" "$(git rev-parse refs/remotes/origin/main)")"
+          jq --arg input_key "$input_key" '.activeDelivery.attempt.inputKey=$input_key' \
+            "$RUNNER_TEMP/next-state.json" > "$RUNNER_TEMP/final-state.json"
+          mv "$RUNNER_TEMP/final-state.json" "$RUNNER_TEMP/next-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/next-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-transition "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/next-state.json"
+          state_dir="$RUNNER_TEMP/adoption-state"
+          git worktree add "$state_dir" "$state_ref"
+          cp "$RUNNER_TEMP/next-state.json" "$state_dir/state/upstream-adoption.json"
+          git -C "$state_dir" config user.name "${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]"
+          git -C "$state_dir" config user.email "${{ vars.MINT_FINALIZER_APP_ID }}+${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]@users.noreply.github.com"
+          git -C "$state_dir" add state/upstream-adoption.json
+          git -C "$state_dir" commit -m "chore(release): record $stage blocker"
+          state_commit="$(git -C "$state_dir" rev-parse HEAD)"
+          git remote set-url origin "https://x-access-token:${FINALIZER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "$state_commit:refs/heads/automation/upstream-adoption-state"
+          echo 'durable=true' >> "$GITHUB_OUTPUT"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+          echo "phase=$phase" >> "$GITHUB_OUTPUT"
+          echo "queue_head=$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/next-state.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Project one Issue or open the circuit breaker
+        if: always() && steps.inspect.outputs.eligible == 'true' && steps.record.outputs.project != 'false'
+        env:
+          DURABLE: ${{ steps.record.outputs.durable || 'false' }}
+          FINGERPRINT: ${{ steps.record.outputs.fingerprint }}
+          GH_TOKEN: ${{ github.token }}
+          PHASE: ${{ steps.record.outputs.phase }}
+          QUEUE_HEAD: ${{ steps.record.outputs.queue_head }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=upstream-adoption-project-failure \
+            -f "client_payload[source_run]=$SOURCE_RUN" \
+            -f "client_payload[durable]=$DURABLE" \
+            -f "client_payload[fingerprint]=$FINGERPRINT" \
+            -f "client_payload[phase]=$PHASE" \
+            -f "client_payload[queue_head]=$QUEUE_HEAD"
