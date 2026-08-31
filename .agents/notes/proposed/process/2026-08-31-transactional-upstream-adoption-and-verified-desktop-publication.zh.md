@@ -44,7 +44,7 @@ flowchart LR
 
 ## 候选分支与验证
 
-每个队首拥有 `automation/adopt/<sanitized-upstream-tag>` 和一个 integration PR。干净合并在该分支创建真实的 `--no-ff` merge commit。下游与上游仓库具有独立根提交，因此第一次自动合并与维护者合并还必须使用 `--allow-unrelated-histories`；只有 `MERGE_HEAD` 证明 Git 已进入冲突合并时，失败才归类为冲突。发生冲突时中止合并，并新增 `.github/upstream-adoption-requests/<sanitized-upstream-tag>.json`，其中包含固定源码、base、目标 desktop Release、state revision、归一化冲突路径与准确恢复命令。request 文件使恢复分支与冲突清单可以检出；在维护者完成合并前，PR 不能展示组装后的上游 diff。维护者 fetch 固定 tag、验证其 commit、用 `--no-ff --allow-unrelated-histories` 合并该 commit、按照所有权 classifier 解决冲突、删除 request 文件并在不 force 的情况下 push。request 文件仍存在或固定 upstream commit 不是 ancestor 时，验证和 finalization 都必须拒绝候选。
+每个队首拥有 `automation/adopt/<sanitized-upstream-tag>` 和一个 integration PR。在查找 merge base 前，Controller 会把 Actions 浅克隆补全为完整下游历史；上游 tag 与下游 branch 共享上一次已发布的上游 commit，绝不能按无关历史连接。干净合并在该分支创建真实的 `--no-ff` merge commit。只有 `MERGE_HEAD` 证明 Git 已进入冲突合并时，失败才归类为冲突。排序后的冲突清单通过文件而不是进程参数传递，因此仓库规模的冲突集不会超过 host 参数长度上限。发生冲突时中止合并，并新增 `.github/upstream-adoption-requests/<sanitized-upstream-tag>.json`，其中包含固定源码、base、目标 desktop Release、state revision、归一化冲突路径与准确恢复命令。request 文件使恢复分支与冲突清单可以检出；在维护者完成合并前，PR 不能展示组装后的上游 diff。维护者 fetch 固定 tag、验证其 commit、用 `--no-ff` 合并该 commit、按照所有权 classifier 解决冲突、删除 request 文件并在不 force 的情况下 push。request 文件仍存在或固定 upstream commit 不是 ancestor 时，验证和 finalization 都必须拒绝候选。
 
 候选分支永远不允许 force push。`main` 移动时，bot 可以把新 base 合并进纯 bot 候选；人工编写的候选进入 `candidate-stale`，要求维护者合入当前 `main`。任何候选 head 变化都会使 validation receipt、artifact bundle 与 approval 失效。冲突解决或其他人工编辑需要一次 maintainer approval，且 review commit 必须匹配最终已验证 head。PR 未合并而被关闭会暂停交付；显式 resume 之前，定时 reconcile 不得重建。分支保留到发布完成，随后 bot 删除分支，并用 finalization 与发布链接关闭任何仍打开的 PR。
 
