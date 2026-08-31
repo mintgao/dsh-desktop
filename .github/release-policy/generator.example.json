@@ -15,9 +15,9 @@
     "fingerprint": "SHA256:replace-with-signer-fingerprint"
   },
   "apps": [
-    {"role": "controller", "slug": "replace-with-controller-app-slug", "id": 1, "installationId": 11, "displayName": "Mint Adoption Controller"},
-    {"role": "finalizer", "slug": "replace-with-finalizer-app-slug", "id": 2, "installationId": 12, "displayName": "Mint State Finalizer"},
-    {"role": "publisher", "slug": "replace-with-publisher-app-slug", "id": 3, "installationId": 13, "displayName": "Mint Release Publisher"}
+    {"role": "controller", "slug": "replace-with-controller-app-slug", "id": 1, "installationId": 11, "displayName": "Mint Adoption Controller", "privateKeyPath": "/outside/repository/controller.pem"},
+    {"role": "finalizer", "slug": "replace-with-finalizer-app-slug", "id": 2, "installationId": 12, "displayName": "Mint State Finalizer", "privateKeyPath": "/outside/repository/finalizer.pem"},
+    {"role": "publisher", "slug": "replace-with-publisher-app-slug", "id": 3, "installationId": 13, "displayName": "Mint Release Publisher", "privateKeyPath": "/outside/repository/publisher.pem"}
   ],
-  "repositoryRoles": {"4": "maintain"}
+  "repositoryRoles": {"2": "maintain"}
 }
