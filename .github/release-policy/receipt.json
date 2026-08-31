@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "receiptId": "aa164a02-f7a2-49ab-b9ed-0e761d2fb9bd",
+  "receiptId": "8068bb08-5029-4235-82ec-99b778dc7ffe",
   "sequence": 1,
-  "authorizationPr": 32,
+  "authorizationPr": 36,
   "predecessor": null,
   "repository": {
     "id": 1344813014,
@@ -12,8 +12,8 @@
       "type": "User"
     }
   },
-  "issuedAt": "2026-08-31T18:33:50.680Z",
-  "expiresAt": "2026-09-29T18:33:50.680Z",
+  "issuedAt": "2026-08-31T19:38:01.595Z",
+  "expiresAt": "2026-09-29T19:38:01.595Z",
   "issuer": {
     "login": "mintgao",
     "fingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
@@ -155,7 +155,7 @@
           "type": "non_fast_forward"
         }
       ],
-      "updatedAt": "2026-09-01T01:12:18.665+08:00",
+      "updatedAt": "2026-08-31T17:12:18.665Z",
       "bypassActors": [
         {
           "actorType": "Integration",
@@ -200,7 +200,7 @@
           }
         }
       ],
-      "updatedAt": "2026-09-01T01:12:30.382+08:00",
+      "updatedAt": "2026-08-31T17:12:30.382Z",
       "bypassActors": [
         {
           "actorType": "Integration",
@@ -230,7 +230,7 @@
           "type": "non_fast_forward"
         }
       ],
-      "updatedAt": "2026-09-01T01:12:41.767+08:00",
+      "updatedAt": "2026-08-31T17:12:41.767Z",
       "bypassActors": [
         {
           "actorType": "Integration",
@@ -257,7 +257,7 @@
           "type": "creation"
         }
       ],
-      "updatedAt": "2026-09-01T01:12:53.671+08:00",
+      "updatedAt": "2026-08-31T17:12:53.671Z",
       "bypassActors": [
         {
           "actorType": "RepositoryRole",
@@ -295,13 +295,13 @@
           "type": "non_fast_forward"
         }
       ],
-      "updatedAt": "2026-09-01T01:13:08.297+08:00",
+      "updatedAt": "2026-08-31T17:13:08.297Z",
       "bypassActors": []
     }
   ],
   "workflowDigests": {
     ".github/workflows/desktop-release.yml": "55a5c1aa4324723617b8b1db09044dff29003e98c3323ac2c659d23f4209c86f",
-    ".github/workflows/upstream-adoption-controller.yml": "8f1dd23aab3fd5336dfbfd30fd9027b175420e539b1dcc0baf015a5a06be2a3d",
+    ".github/workflows/upstream-adoption-controller.yml": "bdb30c31b6567e1e77e369a09c89e69aee43707dcfc5e2888c1194584a93e3d3",
     ".github/workflows/upstream-adoption-finalizer.yml": "30efd58c68504be6a9549cc34571466b41cadb572ec1e95a0f3bf0299af3d0e9",
     ".github/workflows/upstream-adoption-observer.yml": "6d8535c4e73b4cfb73d91185b356c1b7a62ff6c9f3c2e67e1956f76f127d1d75",
     ".github/workflows/upstream-adoption-preflight.yml": "3b26cb54189a250ff9e289ca08a9b65de87fff7791ef9f78a9601eb536f49df1",
