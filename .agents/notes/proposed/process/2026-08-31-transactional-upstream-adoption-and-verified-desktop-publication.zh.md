@@ -64,7 +64,7 @@ controller、validator、finalizer、publication、signing、state schema、owne
 
 finalizer 获得短期 Finalizer App token，但不执行候选代码。它重新检查 active ruleset 与 App permission、state revision、准确的候选和 base commit、upstream tag 绑定、validation receipt 与 artifact bundle、受保护路径及人工编辑 approval，以及 desktop tag 和 request 文件均不存在。它准备把 `main` fast-forward 到已完成制品 qualification 的候选、创建指向该候选的 annotated desktop tag，并创建进入 `release-pending` 且记录准确 bundle receipt 的状态分支 commit。一次无 force 的 `git push --atomic` 创建全部三个 ref 更新；任何并发变化都会拒绝整个 push。
 
-State Finalizer App 是唯一在 `main` PR ruleset 中拥有 always-bypass 的自动化 actor，其 private key 只存在于受保护 finalizer environment。一个 `desktop-v*` tag ruleset 限制创建，并只把 State Finalizer App 与 maintainer role 设为 bypass actor；另一个 ruleset 禁止更新和删除且不给任何 actor bypass。状态分支要求所有非 bypass writer 通过只允许 squash、具备一次非 stale approval 的 PR，而自动化 bypass 只授予 State Finalizer App；它还禁止删除和 non-fast-forward 更新。active 候选分支禁止删除和 non-fast-forward 更新。如果候选 head 可以从 `main` 到达后 GitHub 没有自动把 PR 标记为完成，controller 会用准确 finalizer commit 与 run 关闭它。
+State Finalizer App 是唯一在 `main` PR ruleset 中拥有 always-bypass 的自动化 actor，其 private key 只存在于受保护 finalizer environment。`main` 与 state PR ruleset 要求 unattributed change 获得额外 approval，并使用空的 designated-reviewer list；因此 App-authored final head 加独立 owner approval 可同时满足 authorship separation 与 exact-head review，而无需把仓库绑定到指定 reviewer。一个 `desktop-v*` tag ruleset 限制创建，并只把 State Finalizer App 与 maintainer role 设为 bypass actor；另一个 ruleset 禁止更新和删除且不给任何 actor bypass。状态分支要求所有非 bypass writer 通过只允许 squash、具备一次非 stale approval 的 PR，而自动化 bypass 只授予 State Finalizer App；它还禁止删除和 non-fast-forward 更新。active 候选分支禁止删除和 non-fast-forward 更新。如果候选 head 可以从 `main` 到达后 GitHub 没有自动把 PR 标记为完成，controller 会用准确 finalizer commit 与 run 关闭它。
 
 ## Draft-first 发布
 
