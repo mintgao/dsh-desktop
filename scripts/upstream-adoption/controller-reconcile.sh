@@ -300,6 +300,7 @@ if git ls-remote --exit-code origin "refs/heads/$candidate_branch" >/dev/null 2>
     fi
     git remote set-url origin "https://x-access-token:${CONTROLLER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
     git push origin "$candidate_branch:refs/heads/$candidate_branch"
+    controller_wrote=true
   fi
 else
   git switch --create "$candidate_branch" origin/main
