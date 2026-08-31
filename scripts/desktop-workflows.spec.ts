@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { load } from 'js-yaml'
 import { describe, expect, it } from 'vitest'
@@ -23,7 +23,7 @@ describe('transactional upstream adoption workflows', () => {
   it('uses the Controller App only for candidate, PR, Issue, and explicit dispatch coordination', () => {
     const workflow = workflowDocument('.github/workflows/upstream-adoption-controller.yml')
     const reconcile = workflowJob(workflow, 'reconcile')
-    const text = commands(reconcile)
+    const text = `${commands(reconcile)}\n${controllerReconcileScript()}`
 
     expect(reconcile.environment).toBeUndefined()
     expect(text).toContain('actions/create-github-app-token')
@@ -38,6 +38,31 @@ describe('transactional upstream adoption workflows', () => {
     expect(text).not.toContain('gh issue comment')
     expect(text).not.toContain('refs/heads/main"')
     expect(text).not.toContain('refs/tags/desktop-v')
+  })
+
+  it('keeps every workflow run expression within the GitHub parser limit', () => {
+    const reconcile = workflowStep(
+      workflowDocument('.github/workflows/upstream-adoption-controller.yml'),
+      'reconcile',
+      'Reconcile queue-head phase',
+    )
+    const runs = readdirSync(resolve(root, '.github/workflows'))
+      .filter(path => /\.ya?ml$/u.test(path))
+      .flatMap((path) => {
+        const workflow = workflowDocument(`.github/workflows/${path}`)
+        return Object.values(asRecord(workflow.jobs, `${path} jobs`)).flatMap((jobValue) => {
+          const job = asRecord(jobValue, `${path} job`)
+          if (!Array.isArray(job.steps)) return []
+          return job.steps.map(step => renderStepField(asRecord(step, `${path} step`).run))
+        })
+      })
+
+    expect(Math.max(...runs.map(run => run.length))).toBeLessThanOrEqual(21_000)
+    expect(renderStepField(reconcile.run)).toBe('bash scripts/upstream-adoption/controller-reconcile.sh')
+    expect(asRecord(reconcile.env, 'controller reconcile environment')).toMatchObject({
+      CONTROLLER_APP_ID: '${{ vars.MINT_CONTROLLER_APP_ID }}',
+      CONTROLLER_APP_SLUG: '${{ vars.MINT_CONTROLLER_APP_SLUG }}',
+    })
   })
 
   it('executes candidate code without App or Apple credentials and signs only in the protected signing job', () => {
@@ -186,13 +211,12 @@ describe('transactional upstream adoption workflows', () => {
     const project = workflowJob(controller, 'project-failure')
     const success = workflowJob(controller, 'project-success')
     const manualForce = workflowStep(controller, 'reconcile', 'Reject incomplete manual force')
-    const reconcile = workflowStep(controller, 'reconcile', 'Reconcile queue-head phase')
-    const reconcileText = commands(workflowJob(controller, 'reconcile'))
+    const reconcileText = `${commands(workflowJob(controller, 'reconcile'))}\n${controllerReconcileScript()}`
     const recordText = commands(record)
     const projectText = commands(project)
     const successText = commands(success)
     const manualForceText = renderStepField(manualForce.run)
-    const reconcilePhaseText = renderStepField(reconcile.run)
+    const reconcilePhaseText = controllerReconcileScript()
 
     expect(record.environment).toBe('mint-finalizer')
     expect(recordText).toContain('failure-fingerprint')
@@ -341,6 +365,10 @@ describe('desktop release withdrawal workflow', () => {
 
 function workflowDocument(path: string): Record<string, unknown> {
   return asRecord(load(readFileSync(resolve(root, path), 'utf8')), path)
+}
+
+function controllerReconcileScript(): string {
+  return readFileSync(resolve(root, 'scripts/upstream-adoption/controller-reconcile.sh'), 'utf8')
 }
 
 function workflowJob(workflow: Record<string, unknown>, name: string): Record<string, unknown> {
