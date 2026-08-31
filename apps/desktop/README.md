@@ -77,7 +77,7 @@ After the maintainer explicitly confirms that Apple Developer enrollment and rel
 - `MACOS_CERTIFICATE_P12_BASE64` and `MACOS_CERTIFICATE_PASSWORD` for the Developer ID Application certificate.
 - `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` for App Store Connect notarization.
 
-No tag or publication action is required for an ordinary upstream Release. The adoption workflow queues it, updates [the recorded state](../../.github/upstream-sync-state.json), pushes the tag mapped by the active release stage, and dispatches this workflow with the upstream tag and commit for generated Release notes. A manually pushed `desktop-v*` tag remains an exceptional draft-only path.
+No tag or publication action is required for an ordinary upstream Release. The [transactional adoption control plane](../../.github/upstream-adoption/README.md) queues it on a protected state ref, qualifies the exact candidate and both native architectures before tag creation, atomically advances `main`, the desktop tag, and state, then verifies the public Release before advancing the queue. Unchanged deterministic blockers are successful no-ops and update one Issue only when the phase or fingerprint changes.
 
 For an exceptional desktop-only prerelease, create a tag after those credentials are configured:
 
@@ -88,7 +88,9 @@ git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
 git push origin desktop-v0.2.0-preview.1
 ```
 
-In signed mode, the workflow forces signing, submits both preview architectures for notarization, verifies their Developer ID identities and stapled tickets, and creates the two DMGs and their SHA-256 checksums. An automated run publishes the GitHub prerelease immediately and records the embedded Harness tag, upstream commit, and desktop source commit. A manual tag creates the same signed artifacts as a draft. Public preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
+The tag push does not publish by itself. Manually run `Validate and qualify upstream candidate` with that tag, wait for its successful run ID, then run `Publish qualified DSH Desktop bundle` with the same tag and validation run ID. Both workflows re-derive the tag commit and receipt provenance; the publication remains a draft.
+
+In signed mode, qualification first verifies the current owner-authenticated release policy without exposing Apple credentials to the candidate. A separate signing job then forces signing, submits both preview architectures for notarization, verifies their Developer ID identities and stapled tickets, and creates the two DMGs and their SHA-256 checksums. An automated run publishes the GitHub prerelease and records the embedded Harness tag, upstream commit, and desktop source commit. A manual tag creates the same signed artifacts as a draft. Public preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
 
 For an exceptional desktop-only stable release, create the stable tag after the same credential and artifact checks pass:
 

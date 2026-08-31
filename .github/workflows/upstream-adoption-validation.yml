@@ -1,0 +1,511 @@
+name: Validate and qualify upstream candidate
+run-name: Validate upstream attempt ${{ github.event.client_payload.input_key || inputs.release_tag }}
+
+on:
+  repository_dispatch:
+    types: [upstream-adoption-validate]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Exceptional immutable desktop-v* tag to qualify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-adoption-validation-${{ github.event.client_payload.queue_head }}
+  cancel-in-progress: false
+
+jobs:
+  bind-attempt:
+    if: github.repository == 'mintgao/dsh-desktop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture automatic attempt before project checkout
+        if: github.event_name == 'repository_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_INPUT_KEY: ${{ github.event.client_payload.input_key }}
+          REQUESTED_QUEUE_HEAD: ${{ github.event.client_payload.queue_head }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/automation/upstream-adoption-state" > "$RUNNER_TEMP/state-ref.json"
+          state_ref_commit="$(jq -r '.object.sha' "$RUNNER_TEMP/state-ref.json")"
+          gh api "repos/$GITHUB_REPOSITORY/contents/state/upstream-adoption.json?ref=$state_ref_commit" --jq '.content' \
+            | base64 --decode > "$RUNNER_TEMP/state.json"
+          test "$(jq -r '.schemaVersion' "$RUNNER_TEMP/state.json")" = 2
+          test "$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")" = candidate-open
+          test "$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")" = ''
+          test "$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")" = "$REQUESTED_QUEUE_HEAD"
+          test "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" = "$REQUESTED_INPUT_KEY"
+          jq -n \
+            --argjson runId "$GITHUB_RUN_ID" \
+            --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg stateRefCommit "$state_ref_commit" \
+            --argjson stateRevision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+            --arg inputKey "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+            --arg candidateCommit "$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")" \
+            --arg baseCommit "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")" \
+            --arg upstreamCommit "$(jq -r '.activeDelivery.upstream.commit' "$RUNNER_TEMP/state.json")" \
+            --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" \
+            '{schemaVersion:1,kind:"validation",runId:$runId,runAttempt:$runAttempt,stateRefCommit:$stateRefCommit,stateRevision:$stateRevision,inputKey:$inputKey,candidateCommit:$candidateCommit,baseCommit:$baseCommit,upstreamCommit:$upstreamCommit,desktopTag:$desktopTag}' \
+            > "$RUNNER_TEMP/validation-attempt-context.json"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'repository_dispatch'
+        with:
+          name: validation-attempt-context
+          path: ${{ runner.temp }}/validation-attempt-context.json
+          if-no-files-found: error
+          retention-days: 30
+
+  prepare:
+    if: github.repository == 'mintgao/dsh-desktop'
+    needs: bind-attempt
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.context.outputs.base }}
+      candidate: ${{ steps.context.outputs.candidate }}
+      mode: ${{ steps.context.outputs.mode }}
+      nonce: ${{ steps.context.outputs.nonce }}
+      state_commit: ${{ steps.context.outputs.state_commit }}
+      state_revision: ${{ steps.context.outputs.state_revision }}
+      input_key: ${{ steps.context.outputs.input_key }}
+      upstream_commit: ${{ steps.context.outputs.upstream_commit }}
+      desktop_tag: ${{ steps.context.outputs.desktop_tag }}
+      workflow_commit: ${{ steps.context.outputs.workflow_commit }}
+      version: ${{ steps.context.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - id: context
+        name: Re-derive trusted validation context
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_SIGNING_MODE: ${{ vars.DESKTOP_RELEASE_SIGNING_MODE }}
+          REQUESTED_RELEASE_TAG: ${{ inputs.release_tag }}
+          REQUESTED_QUEUE_HEAD: ${{ github.event.client_payload.queue_head }}
+        run: |
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          trusted_main="$(git rev-parse refs/remotes/origin/main)"
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$trusted_main"
+          git show "$state_ref:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          if [[ "$EVENT_NAME" == repository_dispatch ]]; then
+            queue_head="$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")"
+            test "$REQUESTED_QUEUE_HEAD" = "$queue_head"
+            test "$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")" = candidate-open
+            test "$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")" = ''
+            base="$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")"
+            candidate="$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")"
+            test "$base" = "$trusted_main"
+            test "$candidate" = "$(git ls-remote origin "refs/heads/$(jq -r '.activeDelivery.candidate.branch' "$RUNNER_TEMP/state.json")" | cut -f 1)"
+            mode="$(jq -r '.activeDelivery.mode' "$RUNNER_TEMP/state.json")"
+            nonce="$(jq -r '.activeDelivery.validation.nonce' "$RUNNER_TEMP/state.json")"
+            input_key="$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")"
+            upstream_commit="$(jq -r '.activeDelivery.upstream.commit' "$RUNNER_TEMP/state.json")"
+            desktop_tag="$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")"
+            workflow_commit="$trusted_main"
+          else
+            desktop_tag="$REQUESTED_RELEASE_TAG"
+            [[ "$desktop_tag" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+            git fetch origin "refs/tags/$desktop_tag:refs/tags/$desktop_tag"
+            candidate="$(git rev-parse "$desktop_tag^{commit}")"
+            base="$candidate"
+            version="${desktop_tag#desktop-v}"
+            mode=signed-stable
+            if [[ "$version" == *-unsigned.1 || "$version" == *.unsigned.1 ]]; then mode=unsigned-preview
+            elif [[ "$version" == *-* ]]; then mode=signed-preview
+            fi
+            if [[ "$mode" != unsigned-preview ]]; then test "$RELEASE_SIGNING_MODE" = signed; fi
+            nonce="$(openssl rand -hex 32)"
+            input_key="$(printf '%s' "manual:$desktop_tag:$candidate" | sha256sum | cut -d ' ' -f 1)"
+            upstream_commit="$candidate"
+            workflow_commit="$trusted_main"
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "nonce=$nonce" >> "$GITHUB_OUTPUT"
+          echo "state_commit=$(git rev-parse "$state_ref")" >> "$GITHUB_OUTPUT"
+          echo "state_revision=$(jq -r '.revision' "$RUNNER_TEMP/state.json")" >> "$GITHUB_OUTPUT"
+          echo "input_key=$input_key" >> "$GITHUB_OUTPUT"
+          echo "upstream_commit=$upstream_commit" >> "$GITHUB_OUTPUT"
+          echo "desktop_tag=$desktop_tag" >> "$GITHUB_OUTPUT"
+          echo "workflow_commit=$workflow_commit" >> "$GITHUB_OUTPUT"
+          echo "version=${desktop_tag#desktop-v}" >> "$GITHUB_OUTPUT"
+  candidate-checks:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.candidate }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:desktop
+      - run: pnpm run build:desktop
+      - run: pnpm run typecheck
+      - run: pnpm run doc-sync
+      - run: pnpm exec vitest run scripts/desktop-workflows.spec.ts scripts/upstream-adoption/state.spec.ts
+      - name: Reject generated source drift
+        run: git diff --exit-code
+
+  package-candidate:
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.candidate }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run desktop:stage
+      - name: Build unsigned candidate payload
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          target=dir
+          if [[ "${{ needs.prepare.outputs.mode }}" == unsigned-preview ]]; then target=dmg; fi
+          pnpm exec electron-builder \
+            --config apps/desktop/electron-builder.yml \
+            --config.extraMetadata.version=${{ needs.prepare.outputs.version }} \
+            --config.mac.notarize=false \
+            --mac "$target" \
+            --${{ matrix.arch }} \
+            --publish never
+      - name: Smoke candidate before any secret-bearing job
+        run: |
+          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
+          test -n "$app_path"
+          "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke
+          if [[ "${{ needs.prepare.outputs.mode }}" == unsigned-preview ]]; then
+            ! codesign -dvvv "$app_path" 2>&1 | grep -q 'Authority=Developer ID Application:'
+          else
+            COPYFILE_DISABLE=1 tar -C "$(dirname "$app_path")" -czf "$RUNNER_TEMP/unsigned-app-${{ matrix.arch }}.tar.gz" "$(basename "$app_path")"
+          fi
+      - name: Bind the signed-mode payload to an exact archive manifest
+        if: needs.prepare.outputs.mode != 'unsigned-preview'
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+          EXPECTED_SOURCE_COMMIT: ${{ needs.prepare.outputs.candidate }}
+          TRUSTED_WORKFLOW_COMMIT: ${{ needs.prepare.outputs.workflow_commit }}
+        run: |
+          archive="$RUNNER_TEMP/unsigned-app-${EXPECTED_ARCH}.tar.gz"
+          manifest="$RUNNER_TEMP/unsigned-app-${EXPECTED_ARCH}.manifest.json"
+          git fetch --no-tags origin "$TRUSTED_WORKFLOW_COMMIT"
+          git show "$TRUSTED_WORKFLOW_COMMIT:scripts/upstream-adoption/signing_payload.py" > "$RUNNER_TEMP/signing_payload.py"
+          /usr/bin/python3 "$RUNNER_TEMP/signing_payload.py" create \
+            --archive "$archive" \
+            --manifest "$manifest" \
+            --architecture "$EXPECTED_ARCH" \
+            --source-commit "$EXPECTED_SOURCE_COMMIT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-${{ matrix.arch }}
+          path: |
+            apps/desktop/dist/*.dmg
+            ${{ runner.temp }}/unsigned-app-${{ matrix.arch }}.tar.gz
+            ${{ runner.temp }}/unsigned-app-${{ matrix.arch }}.manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  authorize-signing:
+    if: needs.prepare.outputs.mode != 'unsigned-preview'
+    needs: prepare
+    environment: mint-finalizer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.workflow_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: finalizer-token
+        with:
+          app-id: ${{ vars.MINT_FINALIZER_APP_ID }}
+          private-key: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+      - name: Authorize Apple credential use with the current owner policy
+        env:
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+        run: |
+          pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts .github/release-policy/activation.json .github/release-policy/receipt.json finalizer "$RUNNER_TEMP/runtime-policy-facts.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy .github/release-policy/activation.json .github/release-policy/receipt.json .github/release-policy/receipt.json.sig "$RUNNER_TEMP/runtime-policy-facts.json"
+
+  sign:
+    if: >-
+      always()
+      && needs.prepare.result == 'success'
+      && needs.candidate-checks.result == 'success'
+      && needs.package-candidate.result == 'success'
+      && needs.authorize-signing.result == 'success'
+    needs: [prepare, candidate-checks, package-candidate, authorize-signing]
+    environment: mint-signing
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.workflow_commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v5
+        with:
+          name: candidate-${{ matrix.arch }}
+          path: ${{ runner.temp }}/candidate
+      - name: Validate payload archive without executing candidate code
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+          EXPECTED_SOURCE_COMMIT: ${{ needs.prepare.outputs.candidate }}
+        run: |
+          archive="$RUNNER_TEMP/candidate/unsigned-app-${EXPECTED_ARCH}.tar.gz"
+          manifest="$RUNNER_TEMP/candidate/unsigned-app-${EXPECTED_ARCH}.manifest.json"
+          /usr/bin/python3 scripts/upstream-adoption/signing_payload.py verify-extract \
+            --artifact-dir "$RUNNER_TEMP/candidate" \
+            --archive "$archive" \
+            --manifest "$manifest" \
+            --output "$RUNNER_TEMP/payload" \
+            --architecture "$EXPECTED_ARCH" \
+            --source-commit "$EXPECTED_SOURCE_COMMIT"
+      - name: Sign, package, notarize, and verify with fixed system commands
+        env:
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in APPLE_API_ISSUER APPLE_API_KEY_ID APPLE_API_KEY_P8_BASE64 MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD; do test -n "${!name}"; done
+          keychain="$RUNNER_TEMP/release.keychain-db"
+          certificate="$RUNNER_TEMP/release.p12"
+          api_key="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 -D > "$certificate"
+          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 -D > "$api_key"
+          security create-keychain -p "$GITHUB_RUN_ID" "$keychain"
+          security unlock-keychain -p "$GITHUB_RUN_ID" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$GITHUB_RUN_ID" "$keychain"
+          identity="$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+          test -n "$identity"
+          app="$RUNNER_TEMP/payload/DSH Desktop.app"
+          entitlements=apps/desktop/build/entitlements.mac.plist
+          plutil -lint "$entitlements"
+          codesign --force --deep --options runtime --timestamp --entitlements "$entitlements" --sign "$identity" --keychain "$keychain" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -d --entitlements :- "$app" 2>/dev/null | grep -q 'com.apple.security.cs.allow-jit'
+          output="$RUNNER_TEMP/signed-${{ matrix.arch }}"
+          mkdir "$output"
+          hdiutil create -volname 'DSH Desktop Mint' -srcfolder "$app" -ov -format UDZO "$output/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
+          xcrun notarytool submit "$output/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg" --key "$api_key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$output/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
+          xcrun stapler validate "$output/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
+          COPYFILE_DISABLE=1 tar -C "$RUNNER_TEMP/payload" -czf "$output/signed-app-${{ matrix.arch }}.tar.gz" 'DSH Desktop.app'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-payload-${{ matrix.arch }}
+          path: ${{ runner.temp }}/signed-${{ matrix.arch }}/*
+          if-no-files-found: error
+          retention-days: 30
+
+  assemble-stable:
+    if: needs.prepare.outputs.mode == 'signed-stable'
+    needs: [prepare, sign]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.base }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@v5
+        with:
+          name: signed-payload-${{ matrix.arch }}
+          path: ${{ runner.temp }}/signed-payload
+      - name: Assemble updater ZIP and metadata without Apple credentials
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          archive="$RUNNER_TEMP/signed-payload/signed-app-${{ matrix.arch }}.tar.gz"
+          test -s "$archive"
+          ! tar -tzf "$archive" | grep -E '(^/|(^|/)\.\.(/|$))'
+          mkdir "$RUNNER_TEMP/signed-app"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/signed-app"
+          app="$RUNNER_TEMP/signed-app/DSH Desktop.app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          pnpm exec electron-builder \
+            --config apps/desktop/electron-builder.yml \
+            --config.extraMetadata.version=${{ needs.prepare.outputs.version }} \
+            --config.mac.identity=null \
+            --prepackaged "$app" \
+            --mac zip \
+            --${{ matrix.arch }} \
+            --publish never
+          test -s "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip"
+          test -s "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
+          test -s apps/desktop/dist/latest-mac.yml
+          mv apps/desktop/dist/latest-mac.yml "apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-stable-${{ matrix.arch }}
+          path: |
+            ${{ runner.temp }}/signed-payload/*.dmg
+            apps/desktop/dist/*.zip
+            apps/desktop/dist/*.blockmap
+            apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml
+          if-no-files-found: error
+          retention-days: 30
+
+  attest:
+    if: >-
+      always()
+      && needs.candidate-checks.result == 'success'
+      && needs.package-candidate.result == 'success'
+      && ((needs.prepare.outputs.mode == 'unsigned-preview'
+          && needs.sign.result == 'skipped'
+          && needs.assemble-stable.result == 'skipped')
+        || (needs.prepare.outputs.mode == 'signed-preview'
+          && needs.sign.result == 'success'
+          && needs.assemble-stable.result == 'skipped')
+        || (needs.prepare.outputs.mode == 'signed-stable'
+          && needs.sign.result == 'success'
+          && needs.assemble-stable.result == 'success'))
+    needs: [prepare, candidate-checks, package-candidate, sign, assemble-stable]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.workflow_commit }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@v5
+        if: needs.prepare.outputs.mode == 'unsigned-preview'
+        with:
+          pattern: candidate-*
+          path: bundle
+          merge-multiple: true
+      - uses: actions/download-artifact@v5
+        if: needs.prepare.outputs.mode == 'signed-preview'
+        with:
+          pattern: signed-payload-*
+          path: bundle
+          merge-multiple: true
+      - uses: actions/download-artifact@v5
+        if: needs.prepare.outputs.mode == 'signed-stable'
+        with:
+          pattern: signed-stable-*
+          path: bundle
+          merge-multiple: true
+      - name: Build immutable artifact manifest and validation receipt
+        run: |
+          find bundle -type f -name 'signed-app-*.tar.gz' -delete
+          if [[ "${{ needs.prepare.outputs.mode }}" == signed-stable ]]; then
+            pnpm exec tsx scripts/merge-desktop-update-metadata.ts \
+              --version '${{ needs.prepare.outputs.version }}' \
+              --output bundle/latest-mac.yml \
+              bundle/latest-mac-arm64.yml \
+              bundle/latest-mac-x64.yml
+            find bundle -type f -name 'latest-mac-*.yml' -delete
+          fi
+          find bundle -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' -o -name 'latest-mac.yml' \) -print0 | sort -z | xargs -0 sha256sum > bundle/SHA256SUMS.txt
+          checksum_digest="$(sha256sum bundle/SHA256SUMS.txt | cut -d ' ' -f 1)"
+          jq -Rn --arg checksum_digest "$checksum_digest" \
+            '[inputs | capture("^(?<sha>[0-9a-f]{64})  (?<path>.+)$") | {name:(.path|sub("^bundle/";"")),sha256:.sha}]
+              + [{name:"SHA256SUMS.txt",sha256:$checksum_digest}]
+              | sort_by(.name)' \
+            < bundle/SHA256SUMS.txt > bundle/artifact-manifest.json
+          pnpm exec tsx scripts/upstream-adoption/cli.ts expected-assets '${{ needs.prepare.outputs.version }}' '${{ needs.prepare.outputs.mode }}' > "$RUNNER_TEMP/expected-assets.json"
+          jq -e --slurpfile expected "$RUNNER_TEMP/expected-assets.json" '([.[].name] | sort) == ($expected[0] | sort)' bundle/artifact-manifest.json
+          manifest_digest="$(sha256sum bundle/artifact-manifest.json | cut -d ' ' -f 1)"
+          jq -n \
+            --arg nonce '${{ needs.prepare.outputs.nonce }}' \
+            --arg stateRefCommit '${{ needs.prepare.outputs.state_commit }}' \
+            --argjson stateRevision '${{ needs.prepare.outputs.state_revision }}' \
+            --arg inputKey '${{ needs.prepare.outputs.input_key }}' \
+            --arg candidateCommit '${{ needs.prepare.outputs.candidate }}' \
+            --arg baseCommit '${{ needs.prepare.outputs.base }}' \
+            --arg upstreamCommit '${{ needs.prepare.outputs.upstream_commit }}' \
+            --arg desktopTag '${{ needs.prepare.outputs.desktop_tag }}' \
+            --arg mode '${{ needs.prepare.outputs.mode }}' \
+            --arg workflowCommit '${{ needs.prepare.outputs.workflow_commit }}' \
+            --argjson runId "$GITHUB_RUN_ID" \
+            --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg manifestDigest "$manifest_digest" \
+            '{schemaVersion:1,nonce:$nonce,stateRefCommit:$stateRefCommit,stateRevision:$stateRevision,inputKey:$inputKey,candidateCommit:$candidateCommit,baseCommit:$baseCommit,upstreamCommit:$upstreamCommit,desktopTag:$desktopTag,mode:$mode,workflowCommit:$workflowCommit,runId:$runId,runAttempt:$runAttempt,conclusion:"success",artifactName:"desktop-bundle",manifestDigest:$manifestDigest,sourceCommit:$candidateCommit}' \
+            > receipt.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-bundle
+          path: bundle
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validation-receipt
+          path: receipt.json
+          if-no-files-found: error
+          retention-days: 30

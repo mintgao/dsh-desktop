@@ -5,181 +5,269 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 
-describe('desktop release workflow', () => {
-  it('keeps explicitly enabled stable releases signed and can publish both native update ZIPs automatically', () => {
+describe('transactional upstream adoption workflows', () => {
+  it('retires the noisy legacy schedule and keeps the new controller safely unconfigured by default', () => {
+    const legacy = workflowDocument('.github/workflows/upstream-sync.yml')
+    const controller = workflowDocument('.github/workflows/upstream-adoption-controller.yml')
+    const legacyTriggers = asRecord(legacy.on, 'legacy triggers')
+    const controllerTriggers = asRecord(controller.on, 'controller triggers')
+    const activationCommands = commands(workflowJob(controller, 'activation'))
+
+    expect(legacyTriggers).toEqual({ workflow_dispatch: null })
+    expect(controllerTriggers).toHaveProperty('schedule')
+    expect(activationCommands).toContain('UPSTREAM_ADOPTION_ENABLED')
+    expect(activationCommands).toContain('safely unconfigured')
+    expect(activationCommands).not.toContain('exit 1')
+  })
+
+  it('uses the Controller App only for candidate, PR, Issue, and explicit dispatch coordination', () => {
+    const workflow = workflowDocument('.github/workflows/upstream-adoption-controller.yml')
+    const reconcile = workflowJob(workflow, 'reconcile')
+    const text = commands(reconcile)
+
+    expect(reconcile.environment).toBeUndefined()
+    expect(text).toContain('actions/create-github-app-token')
+    expect(text).toContain('pnpm/action-setup@v4')
+    expect(text).toContain('pnpm install --frozen-lockfile --ignore-scripts')
+    expect(text).toContain('git merge --no-ff')
+    expect(text).toContain('.github/upstream-adoption-requests/')
+    expect(text).toContain('gh pr create')
+    expect(text).toContain('gh issue create')
+    expect(text).toContain('attempt-decision')
+    expect(text).toContain('Known blocker:')
+    expect(text).not.toContain('gh issue comment')
+    expect(text).not.toContain('refs/heads/main"')
+    expect(text).not.toContain('refs/tags/desktop-v')
+  })
+
+  it('executes candidate code without App or Apple credentials and signs only in the protected signing job', () => {
+    const workflow = workflowDocument('.github/workflows/upstream-adoption-validation.yml')
+    const bindAttempt = workflowJob(workflow, 'bind-attempt')
+    const prepare = workflowJob(workflow, 'prepare')
+    const candidate = workflowJob(workflow, 'candidate-checks')
+    const packaging = workflowJob(workflow, 'package-candidate')
+    const authorize = workflowJob(workflow, 'authorize-signing')
+    const sign = workflowJob(workflow, 'sign')
+    const assemble = workflowJob(workflow, 'assemble-stable')
+    const attest = workflowJob(workflow, 'attest')
+    const candidateText = commands(candidate)
+    const prepareText = commands(prepare)
+    const packagingText = commands(packaging)
+    const authorizeText = commands(authorize)
+    const signText = commands(sign)
+    const assembleText = commands(assemble)
+    const attestText = commands(attest)
+    const bindAttemptText = commands(bindAttempt)
+    if (!Array.isArray(attest.steps)) throw new Error('attest job has no steps')
+    const attestCheckout = asRecord(attest.steps[0], 'attest checkout')
+    const secrets = [...signText.matchAll(/secrets\.([A-Z0-9_]+)/g)].map(match => match[1]).sort()
+
+    expect(bindAttemptText).toContain('validation-attempt-context')
+    expect(bindAttemptText).toContain('runAttempt')
+    expect(bindAttemptText).not.toContain('actions/checkout')
+    expect(bindAttemptText).not.toContain('pnpm install')
+    expect(prepareText).toContain('test "$GITHUB_SHA" = "$trusted_main"')
+    expect(prepareText).toContain('test "$GITHUB_REF" = refs/heads/main')
+    expect(prepareText).toContain('workflow_commit="$trusted_main"')
+    expect(candidateText).toContain('pnpm run test:desktop')
+    expect(candidateText).toContain('pnpm run doc-sync')
+    expect(candidateText).not.toContain('secrets.')
+    expect(packagingText).toContain('CSC_IDENTITY_AUTO_DISCOVERY')
+    expect(packagingText).toContain('unsigned-app-${{ matrix.arch }}.manifest.json')
+    expect(packagingText).toContain('git show "$TRUSTED_WORKFLOW_COMMIT:scripts/upstream-adoption/signing_payload.py"')
+    expect(packagingText).toContain('signing_payload.py" create')
+    expect(packagingText).not.toContain('secrets.')
+    expect(authorize.environment).toBe('mint-finalizer')
+    expect(authorizeText).toContain('verify-policy')
+    expect(authorizeText).toContain('MINT_FINALIZER_APP_PRIVATE_KEY')
+    expect(authorizeText).not.toContain('APPLE_API_KEY')
+    expect(sign.environment).toBe('mint-signing')
+    expect(secrets).toEqual(['APPLE_API_ISSUER', 'APPLE_API_KEY_ID', 'APPLE_API_KEY_P8_BASE64', 'MACOS_CERTIFICATE_P12_BASE64', 'MACOS_CERTIFICATE_PASSWORD'])
+    expect(signText).not.toContain('pnpm install')
+    expect(signText).not.toContain('electron-builder')
+    expect(signText).not.toContain('--dsh-package-smoke')
+    expect(signText).toContain('"ref":"${{ needs.prepare.outputs.workflow_commit }}"')
+    expect(signText).toContain('signing_payload.py verify-extract')
+    expect(signText).not.toContain('tar -xzf')
+    expect(signText).toContain('--entitlements "$entitlements"')
+    expect(signText).toContain('codesign --verify')
+    expect(signText).toContain('xcrun notarytool submit')
+    expect(assemble.environment).toBeUndefined()
+    expect(assembleText).toContain('--prepackaged "$app"')
+    expect(assembleText).toContain('--mac zip')
+    expect(assembleText).toContain('.zip.blockmap')
+    expect(assembleText).toContain('latest-mac-${{ matrix.arch }}.yml')
+    expect(assembleText).not.toContain('secrets.')
+    expect(attest.permissions).toEqual({ actions: 'read', contents: 'read' })
+    expect(asRecord(attestCheckout.with, 'attest checkout inputs').ref).toBe('${{ needs.prepare.outputs.workflow_commit }}')
+    expect(attestText).toContain('merge-desktop-update-metadata.ts')
+    expect(attestText).toContain('expected-assets')
+    expect(attestText).toContain('SHA256SUMS.txt",sha256:$checksum_digest')
+    expect(attestText).toContain('validation-receipt')
+    expect(String(attest.if)).toContain("needs.prepare.outputs.mode == 'signed-stable'")
+    const observer = workflowDocument('.github/workflows/upstream-adoption-observer.yml')
+    expect(commands(workflowJob(observer, 'finalize-success'))).toContain('upstream-adoption-finalize')
+    expect(attestText).not.toContain('upstream-adoption-finalize')
+  })
+
+  it('requires policy verification before the Finalizer App atomically advances source, tag, and state', () => {
+    const workflow = workflowDocument('.github/workflows/upstream-adoption-finalizer.yml')
+    const finalize = workflowJob(workflow, 'finalize')
+    const complete = workflowJob(workflow, 'complete-publication')
+    const text = commands(finalize)
+    const completionText = commands(complete)
+    const policyIndex = text.indexOf('verify-policy')
+    const pushIndex = text.indexOf('git push --atomic')
+
+    expect(finalize.environment).toBe('mint-finalizer')
+    expect(policyIndex).toBeGreaterThan(-1)
+    expect(pushIndex).toBeGreaterThan(policyIndex)
+    expect(text).toContain('policy-state')
+    expect(text).toContain('.policy=$policy[0]')
+    expect(text).toContain('validate-receipt')
+    expect(text).toContain('state-validated')
+    expect(text).toContain('state-artifacts')
+    expect(text).toContain('$candidate_head:refs/heads/main')
+    expect(text).toContain('refs/tags/$desktop_tag:refs/tags/$desktop_tag')
+    expect(text).toContain('$state_commit:refs/heads/automation/upstream-adoption-state')
+    expect(text).not.toContain('git push --force')
+    expect(completionText).toContain('.github/workflows/desktop-release.yml')
+    expect(completionText).toContain('gh release download')
+    expect(completionText).toContain('verify-release')
+    expect(completionText).toContain('publication-evidence.json')
+  })
+
+  it('publishes only a qualified bundle through a verified draft and then requests cursor advancement', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release.yml')
-    const triggers = asRecord(workflow.on, 'workflow triggers')
-    const build = workflowJob(workflow, 'build')
-    const release = workflowJob(workflow, 'release')
-    const buildSteps = workflowSteps(build)
-    const releaseSteps = workflowSteps(release)
-    const secretStep = namedStep(buildSteps, 'Validate signing secrets')
-    const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
-    const packageStep = namedStep(buildSteps, 'Build, sign, and notarize stable DMG and update ZIP')
-    const packageSmokeStep = namedStep(buildSteps, 'Smoke packaged updater module')
-    const signatureStep = namedStep(buildSteps, 'Verify Developer ID application signature')
-    const notarizationStep = namedStep(buildSteps, 'Verify notarization ticket')
-    const metadataStep = namedStep(releaseSteps, 'Merge architecture update metadata')
-    const checksumStep = namedStep(releaseSteps, 'Write stable release checksums')
-    const notesStep = namedStep(releaseSteps, 'Write release notes')
-    const releaseStep = namedStep(releaseSteps, 'Create GitHub release')
+    const bindAttempt = workflowJob(workflow, 'bind-attempt')
+    const verify = workflowJob(workflow, 'verify-bundle')
+    const publish = workflowJob(workflow, 'publish')
+    const observer = workflowDocument('.github/workflows/upstream-adoption-observer.yml')
+    const verifyText = commands(verify)
+    const publishText = commands(publish)
+    const bindAttemptText = commands(bindAttempt)
+    const completionText = commands(workflowJob(observer, 'finalize-publication-success'))
 
-    expect(triggers).toHaveProperty('workflow_dispatch')
-    expect(build.env).toBeUndefined()
-    expect(String(namedStep(workflowSteps(workflowJob(workflow, 'prepare')), 'Validate desktop tag').run)).toContain(
-      'RELEASE_SIGNING_MODE:-unsigned-preview',
-    )
-    expect(secretStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
-    expect(secretStep.env).toEqual({
-      MACOS_CERTIFICATE_P12_BASE64: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
-      MACOS_CERTIFICATE_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
-      APPLE_API_KEY_P8_BASE64: '${{ secrets.APPLE_API_KEY_P8_BASE64 }}',
-      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
-      APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
-    })
-    expect(keyStep.env).toEqual({
-      APPLE_API_KEY_P8_BASE64: '${{ secrets.APPLE_API_KEY_P8_BASE64 }}',
-      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
-    })
-    expect(packageStep.env).toEqual({
-      CSC_LINK: '${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}',
-      CSC_KEY_PASSWORD: '${{ secrets.MACOS_CERTIFICATE_PASSWORD }}',
-      APPLE_API_KEY_ID: '${{ secrets.APPLE_API_KEY_ID }}',
-      APPLE_API_ISSUER: '${{ secrets.APPLE_API_ISSUER }}',
-    })
-    expect(packageStep.run).toContain('--mac dmg zip')
-    expect(String(packageSmokeStep.run)).toContain('Contents/MacOS/DSH Desktop')
-    expect(String(packageSmokeStep.run)).toContain('--dsh-package-smoke')
-    expect(String(signatureStep.run)).toContain('Authority=Developer ID Application:')
-    expect(String(signatureStep.run)).toContain('Signature=adhoc')
-    expect(packageStep.if).toBe("needs.prepare.outputs.mode == 'signed-stable'")
-    expect(signatureStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
-    expect(notarizationStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
-    expect(String(metadataStep.run)).toContain('latest-mac-arm64.yml')
-    expect(String(metadataStep.run)).toContain('latest-mac-x64.yml')
-    expect(String(checksumStep.run)).toContain('cd release-assets')
-    expect(String(checksumStep.run)).toContain('sha256sum *.dmg *.zip > SHA256SUMS.txt')
-    expect(String(checksumStep.run)).not.toContain('sha256sum release-assets/')
-    expect(String(notesStep.run)).toContain('__UPSTREAM_COMMIT__')
-    expect(String(releaseStep.run)).toContain('release-assets/latest-mac.yml')
-    expect(String(releaseStep.run)).toContain('options+=(--latest)')
-    expect(String(releaseStep.run)).toContain('options+=(--draft)')
-    expect(String(releaseStep.run)).toContain('if [[ "$PUBLISH" != true ]]')
+    expect(bindAttemptText).toContain('publication-attempt-context')
+    expect(bindAttemptText).toContain('runAttempt')
+    expect(bindAttemptText).not.toContain('actions/checkout')
+    expect(bindAttemptText).not.toContain('pnpm install')
+    expect(verifyText).toContain('gh run download')
+    expect(verifyText).toContain('desktop-bundle')
+    expect(verifyText).toContain('validation-receipt')
+    expect(verifyText).toContain('.github/workflows/upstream-adoption-validation.yml')
+    expect(verifyText).toContain('expected_event=workflow_dispatch')
+    expect(verifyText).toContain('artifact-manifest.json')
+    expect(verifyText).not.toContain('electron-builder')
+    expect(publish.environment).toBe('mint-publication')
+    expect(String(publish.if)).toContain("github.ref == 'refs/heads/main'")
+    expect(commands(workflowJob(workflow, 'prepare'))).toContain('test "$GITHUB_SHA" = "$trusted_main"')
+    expect(commands(workflowJob(workflow, 'prepare'))).toContain('test "$GITHUB_REF" = refs/heads/main')
+    expect(publishText).toContain('test "$GITHUB_REF" = refs/heads/main')
+    expect(publishText).toContain('test "$GITHUB_SHA" =')
+    expect(publishText).toContain('${{ needs.prepare.outputs.workflow_commit }}')
+    expect(publishText.indexOf('verify-policy')).toBeLessThan(publishText.indexOf('gh release create'))
+    expect(publishText).toContain('--draft')
+    expect(publishText).toContain('gh release upload')
+    expect(publishText).toContain('--draft=false')
+    expect(publishText).toContain('verify-release')
+    expect(publishText).toContain('gh release download')
+    expect(completionText).toContain('gh run download')
+    expect(completionText).toContain('artifact-manifest.json')
+    expect(completionText).toContain('upstream-adoption-publication-verified')
+    expect(completionText).toContain('.github/workflows/desktop-release.yml')
+    expect(publishText).not.toContain('pnpm run desktop:stage')
   })
 
-  it('builds unsigned prereleases by default without Apple credentials', () => {
-    const workflow = workflowDocument('.github/workflows/desktop-release.yml')
-    const prepareSteps = workflowSteps(workflowJob(workflow, 'prepare'))
-    const build = workflowJob(workflow, 'build')
-    const buildSteps = workflowSteps(build)
-    const releaseSteps = workflowSteps(workflowJob(workflow, 'release'))
-    const channelStep = namedStep(prepareSteps, 'Validate desktop tag')
-    const unsignedBuild = namedStep(buildSteps, 'Build unsigned preview DMG')
-    const unsignedIdentity = namedStep(buildSteps, 'Verify unsigned preview identity')
-    const signatureStep = namedStep(buildSteps, 'Verify Developer ID application signature')
-    const notarizationStep = namedStep(buildSteps, 'Verify notarization ticket')
-    const checksumStep = namedStep(releaseSteps, 'Write preview release checksums')
-    const previewRelease = namedStep(releaseSteps, 'Create GitHub release')
-    const unsignedNotes = readFileSync(resolve(root, '.github/desktop-unsigned-preview-release-notes.md'), 'utf8')
+  it('persists failed stages once and opens a circuit breaker when protected failure state cannot advance', () => {
+    const observer = workflowDocument('.github/workflows/upstream-adoption-observer.yml')
+    const controller = workflowDocument('.github/workflows/upstream-adoption-controller.yml')
+    const record = workflowJob(observer, 'record-failure')
+    const project = workflowJob(controller, 'project-failure')
+    const success = workflowJob(controller, 'project-success')
+    const manualForce = workflowStep(controller, 'reconcile', 'Reject incomplete manual force')
+    const reconcile = workflowStep(controller, 'reconcile', 'Reconcile queue-head phase')
+    const reconcileText = commands(workflowJob(controller, 'reconcile'))
+    const recordText = commands(record)
+    const projectText = commands(project)
+    const successText = commands(success)
+    const manualForceText = renderStepField(manualForce.run)
+    const reconcilePhaseText = renderStepField(reconcile.run)
 
-    expect(build.env).toBeUndefined()
-    expect(channelStep.env).toHaveProperty('RELEASE_SIGNING_MODE', '${{ vars.DESKTOP_RELEASE_SIGNING_MODE }}')
-    expect(String(channelStep.run)).toContain('mode=unsigned-preview')
-    expect(String(channelStep.run)).toContain('A desktop tag without the unsigned.1 marker requires')
-    expect(unsignedBuild.if).toBe("needs.prepare.outputs.mode == 'unsigned-preview'")
-    expect(unsignedBuild.env).toEqual({ CSC_IDENTITY_AUTO_DISCOVERY: 'false' })
-    expect(String(unsignedBuild.run)).toContain('--config.mac.notarize=false')
-    expect(String(unsignedBuild.run)).toContain('--mac dmg')
-    expect(String(unsignedBuild.run)).not.toContain('--mac dmg zip')
-    expect(unsignedIdentity.if).toBe("needs.prepare.outputs.mode == 'unsigned-preview'")
-    expect(String(unsignedIdentity.run)).toContain('unexpectedly carries a Developer ID Application identity')
-    expect(signatureStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
-    expect(notarizationStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
-    expect(String(checksumStep.run)).toContain('cd release-assets')
-    expect(String(checksumStep.run)).toContain('sha256sum *.dmg > SHA256SUMS.txt')
-    expect(String(checksumStep.run)).not.toContain('sha256sum release-assets/')
-    expect(String(channelStep.run)).toContain('An automatic publication requires its upstream tag and commit.')
-    expect(String(previewRelease.run)).toContain('options+=(--prerelease)')
-    expect(String(previewRelease.run)).toContain('(Unsigned Preview)')
-    expect(String(previewRelease.run)).toContain('options+=(--draft)')
-    expect(unsignedNotes).toContain('unsigned preview for personal and small-group use')
-    expect(unsignedNotes).toContain('macOS Gatekeeper may require')
-    expect(unsignedNotes).toContain('never enters the signed stable update feed')
+    expect(record.environment).toBe('mint-finalizer')
+    expect(recordText).toContain('failure-fingerprint')
+    expect(recordText).toContain('validate-transition')
+    expect(recordText.indexOf('verify-policy')).toBeLessThan(recordText.indexOf('git push origin'))
+    expect(recordText).toContain('upstream-adoption-project-failure')
+    expect(recordText).toContain('Exceptional manual validation or publication runs do not project blocker state')
+    expect(recordText).toContain('current candidate branch head')
+    expect(recordText).toContain('.runAttempt == $attempt')
+    expect(projectText).toContain('gh issue create')
+    expect(projectText).toContain('Scheduled reconciliations are successful no-ops')
+    expect(projectText).toContain('issues?state=$issue_state&per_page=100')
+    expect(projectText).not.toContain('gh issue comment')
+    expect(projectText).not.toContain('gh variable set')
+    expect(projectText).not.toContain('gh issue list --state open --limit 100')
+    expect(reconcileText).toContain('(del(.runId,.runAttempt))')
+    expect(reconcileText).toContain('.display_title')
+    expect(reconcileText).toContain('open_context_circuit')
+    expect(reconcileText).toContain('retry_completed_cleanup')
+    expect(reconcileText).toContain('next scheduled reconcile will retry')
+    expect(manualForceText).toContain('"$RESUME" == true')
+    expect(manualForceText).not.toContain('force_retry=')
+    expect(reconcilePhaseText).toContain('force_retry=false')
+    expect(reconcilePhaseText).toContain('.activeDelivery.upstream.tag // "idle"')
+    expect(reconcilePhaseText.indexOf('Manual force must target authoritative queue head')).toBeLessThan(reconcilePhaseText.indexOf('gh issue close "$circuit_issue"'))
+    expect(reconcilePhaseText).not.toContain('--title "Delivered: DeepSeek Harness')
+    expect(successText).toContain('gh issue close')
+    expect(successText).toContain('gh release view')
+    expect(successText).toContain('git/refs/heads/$candidate_branch')
+    expect(successText).not.toContain('--title "Delivered: DeepSeek Harness')
   })
 
-  it('requires Apple credentials only after signed release mode is explicitly enabled', () => {
-    const workflow = workflowDocument('.github/workflows/desktop-release.yml')
-    const buildSteps = workflowSteps(workflowJob(workflow, 'build'))
-    const secretStep = namedStep(buildSteps, 'Validate signing secrets')
-    const keyStep = namedStep(buildSteps, 'Materialize App Store Connect API key')
-    const previewBuild = namedStep(buildSteps, 'Build, sign, and notarize preview DMG')
-
-    expect(secretStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
-    expect(keyStep.if).toBe("needs.prepare.outputs.mode != 'unsigned-preview'")
-    expect(previewBuild.if).toBe("needs.prepare.outputs.mode == 'signed-preview'")
-    expect(String(previewBuild.run)).toContain('--config.forceCodeSigning=true')
-    expect(String(previewBuild.run)).toContain('--config.mac.notarize=true')
+  it('declares exactly three runtime Apps without Administration or Environments permission', () => {
+    const manifest = JSON.parse(readFileSync(resolve(root, '.github/upstream-adoption/apps.json'), 'utf8')) as Record<string, unknown>
+    const apps = asRecord(manifest.apps, 'apps')
+    expect(Object.keys(apps).sort()).toEqual(['controller', 'finalizer', 'publisher'])
+    for (const value of Object.values(apps)) {
+      const permissions = asRecord(asRecord(value, 'app').permissions, 'permissions')
+      expect(permissions).not.toHaveProperty('administration')
+      expect(permissions).not.toHaveProperty('environments')
+    }
   })
 
-  it('loads the updater adapter from both native package-smoke artifacts', () => {
-    const workflow = workflowDocument('.github/workflows/desktop-ci.yml')
-    const smokeJob = workflowJob(workflow, 'package-smoke')
-    const smokeStep = namedStep(workflowSteps(smokeJob), 'Smoke packaged updater module')
-
-    expect(smokeJob.strategy).toMatchObject({
-      matrix: {
-        include: [
-          { arch: 'arm64', runner: 'macos-15' },
-          { arch: 'x64', runner: 'macos-15-intel' },
-        ],
-      },
+  it('protects the state ref with pull-request review while preserving only the Finalizer bypass', () => {
+    const manifest = JSON.parse(readFileSync(resolve(root, '.github/upstream-adoption/rulesets.json'), 'utf8')) as Record<string, unknown>
+    const rulesets = manifest.rulesets
+    if (!Array.isArray(rulesets)) throw new Error('ruleset manifest requires rulesets')
+    const state = rulesets.map(value => asRecord(value, 'ruleset')).find(value => value.name === 'Mint adoption state')
+    if (state === undefined || !Array.isArray(state.rules) || !Array.isArray(state.bypass)) throw new Error('state ruleset is incomplete')
+    const pullRequest = state.rules.map(value => asRecord(value, 'rule')).find(value => value.type === 'pull_request')
+    expect(asRecord(pullRequest, 'pull request rule').parameters).toMatchObject({
+      dismiss_stale_reviews_on_push: true,
+      require_last_push_approval: true,
+      required_approving_review_count: 1,
     })
-    expect(String(smokeStep.run)).toContain('Contents/MacOS/DSH Desktop')
-    expect(String(smokeStep.run)).toContain('--dsh-package-smoke')
-  })
-})
-
-describe('desktop upstream workflow', () => {
-  it('adopts each published upstream release and dispatches its desktop release', () => {
-    const workflow = workflowDocument('.github/workflows/upstream-sync.yml')
-    const adopt = workflowJob(workflow, 'adopt')
-    const steps = workflowSteps(adopt)
-    const commands = steps.map(stepCommand).join('\n')
-
-    expect(workflow.permissions).toEqual({ actions: 'write', contents: 'write', issues: 'write' })
-    expect(adopt.if).toBe("github.repository == 'mintgao/dsh-desktop'")
-    expect(commands).toContain('.github/upstream-sync-state.json')
-    expect(commands).toContain('DESKTOP_RELEASE_SIGNING_MODE must be unsigned-preview or signed.')
-    expect(commands).toContain('desktop_version="${desktop_version}.unsigned.1"')
-    expect(commands).toContain('desktop_version="${desktop_version}-unsigned.1"')
-    expect(commands).toContain('gh release list')
-    expect(commands).toContain('git merge --no-ff')
-    expect(commands).toContain('pnpm run test:desktop')
-    expect(commands).toContain('pnpm run build:desktop')
-    expect(commands).toContain('pnpm run typecheck')
-    expect(commands).toContain('pnpm run doc-sync')
-    expect(commands).toContain('git diff --exit-code')
-    expect(commands).toContain('git push --atomic origin HEAD:main')
-    expect(commands).toContain('gh workflow run desktop-release.yml')
-    expect(commands).toContain('gh issue create')
-    expect(commands).not.toContain('gh pr create')
-    expect(commands).not.toContain('gh pr merge')
-    expect(commands).not.toContain('gh release create')
-    expect(commands).not.toContain('Missing required desktop release secrets:')
+    expect(state.bypass).toEqual([{ actor: 'Mint State Finalizer', mode: 'always' }])
   })
 
-  it('records the adopted upstream release and desktop baseline for idempotent handoff', () => {
-    const state = JSON.parse(readFileSync(resolve(root, '.github/upstream-sync-state.json'), 'utf8')) as Record<string, unknown>
-    const adopted = asRecord(state.lastAdoptedRelease, 'last adopted release')
+  it('ships owner activation in fail-closed unconfigured state', () => {
+    const activation: unknown = JSON.parse(readFileSync(resolve(root, '.github/release-policy/activation.json'), 'utf8'))
+    expect(activation).toEqual({ schemaVersion: 1, status: 'unconfigured' })
+  })
 
-    expect(state.schemaVersion).toBe(1)
-    expect(state.upstreamRepository).toBe('deepseek-ai/deepseek-harness')
-    expect(adopted).toEqual({
-      tag: 'dsh-v0.1.1-rc.2',
-      commit: 'b150a551b8d465e31e418e1b2eaf5e79bbb7d28e',
-      publishedAt: '2026-08-21T12:35:08Z',
-      desktopTag: 'desktop-v0.1.0-preview.5',
-    })
+  it('keeps exceptional manual tags receipt-bound and draft-only', () => {
+    const validation = workflowDocument('.github/workflows/upstream-adoption-validation.yml')
+    const publication = workflowDocument('.github/workflows/desktop-release.yml')
+    const validationTriggers = asRecord(validation.on, 'validation triggers')
+    const publicationTriggers = asRecord(publication.on, 'publication triggers')
+    const validationInputs = asRecord(asRecord(validationTriggers.workflow_dispatch, 'validation manual trigger').inputs, 'validation inputs')
+    const publicationInputs = asRecord(asRecord(publicationTriggers.workflow_dispatch, 'publication manual trigger').inputs, 'publication inputs')
+
+    expect(validationInputs).toHaveProperty('release_tag')
+    expect(publicationInputs).toHaveProperty('release_tag')
+    expect(publicationInputs).toHaveProperty('validation_run')
+    expect(commands(workflowJob(publication, 'publish'))).toContain('if [[ "$AUTOMATIC" == true')
   })
 })
 
@@ -187,53 +275,47 @@ describe('desktop release withdrawal workflow', () => {
   it('withdraws without deleting recovery data and restores the previous stable release', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release-withdraw.yml')
     const withdraw = workflowJob(workflow, 'withdraw')
-    const commands = workflowSteps(withdraw).map(stepCommand).join('\n')
+    const text = commands(withdraw)
 
     expect(workflow.permissions).toEqual({ contents: 'write', issues: 'write' })
     expect(withdraw.if).toBe("github.repository == 'mintgao/dsh-desktop'")
-    expect(commands).toContain('gh release edit "$RELEASE_TAG"')
-    expect(commands).toContain('--draft')
-    expect(commands).toContain('gh release edit "$fallback_tag"')
-    expect(commands).toContain('--latest')
-    expect(commands).toContain('gh issue create')
-    expect(commands).toContain('gh issue comment')
-    expect(commands).toContain('gh issue reopen')
-    expect(commands).toContain('--draft=false')
-    expect(commands).not.toContain('gh release delete')
-    expect(commands).not.toContain('git push --delete')
+    expect(text).toContain('gh release edit "$RELEASE_TAG"')
+    expect(text).toContain('--draft')
+    expect(text).toContain('gh issue create')
+    expect(text).not.toContain('gh release delete')
+    expect(text).not.toContain('git push --delete')
   })
 })
 
-/** Read one GitHub Actions workflow as a mapping. */
 function workflowDocument(path: string): Record<string, unknown> {
   return asRecord(load(readFileSync(resolve(root, path), 'utf8')), path)
 }
 
-/** Select one required workflow job. */
 function workflowJob(workflow: Record<string, unknown>, name: string): Record<string, unknown> {
-  const jobs = asRecord(workflow.jobs, 'workflow jobs')
-  return asRecord(jobs[name], `workflow job ${name}`)
+  return asRecord(asRecord(workflow.jobs, 'workflow jobs')[name], `workflow job ${name}`)
 }
 
-/** Select and validate a job's ordered step mappings. */
-function workflowSteps(job: Record<string, unknown>): Record<string, unknown>[] {
+function workflowStep(workflow: Record<string, unknown>, jobName: string, stepName: string): Record<string, unknown> {
+  const job = workflowJob(workflow, jobName)
+  if (!Array.isArray(job.steps)) throw new Error(`workflow job ${jobName} has no steps`)
+  const steps: unknown[] = job.steps
+  const step: unknown = steps.find(value => asRecord(value, 'workflow step').name === stepName)
+  return asRecord(step, `workflow step ${stepName}`)
+}
+
+function commands(job: Record<string, unknown>): string {
   if (!Array.isArray(job.steps)) throw new Error('workflow job has no steps')
-  return job.steps.map((step, index) => asRecord(step, `workflow step ${String(index + 1)}`))
+  return job.steps.map((step) => {
+    const value = asRecord(step, 'workflow step')
+    return `${renderStepField(value.uses)}\n${JSON.stringify(value.env ?? {})}\n${JSON.stringify(value.with ?? {})}\n${renderStepField(value.run)}`
+  }).join('\n')
 }
 
-/** Select one named workflow step. */
-function namedStep(steps: readonly Record<string, unknown>[], name: string): Record<string, unknown> {
-  const step = steps.find(candidate => candidate.name === name)
-  if (step === undefined) throw new Error(`workflow has no ${name} step`)
-  return step
+function renderStepField(value: unknown): string {
+  if (typeof value === 'string') return value
+  return JSON.stringify(value ?? '')
 }
 
-/** Return a shell step's command without stringifying other YAML node types. */
-function stepCommand(step: Record<string, unknown>): string {
-  return typeof step.run === 'string' ? step.run : ''
-}
-
-/** Narrow parsed YAML nodes to mappings. */
 function asRecord(value: unknown, context: string): Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${context} must be a mapping`)
   return value as Record<string, unknown>

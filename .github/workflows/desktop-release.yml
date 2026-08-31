@@ -1,399 +1,354 @@
-name: Release DSH Desktop
+name: Publish qualified DSH Desktop bundle
+run-name: Publish desktop attempt ${{ github.event.client_payload.input_key || inputs.release_tag }}
 
 on:
-  push:
-    tags:
-      - 'desktop-v*'
+  repository_dispatch:
+    types: [upstream-adoption-publish]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing desktop-v* tag to build
+        description: Exceptional immutable desktop-v* tag
         required: true
         type: string
-      publish:
-        description: Publish immediately after every release check passes
+      validation_run:
+        description: Exact artifact-qualification run ID
         required: true
-        default: false
-        type: boolean
-      upstream_ref:
-        description: Adopted upstream dsh-v* release tag
-        required: false
-        type: string
-      upstream_commit:
-        description: Adopted upstream release commit
-        required: false
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
-  group: desktop-release-${{ inputs.release_tag || github.ref_name }}
+  group: desktop-publication-${{ inputs.release_tag || github.event.client_payload.release_tag }}
   cancel-in-progress: false
 
-env:
-  DSH_TELEMETRY_DISABLED: '1'
-
 jobs:
+  bind-attempt:
+    if: github.repository == 'mintgao/dsh-desktop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture automatic publication attempt before project checkout
+        if: github.event_name == 'repository_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_INPUT_KEY: ${{ github.event.client_payload.input_key }}
+          REQUESTED_RUN: ${{ github.event.client_payload.validation_run }}
+          REQUESTED_TAG: ${{ github.event.client_payload.release_tag }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/automation/upstream-adoption-state" > "$RUNNER_TEMP/state-ref.json"
+          state_ref_commit="$(jq -r '.object.sha' "$RUNNER_TEMP/state-ref.json")"
+          gh api "repos/$GITHUB_REPOSITORY/contents/state/upstream-adoption.json?ref=$state_ref_commit" --jq '.content' \
+            | base64 --decode > "$RUNNER_TEMP/state.json"
+          phase="$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")"
+          [[ "$phase" == release-pending || "$phase" == publication-blocked ]]
+          test "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" = "$REQUESTED_TAG"
+          test "$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")" = "$REQUESTED_RUN"
+          test "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" = "$REQUESTED_INPUT_KEY"
+          jq -n \
+            --argjson runId "$GITHUB_RUN_ID" \
+            --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg stateRefCommit "$state_ref_commit" \
+            --argjson stateRevision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+            --arg inputKey "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+            --arg releaseTag "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" \
+            --arg sourceCommit "$(jq -r '.activeDelivery.artifacts.sourceCommit' "$RUNNER_TEMP/state.json")" \
+            --argjson validationRun "$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")" \
+            '{schemaVersion:1,kind:"publication",runId:$runId,runAttempt:$runAttempt,stateRefCommit:$stateRefCommit,stateRevision:$stateRevision,inputKey:$inputKey,releaseTag:$releaseTag,sourceCommit:$sourceCommit,validationRun:$validationRun}' \
+            > "$RUNNER_TEMP/publication-attempt-context.json"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'repository_dispatch'
+        with:
+          name: publication-attempt-context
+          path: ${{ runner.temp }}/publication-attempt-context.json
+          if-no-files-found: error
+          retention-days: 30
+
   prepare:
-    name: Select release trust and update channel
+    if: github.repository == 'mintgao/dsh-desktop'
+    needs: bind-attempt
     runs-on: ubuntu-latest
     outputs:
+      automatic: ${{ steps.release.outputs.automatic }}
       mode: ${{ steps.release.outputs.mode }}
-      publish: ${{ steps.release.outputs.publish }}
-      tag: ${{ steps.release.outputs.tag }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      source_commit: ${{ steps.release.outputs.source_commit }}
       upstream_commit: ${{ steps.release.outputs.upstream_commit }}
-      upstream_ref: ${{ steps.release.outputs.upstream_ref }}
+      upstream_tag: ${{ steps.release.outputs.upstream_tag }}
+      validation_run: ${{ steps.release.outputs.validation_run }}
       version: ${{ steps.release.outputs.version }}
+      workflow_commit: ${{ steps.release.outputs.workflow_commit }}
     steps:
-      - name: Validate desktop tag
-        id: release
-        shell: bash
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - id: release
+        name: Re-derive release identity from protected state
         env:
-          PUBLISH_REQUESTED: ${{ inputs.publish }}
-          RELEASE_SIGNING_MODE: ${{ vars.DESKTOP_RELEASE_SIGNING_MODE }}
-          REQUESTED_TAG: ${{ inputs.release_tag }}
-          UPSTREAM_COMMIT: ${{ inputs.upstream_commit }}
-          UPSTREAM_REF: ${{ inputs.upstream_ref }}
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_RUN: ${{ inputs.validation_run || github.event.client_payload.validation_run }}
+          REQUESTED_TAG: ${{ inputs.release_tag || github.event.client_payload.release_tag }}
         run: |
-          set -euo pipefail
-          tag="${REQUESTED_TAG:-$GITHUB_REF_NAME}"
-          version="${tag#desktop-v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag must be desktop-v followed by a semantic version." >&2
-            exit 1
-          fi
-          if [[ "$PUBLISH_REQUESTED" == true && ( -z "$UPSTREAM_REF" || -z "$UPSTREAM_COMMIT" ) ]]; then
-            echo 'An automatic publication requires its upstream tag and commit.' >&2
-            exit 1
-          fi
-          signing_mode="${RELEASE_SIGNING_MODE:-unsigned-preview}"
-          if [[ "$signing_mode" != unsigned-preview && "$signing_mode" != signed ]]; then
-            echo "DESKTOP_RELEASE_SIGNING_MODE must be unsigned-preview or signed." >&2
-            exit 1
-          fi
-          mode=unsigned-preview
-          if [[ "$version" == *-unsigned.1 || "$version" == *.unsigned.1 ]]; then
-            mode=unsigned-preview
-          elif [[ "$signing_mode" != signed ]]; then
-            echo "A desktop tag without the unsigned.1 marker requires DESKTOP_RELEASE_SIGNING_MODE=signed." >&2
-            exit 1
-          elif [[ "$version" == *-* ]]; then
-            mode=signed-preview
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state --tags
+          trusted_main="$(git rev-parse refs/remotes/origin/main)"
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$trusted_main"
+          if [[ "$EVENT_NAME" == repository_dispatch ]]; then
+            git show refs/remotes/origin/automation/upstream-adoption-state:state/upstream-adoption.json > "$RUNNER_TEMP/state.json"
+            pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+            phase="$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")"
+            [[ "$phase" == release-pending || "$phase" == publication-blocked ]]
+            release_tag="$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")"
+            validation_run="$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")"
+            test "$REQUESTED_TAG" = "$release_tag"
+            test "$REQUESTED_RUN" = "$validation_run"
+            echo 'automatic=true' >> "$GITHUB_OUTPUT"
+            echo "mode=$(jq -r '.activeDelivery.mode' "$RUNNER_TEMP/state.json")" >> "$GITHUB_OUTPUT"
+            source_commit="$(jq -r '.activeDelivery.artifacts.sourceCommit' "$RUNNER_TEMP/state.json")"
+            echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+            echo "upstream_commit=$(jq -r '.activeDelivery.upstream.commit' "$RUNNER_TEMP/state.json")" >> "$GITHUB_OUTPUT"
+            echo "upstream_tag=$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")" >> "$GITHUB_OUTPUT"
           else
+            release_tag="$REQUESTED_TAG"
+            validation_run="$REQUESTED_RUN"
+            version="${release_tag#desktop-v}"
+            [[ "$release_tag" =~ ^desktop-v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+            source_commit="$(git rev-parse "$release_tag^{commit}")"
             mode=signed-stable
-          fi
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "publish=${PUBLISH_REQUESTED:-false}" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "upstream_commit=${UPSTREAM_COMMIT:-not-recorded}" >> "$GITHUB_OUTPUT"
-          echo "upstream_ref=${UPSTREAM_REF:-not-recorded}" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-  build:
-    name: macOS artifacts / ${{ matrix.arch }}
-    needs: prepare
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-15
-          - arch: x64
-            runner: macos-15-intel
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          ref: ${{ needs.prepare.outputs.tag }}
-
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-
-      - name: Validate signing secrets
-        if: needs.prepare.outputs.mode != 'unsigned-preview'
-        env:
-          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in MACOS_CERTIFICATE_P12_BASE64 MACOS_CERTIFICATE_PASSWORD APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER; do
-            if [[ -z "${!name}" ]]; then
-              echo "Missing required release secret: $name" >&2
-              exit 1
+            if [[ "$version" == *-unsigned.1 || "$version" == *.unsigned.1 ]]; then mode=unsigned-preview
+            elif [[ "$version" == *-* ]]; then mode=signed-preview
             fi
-          done
-
-      - name: Install immutable dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Materialize App Store Connect API key
-        if: needs.prepare.outputs.mode != 'unsigned-preview'
-        env:
-          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
-          printf '%s' "$APPLE_API_KEY_P8_BASE64" | base64 -D > "$key_path"
-          chmod 600 "$key_path"
-          echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
-
-      - name: Stage source-built DSH runtime
-        run: pnpm run desktop:stage
-
-      - name: Build, sign, and notarize stable DMG and update ZIP
-        if: needs.prepare.outputs.mode == 'signed-stable'
-        env:
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: >-
-          pnpm exec electron-builder
-          --config apps/desktop/electron-builder.yml
-          --config.extraMetadata.version=${{ needs.prepare.outputs.version }}
-          --config.forceCodeSigning=true
-          --config.mac.notarize=true
-          --mac dmg zip
-          --${{ matrix.arch }}
-          --publish never
-
-      - name: Build, sign, and notarize preview DMG
-        if: needs.prepare.outputs.mode == 'signed-preview'
-        env:
-          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: >-
-          pnpm exec electron-builder
-          --config apps/desktop/electron-builder.yml
-          --config.extraMetadata.version=${{ needs.prepare.outputs.version }}
-          --config.forceCodeSigning=true
-          --config.mac.notarize=true
-          --mac dmg
-          --${{ matrix.arch }}
-          --publish never
-
-      - name: Build unsigned preview DMG
-        if: needs.prepare.outputs.mode == 'unsigned-preview'
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: >-
-          pnpm exec electron-builder
-          --config apps/desktop/electron-builder.yml
-          --config.extraMetadata.version=${{ needs.prepare.outputs.version }}
-          --config.mac.notarize=false
-          --mac dmg
-          --${{ matrix.arch }}
-          --publish never
-
-      - name: Verify architecture DMG
-        shell: bash
-        run: test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
-
-      - name: Smoke packaged updater module
-        shell: bash
-        run: |
-          set -euo pipefail
-          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
-          test -n "$app_path"
-          "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke
-
-      - name: Verify Developer ID application signature
-        if: needs.prepare.outputs.mode != 'unsigned-preview'
-        shell: bash
-        run: |
-          set -euo pipefail
-          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
-          test -n "$app_path"
-          codesign --verify --deep --strict --verbose=2 "$app_path"
-          signing_details="$(codesign -dvvv --verbose=4 "$app_path" 2>&1)"
-          if [[ "$signing_details" != *"Authority=Developer ID Application:"* ]]; then
-            echo "Desktop artifact is not signed by a Developer ID Application identity." >&2
-            exit 1
+            echo 'automatic=false' >> "$GITHUB_OUTPUT"
+            echo "mode=$mode" >> "$GITHUB_OUTPUT"
+            echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+            echo 'upstream_commit=manual-desktop-release' >> "$GITHUB_OUTPUT"
+            echo 'upstream_tag=manual-desktop-release' >> "$GITHUB_OUTPUT"
           fi
-          if [[ "$signing_details" == *"Signature=adhoc"* ]]; then
-            echo "Desktop artifact has only an ad-hoc signature." >&2
-            exit 1
-          fi
-
-      - name: Verify notarization ticket
-        if: needs.prepare.outputs.mode != 'unsigned-preview'
-        shell: bash
-        run: |
-          set -euo pipefail
-          dmg_path="apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
-          xcrun stapler validate "$dmg_path"
-          spctl --assess --verbose=2 --type open "$dmg_path"
-
-      - name: Verify unsigned preview identity
-        if: needs.prepare.outputs.mode == 'unsigned-preview'
-        shell: bash
-        run: |
-          set -euo pipefail
-          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
-          test -n "$app_path"
-          signing_details="$(codesign -dvvv --verbose=4 "$app_path" 2>&1 || true)"
-          if [[ "$signing_details" == *"Authority=Developer ID Application:"* ]]; then
-            echo "Unsigned preview unexpectedly carries a Developer ID Application identity." >&2
-            exit 1
-          fi
-
-      - name: Preserve architecture update metadata
-        if: needs.prepare.outputs.mode == 'signed-stable'
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f apps/desktop/dist/latest-mac.yml
-          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip"
-          test -f "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
-          mv apps/desktop/dist/latest-mac.yml "apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dsh-desktop-${{ matrix.arch }}
-          path: |
-            apps/desktop/dist/*.dmg
-            apps/desktop/dist/*.zip
-            apps/desktop/dist/*.blockmap
-            apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml
-          if-no-files-found: error
-
-  release:
-    name: Create GitHub release
-    needs:
-      - prepare
-      - build
+          test -n "$validation_run"
+          test "$(git rev-parse "$release_tag^{commit}")" = "$(git rev-parse "${source_commit:-$(git rev-parse "$release_tag^{commit}")}")"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "validation_run=$validation_run" >> "$GITHUB_OUTPUT"
+          echo "version=${release_tag#desktop-v}" >> "$GITHUB_OUTPUT"
+          echo "workflow_commit=$trusted_main" >> "$GITHUB_OUTPUT"
+  verify-bundle:
+    needs: prepare
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.workflow_commit }}
           persist-credentials: false
-          ref: ${{ needs.prepare.outputs.tag }}
-
       - uses: pnpm/action-setup@v4
-        if: needs.prepare.outputs.mode == 'signed-stable'
-
       - uses: actions/setup-node@v6
-        if: needs.prepare.outputs.mode == 'signed-stable'
         with:
           node-version-file: .node-version
           cache: pnpm
-
-      - name: Install immutable dependencies
-        if: needs.prepare.outputs.mode == 'signed-stable'
-        run: pnpm install --frozen-lockfile
-
-      - uses: actions/download-artifact@v5
-        with:
-          pattern: dsh-desktop-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Merge architecture update metadata
-        if: needs.prepare.outputs.mode == 'signed-stable'
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm exec tsx scripts/merge-desktop-update-metadata.ts \
-            --version "${{ needs.prepare.outputs.version }}" \
-            --output release-assets/latest-mac.yml \
-            release-assets/latest-mac-arm64.yml \
-            release-assets/latest-mac-x64.yml
-
-      - name: Write stable release checksums
-        if: needs.prepare.outputs.mode == 'signed-stable'
-        run: |
-          cd release-assets
-          sha256sum *.dmg *.zip > SHA256SUMS.txt
-
-      - name: Write preview release checksums
-        if: needs.prepare.outputs.mode != 'signed-stable'
-        shell: bash
-        run: |
-          set -euo pipefail
-          (
-            cd release-assets
-            sha256sum *.dmg > SHA256SUMS.txt
-          )
-
-      - name: Write release notes
-        shell: bash
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Download exact qualified bundle without rebuilding
         env:
-          RELEASE_MODE: ${{ needs.prepare.outputs.mode }}
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          UPSTREAM_COMMIT: ${{ needs.prepare.outputs.upstream_commit }}
-          UPSTREAM_REF: ${{ needs.prepare.outputs.upstream_ref }}
-          VERSION: ${{ needs.prepare.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          case "$RELEASE_MODE" in
+          validation_run='${{ needs.prepare.outputs.validation_run }}'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$validation_run" > "$RUNNER_TEMP/validation-run.json"
+          expected_event=workflow_dispatch
+          if [[ '${{ needs.prepare.outputs.automatic }}' == true ]]; then expected_event=repository_dispatch; fi
+          jq -e --argjson repository "$GITHUB_REPOSITORY_ID" --arg event "$expected_event" '
+            .repository.id == $repository
+            and .path == ".github/workflows/upstream-adoption-validation.yml"
+            and .event == $event
+            and .conclusion == "success"
+          ' "$RUNNER_TEMP/validation-run.json"
+          gh run download '${{ needs.prepare.outputs.validation_run }}' --name desktop-bundle --dir bundle
+          gh run download '${{ needs.prepare.outputs.validation_run }}' --name validation-receipt --dir validation-receipt
+          test -s bundle/artifact-manifest.json
+          test -s validation-receipt/receipt.json
+          jq -r '.[] | [.sha256,.name] | @tsv' bundle/artifact-manifest.json | while IFS=$'\t' read -r sha name; do
+            test "$(sha256sum "bundle/$name" | cut -d ' ' -f 1)" = "$sha"
+          done
+          pnpm exec tsx scripts/upstream-adoption/cli.ts expected-assets '${{ needs.prepare.outputs.version }}' '${{ needs.prepare.outputs.mode }}' > "$RUNNER_TEMP/expected-assets.json"
+          jq -e --slurpfile expected "$RUNNER_TEMP/expected-assets.json" '([.[].name] | sort) == ($expected[0] | sort)' bundle/artifact-manifest.json
+          manifest_digest="$(sha256sum bundle/artifact-manifest.json | cut -d ' ' -f 1)"
+          jq -e \
+            --argjson run "$validation_run" \
+            --argjson attempt "$(jq -r '.run_attempt' "$RUNNER_TEMP/validation-run.json")" \
+            --arg tag '${{ needs.prepare.outputs.release_tag }}' \
+            --arg mode '${{ needs.prepare.outputs.mode }}' \
+            --arg source '${{ needs.prepare.outputs.source_commit }}' \
+            --arg workflow "$(jq -r '.head_sha' "$RUNNER_TEMP/validation-run.json")" \
+            --arg manifest "$manifest_digest" '
+              .schemaVersion == 1
+              and .runId == $run
+              and .runAttempt == $attempt
+              and .conclusion == "success"
+              and .artifactName == "desktop-bundle"
+              and .desktopTag == $tag
+              and .mode == $mode
+              and .candidateCommit == $source
+              and .sourceCommit == $source
+              and .workflowCommit == $workflow
+              and .manifestDigest == $manifest
+            ' validation-receipt/receipt.json
+          if [[ '${{ needs.prepare.outputs.automatic }}' == true ]]; then
+            git fetch origin refs/heads/automation/upstream-adoption-state
+            git show refs/remotes/origin/automation/upstream-adoption-state:state/upstream-adoption.json > "$RUNNER_TEMP/state.json"
+            test "$(jq -r '.activeDelivery.artifacts.manifestDigest' "$RUNNER_TEMP/state.json")" = "$manifest_digest"
+            test "$(jq -r '.activeDelivery.validation.receiptDigest' "$RUNNER_TEMP/state.json")" = "$(sha256sum validation-receipt/receipt.json | cut -d ' ' -f 1)"
+          fi
+      - name: Bind protected release notes to source provenance
+        run: |
+          case '${{ needs.prepare.outputs.mode }}' in
             signed-stable) template=.github/desktop-stable-release-notes.md ;;
             signed-preview) template=.github/desktop-preview-release-notes.md ;;
             unsigned-preview) template=.github/desktop-unsigned-preview-release-notes.md ;;
-            *) echo "Unsupported desktop release mode: $RELEASE_MODE" >&2; exit 1 ;;
           esac
-          source_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
           sed \
-            -e "s|__VERSION__|$VERSION|g" \
-            -e "s|__UPSTREAM_REF__|$UPSTREAM_REF|g" \
-            -e "s|__UPSTREAM_COMMIT__|$UPSTREAM_COMMIT|g" \
-            -e "s|__SOURCE_COMMIT__|$source_commit|g" \
-            "$template" > release-notes.md
+            -e 's|__VERSION__|${{ needs.prepare.outputs.version }}|g' \
+            -e 's|__UPSTREAM_REF__|${{ needs.prepare.outputs.upstream_tag }}|g' \
+            -e 's|__UPSTREAM_COMMIT__|${{ needs.prepare.outputs.upstream_commit }}|g' \
+            -e 's|__SOURCE_COMMIT__|${{ needs.prepare.outputs.source_commit }}|g' \
+            "$template" > bundle/release-notes.md
+          printf '\nRelease mode: `%s`\n' '${{ needs.prepare.outputs.mode }}' >> bundle/release-notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: publication-bundle
+          path: bundle
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PUBLISH: ${{ needs.prepare.outputs.publish }}
-          RELEASE_MODE: ${{ needs.prepare.outputs.mode }}
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        shell: bash
+  publish:
+    if: github.ref == 'refs/heads/main' && github.sha == needs.prepare.outputs.workflow_commit
+    needs: [prepare, verify-bundle]
+    environment: mint-publication
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.workflow_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind Publisher authority to the trusted main workflow
         run: |
-          set -euo pipefail
-          assets=(
-            release-assets/*.dmg
-            release-assets/SHA256SUMS.txt
-          )
-          release_title="DSH Desktop Mint $VERSION"
-          if [[ "$RELEASE_MODE" == unsigned-preview ]]; then
-            release_title="$release_title (Unsigned Preview)"
-          fi
-          options=(
-            --repo "$GITHUB_REPOSITORY"
-            --verify-tag
-            --title "$release_title"
-            --notes-file release-notes.md
-          )
-          if [[ "$RELEASE_MODE" == signed-stable ]]; then
-            assets+=(
-              release-assets/*.zip
-              release-assets/*.blockmap
-              release-assets/latest-mac.yml
-            )
-            if [[ "$PUBLISH" == true ]]; then
-              options+=(--latest)
-            fi
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = '${{ needs.prepare.outputs.workflow_commit }}'
+          test "$(git rev-parse HEAD)" = '${{ needs.prepare.outputs.workflow_commit }}'
+      - name: Fail closed until release policy activation
+        run: |
+          jq -e '.schemaVersion == 1 and .status == "active"' .github/release-policy/activation.json
+          test -s .github/release-policy/receipt.json
+          test -s .github/release-policy/receipt.json.sig
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: publisher-token
+        with:
+          app-id: ${{ vars.MINT_PUBLISHER_APP_ID }}
+          private-key: ${{ secrets.MINT_PUBLISHER_APP_PRIVATE_KEY }}
+      - name: Verify owner-authenticated policy receipt
+        env:
+          GH_TOKEN: ${{ steps.publisher-token.outputs.token }}
+        run: |
+          pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts .github/release-policy/activation.json .github/release-policy/receipt.json publisher "$RUNNER_TEMP/runtime-policy-facts.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy .github/release-policy/activation.json .github/release-policy/receipt.json .github/release-policy/receipt.json.sig "$RUNNER_TEMP/runtime-policy-facts.json"
+      - uses: actions/download-artifact@v5
+        with:
+          name: publication-bundle
+          path: bundle
+      - name: Reconcile and verify draft before publication
+        env:
+          AUTOMATIC: ${{ needs.prepare.outputs.automatic }}
+          GH_TOKEN: ${{ steps.publisher-token.outputs.token }}
+          MODE: ${{ needs.prepare.outputs.mode }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          already_public=false
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' > "$RUNNER_TEMP/existing-draft" 2>/dev/null; then
+            if [[ "$(cat "$RUNNER_TEMP/existing-draft")" == false ]]; then already_public=true; fi
           else
-            options+=(--prerelease)
+            options=(--draft --verify-tag --notes-file bundle/release-notes.md --title "DSH Desktop Mint $VERSION")
+            if [[ "$MODE" != signed-stable ]]; then options+=(--prerelease); fi
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "${options[@]}"
           fi
-          if [[ "$PUBLISH" != true ]]; then
-            options+=(--draft)
+          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse "$RELEASE_TAG^{commit}")" = '${{ needs.prepare.outputs.source_commit }}'
+          if [[ "$already_public" == false ]]; then
+            mapfile -t assets < <(jq -r '.[].name' bundle/artifact-manifest.json)
+            mapfile -t existing_assets < <(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+            for existing in "${existing_assets[@]}"; do
+              if ! jq -e --arg name "$existing" 'map(.name) | index($name) != null' bundle/artifact-manifest.json >/dev/null; then
+                gh release delete-asset "$RELEASE_TAG" "$existing" --repo "$GITHUB_REPOSITORY" --yes
+              fi
+            done
+            upload=()
+            for asset in "${assets[@]}"; do upload+=("bundle/$asset"); done
+            gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber "${upload[@]}"
+            edit_options=(--notes-file bundle/release-notes.md --title "DSH Desktop Mint $VERSION")
+            if [[ "$MODE" == signed-stable ]]; then edit_options+=(--prerelease=false); else edit_options+=(--prerelease); fi
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "${edit_options[@]}"
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,assets,body > "$RUNNER_TEMP/draft-release.json"
+            mkdir "$RUNNER_TEMP/draft-assets"
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/draft-assets"
+            jq -r '.[] | [.name,.sha256] | @tsv' bundle/artifact-manifest.json | while IFS=$'\t' read -r name expected; do
+              test "$(sha256sum "$RUNNER_TEMP/draft-assets/$name" | cut -d ' ' -f 1)" = "$expected"
+            done
+            jq -e --arg tag "$RELEASE_TAG" --slurpfile manifest bundle/artifact-manifest.json '
+              .isDraft == true and .tagName == $tag
+              and ([.assets[].name] | sort) == ($manifest[0] | map(.name) | sort)
+            ' "$RUNNER_TEMP/draft-release.json"
+            latest=false
+            jq -n \
+              --arg tag "$RELEASE_TAG" --arg target '${{ needs.prepare.outputs.source_commit }}' \
+              --argjson prerelease "$(jq '.isPrerelease' "$RUNNER_TEMP/draft-release.json")" \
+              --arg notes "$(jq -r '.body' "$RUNNER_TEMP/draft-release.json")" \
+              --slurpfile assets bundle/artifact-manifest.json \
+              '{tag:$tag,targetCommit:$target,draft:true,prerelease:$prerelease,latest:false,notes:$notes,assets:$assets[0]}' \
+              > "$RUNNER_TEMP/draft-object.json"
+            if [[ "$AUTOMATIC" == true ]]; then
+              pnpm exec tsx scripts/upstream-adoption/cli.ts verify-release "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/draft-object.json" bundle/artifact-manifest.json draft
+            fi
           fi
-          gh release create "$RELEASE_TAG" "${assets[@]}" "${options[@]}"
+          if [[ "$AUTOMATIC" == true && "$already_public" == false ]]; then
+            options=(--draft=false)
+            if [[ "$MODE" == signed-stable ]]; then options+=(--latest); fi
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" "${options[@]}"
+          fi
+      - name: Verify public object and request cursor advancement
+        if: needs.prepare.outputs.automatic == 'true'
+        env:
+          GH_TOKEN: ${{ steps.publisher-token.outputs.token }}
+        run: |
+          gh release view '${{ needs.prepare.outputs.release_tag }}' --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,assets,body > "$RUNNER_TEMP/public-release.json"
+          jq -e --arg tag '${{ needs.prepare.outputs.release_tag }}' --slurpfile manifest bundle/artifact-manifest.json '
+            .isDraft == false and .tagName == $tag
+            and ([.assets[].name] | sort) == ($manifest[0] | map(.name) | sort)
+          ' "$RUNNER_TEMP/public-release.json"
+          mkdir "$RUNNER_TEMP/public-assets"
+          gh release download '${{ needs.prepare.outputs.release_tag }}' --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/public-assets"
+          jq -r '.[] | [.name,.sha256] | @tsv' bundle/artifact-manifest.json | while IFS=$'\t' read -r name expected; do
+            test "$(sha256sum "$RUNNER_TEMP/public-assets/$name" | cut -d ' ' -f 1)" = "$expected"
+          done
+          latest=false
+          if [[ '${{ needs.prepare.outputs.mode }}' == signed-stable ]]; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')" = '${{ needs.prepare.outputs.release_tag }}'
+            latest=true
+          fi
+          jq -n \
+            --arg tag '${{ needs.prepare.outputs.release_tag }}' --arg target '${{ needs.prepare.outputs.source_commit }}' \
+            --argjson prerelease "$(jq '.isPrerelease' "$RUNNER_TEMP/public-release.json")" --argjson latest "$latest" \
+            --arg notes "$(jq -r '.body' "$RUNNER_TEMP/public-release.json")" \
+            --slurpfile assets bundle/artifact-manifest.json \
+            '{tag:$tag,targetCommit:$target,draft:false,prerelease:$prerelease,latest:$latest,notes:$notes,assets:$assets[0]}' \
+            > "$RUNNER_TEMP/public-object.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts verify-release "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/public-object.json" bundle/artifact-manifest.json public

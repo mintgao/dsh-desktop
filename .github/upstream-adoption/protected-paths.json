@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "paths": [
+    ".github/release-policy/**",
+    ".github/upstream-adoption/**",
+    ".github/workflows/desktop-release.yml",
+    ".github/workflows/upstream-adoption-*.yml",
+    ".github/workflows/upstream-sync.yml",
+    "scripts/desktop-workflows.spec.ts",
+    "scripts/upstream-adoption/**"
+  ]
+}

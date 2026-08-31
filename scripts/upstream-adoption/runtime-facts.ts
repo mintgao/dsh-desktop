@@ -1,0 +1,256 @@
+/** Collect runtime-visible GitHub facts for owner-authorized policy verification. */
+
+import { createHash } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import {
+  byteDigest,
+  parsePolicyActivation,
+  parsePolicyReceipt,
+  parseProtectedPolicyState,
+  receiptBundleDigest,
+  type AuthorizationFile,
+  type PolicyRepositoryIdentity,
+  type ReceiptRuleset,
+  type RuntimePolicyFacts,
+  type SquashAuthorizationFacts,
+} from './policy.ts'
+
+const [activationPath, receiptPath, role, outputPath] = process.argv.slice(2)
+if (activationPath === undefined || receiptPath === undefined || outputPath === undefined) {
+  throw new Error('Usage: runtime-facts <activation> <receipt> <role> <output>')
+}
+if (role !== 'controller' && role !== 'finalizer' && role !== 'publisher') {
+  throw new Error('Runtime App role must be controller, finalizer, or publisher.')
+}
+const token = process.env.GH_TOKEN
+const repositoryName = process.env.GITHUB_REPOSITORY
+if (token === undefined || repositoryName === undefined) throw new Error('GH_TOKEN and GITHUB_REPOSITORY are required.')
+
+const activationBytes = readFileSync(activationPath)
+const activation = parsePolicyActivation(JSON.parse(activationBytes.toString('utf8')) as unknown)
+if (activation.status !== 'active') throw new Error('Release policy is unconfigured.')
+const receiptBytes = readFileSync(receiptPath)
+const receipt = parsePolicyReceipt(JSON.parse(receiptBytes.toString('utf8')) as unknown)
+readFileSync(`${receiptPath}.sig`)
+const repositoryValue = object(await api(`/repos/${repositoryName}`), 'repository')
+const repository = repositoryIdentity(repositoryValue)
+const installation = object(await api('/installation'), 'installation')
+const installationApp = object(installation.app, 'installation.app')
+const mainRef = object(await api(`/repos/${repositoryName}/git/ref/heads/main`), 'main ref')
+const mainCommit = string(object(mainRef.object, 'main ref object').sha, 'main ref sha')
+const activationAuthorization = await authorizationFacts(activation.authorizationPr, mainCommit)
+const receiptAuthorization = receipt.authorizationPr === activation.authorizationPr
+  ? activationAuthorization
+  : await authorizationFacts(receipt.authorizationPr, mainCommit)
+
+const rulesets: Omit<ReceiptRuleset, 'bypassActors'>[] = []
+for (const expected of receipt.rulesets) {
+  const value = object(
+    await api(`/repos/${repositoryName}/rulesets/${String(expected.id)}`),
+    `ruleset ${String(expected.id)}`,
+  )
+  rulesets.push({
+    id: integer(value.id, 'ruleset.id'),
+    name: string(value.name, 'ruleset.name'),
+    target: string(value.target, 'ruleset.target'),
+    enforcement: string(value.enforcement, 'ruleset.enforcement'),
+    conditions: value.conditions,
+    rules: value.rules,
+    updatedAt: string(value.updated_at, 'ruleset.updated_at'),
+  })
+}
+
+const workflowDigests: Record<string, string> = {}
+for (const path of Object.keys(receipt.workflowDigests)) {
+  workflowDigests[path] = createHash('sha256').update(readFileSync(resolve(path))).digest('hex')
+}
+
+let stateRef: RuntimePolicyFacts['stateRef'] = null
+const stateRefResponse = await request(`/repos/${repositoryName}/git/ref/heads/automation/upstream-adoption-state`)
+if (stateRefResponse.ok) {
+  const ref = object(await json(stateRefResponse), 'state ref')
+  const commit = string(object(ref.object, 'state ref object').sha, 'state ref commit')
+  const stateBytes = await repositoryFile('state/upstream-adoption.json', commit)
+  const state = object(JSON.parse(stateBytes.toString('utf8')) as unknown, 'protected state')
+  stateRef = {
+    ref: 'refs/heads/automation/upstream-adoption-state',
+    commit,
+    policy: parseProtectedPolicyState(state.policy ?? null),
+  }
+} else if (stateRefResponse.status !== 404) {
+  throw new Error(`GitHub API ${String(stateRefResponse.status)} while reading protected state ref.`)
+}
+
+const facts: RuntimePolicyFacts = {
+  repository,
+  activationAuthorization,
+  receiptAuthorization,
+  executingApp: {
+    role,
+    slug: string(installationApp.slug, 'installation.app.slug'),
+    id: integer(installationApp.id, 'installation.app.id'),
+    installationId: integer(installation.id, 'installation.id'),
+    permissions: stringMap(installation.permissions, 'installation.permissions'),
+  },
+  stateRef,
+  rulesets,
+  workflowDigests,
+}
+writeFileSync(outputPath, `${JSON.stringify(facts, null, 2)}\n`)
+
+async function authorizationFacts(
+  prNumber: number,
+  mainCommit: string,
+): Promise<SquashAuthorizationFacts> {
+  const pr = object(await publicApi(`/repos/${repositoryName}/pulls/${String(prNumber)}`), `pull request ${String(prNumber)}`)
+  const base = object(pr.base, 'pull request base')
+  const head = object(pr.head, 'pull request head')
+  const baseRepository = object(base.repo, 'pull request base repository')
+  const headRepository = object(head.repo, 'pull request head repository')
+  const mergedBy = object(pr.merged_by, 'pull request merged_by')
+  const mergeSha = string(pr.merge_commit_sha, 'pull request merge_commit_sha')
+  const headSha = string(head.sha, 'pull request head sha')
+  const prFiles = await paginatedFiles(`/repos/${repositoryName}/pulls/${String(prNumber)}/files`)
+  const mergeCommit = object(await api(`/repos/${repositoryName}/commits/${mergeSha}`), 'merge commit')
+  const headCommit = object(await api(`/repos/${repositoryName}/commits/${headSha}`), 'head commit')
+  const commit = object(mergeCommit.commit, 'merge commit payload')
+  const verification = object(commit.verification, 'merge commit verification')
+  const compare = object(await api(`/repos/${repositoryName}/compare/${mergeSha}...${mainCommit}`), 'authorization ancestry')
+  const parentDiffFiles = files(mergeCommit.files, 'merge commit files')
+  const remoteActivation = await repositoryFile('.github/release-policy/activation.json', mergeSha)
+  const remoteReceipt = await repositoryFile('.github/release-policy/receipt.json', mergeSha)
+  const remoteSignature = await repositoryFile('.github/release-policy/receipt.json.sig', mergeSha)
+  return {
+    pr: integer(pr.number, 'pull request number'),
+    baseRef: string(base.ref, 'pull request base ref'),
+    baseRepositoryId: integer(baseRepository.id, 'pull request base repository id'),
+    headRepositoryId: integer(headRepository.id, 'pull request head repository id'),
+    headSha,
+    headTreeSha: string(object(object(headCommit.commit, 'head commit payload').tree, 'head tree').sha, 'head tree sha'),
+    mergeSha,
+    merged: pr.merged === true,
+    mergedBy: {
+      login: string(mergedBy.login, 'pull request merged_by login'),
+      type: string(mergedBy.type, 'pull request merged_by type'),
+    },
+    changedFileCount: integer(pr.changed_files, 'pull request changed_files'),
+    prFiles,
+    mergeCommit: {
+      sha: string(mergeCommit.sha, 'merge commit sha'),
+      verificationVerified: verification.verified === true,
+      verificationReason: string(verification.reason, 'merge commit verification reason'),
+      committerLogin: string(object(mergeCommit.committer, 'merge commit committer').login, 'merge commit committer login'),
+      parents: array(mergeCommit.parents, 'merge commit parents')
+        .map((parent, index) => string(object(parent, `merge parent ${String(index)}`).sha, 'merge parent sha')),
+      treeSha: string(object(commit.tree, 'merge commit tree').sha, 'merge commit tree sha'),
+      parentDiffFiles,
+    },
+    reachableFromMain: ['ahead', 'identical'].includes(string(compare.status, 'authorization ancestry status')),
+    activationDigest: byteDigest(remoteActivation),
+    receiptBundleDigest: receiptBundleDigest(remoteReceipt, remoteSignature),
+  }
+}
+
+async function paginatedFiles(path: string): Promise<readonly AuthorizationFile[]> {
+  const result: AuthorizationFile[] = []
+  for (let page = 1; ; page += 1) {
+    const batch = array(await publicApi(`${path}?per_page=100&page=${String(page)}`), 'pull request files')
+    result.push(...files(batch, 'pull request files'))
+    if (batch.length < 100) return result
+  }
+}
+
+async function repositoryFile(path: string, ref: string): Promise<Buffer> {
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+  const value = object(
+    await api(`/repos/${repositoryName}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`),
+    `repository file ${path}`,
+  )
+  if (value.type !== 'file' || value.encoding !== 'base64') throw new Error(`Repository path ${path} is not a base64 file.`)
+  return Buffer.from(string(value.content, `repository file ${path} content`).replaceAll('\n', ''), 'base64')
+}
+
+async function api(path: string): Promise<unknown> {
+  const response = await request(path)
+  if (!response.ok) throw new Error(`GitHub API ${String(response.status)} for ${path}.`)
+  return await json(response)
+}
+
+async function publicApi(path: string): Promise<unknown> {
+  const response = await fetch(`https://api.github.com${path}`, { headers: publicHeaders() })
+  if (!response.ok) throw new Error(`Public GitHub API ${String(response.status)} for ${path}.`)
+  return await json(response)
+}
+
+async function request(path: string): Promise<Response> {
+  return await fetch(`https://api.github.com${path}`, { headers: headers(token as string) })
+}
+
+async function json(response: Response): Promise<unknown> {
+  return await response.json() as unknown
+}
+
+function headers(value: string): Record<string, string> {
+  return {
+    Accept: 'application/vnd.github+json',
+    Authorization: `Bearer ${value}`,
+    'X-GitHub-Api-Version': '2022-11-28',
+  }
+}
+
+function publicHeaders(): Record<string, string> {
+  return { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }
+}
+
+function repositoryIdentity(value: Record<string, unknown>): PolicyRepositoryIdentity {
+  const owner = object(value.owner, 'repository.owner')
+  const ownerType = string(owner.type, 'repository.owner.type')
+  if (ownerType !== 'User') throw new Error('Repository owner must remain a personal User account; use break-glass after transfer.')
+  return {
+    id: integer(value.id, 'repository.id'),
+    name: string(value.name, 'repository.name'),
+    owner: { login: string(owner.login, 'repository.owner.login'), type: ownerType },
+  }
+}
+
+function files(value: unknown, name: string): readonly AuthorizationFile[] {
+  return array(value, name).map((entry, index) => {
+    const file = object(entry, `${name}[${String(index)}]`)
+    return {
+      path: string(file.filename, `${name}.filename`),
+      status: string(file.status, `${name}.status`),
+      previousPath: file.previous_filename === undefined
+        ? null
+        : string(file.previous_filename, `${name}.previous_filename`),
+    }
+  })
+}
+
+function array(value: unknown, name: string): readonly unknown[] {
+  if (!Array.isArray(value)) throw new Error(`${name} must be an array.`)
+  return value
+}
+
+function object(value: unknown, name: string): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${name} must be an object.`)
+  }
+  return value as Record<string, unknown>
+}
+
+function string(value: unknown, name: string): string {
+  if (typeof value !== 'string' || value === '') throw new Error(`${name} must be a string.`)
+  return value
+}
+
+function integer(value: unknown, name: string): number {
+  if (!Number.isInteger(value)) throw new Error(`${name} must be an integer.`)
+  return Number(value)
+}
+
+function stringMap(value: unknown, name: string): Readonly<Record<string, string>> {
+  const result = object(value, name)
+  if (Object.values(result).some(entry => typeof entry !== 'string')) throw new Error(`${name} values must be strings.`)
+  return result as Readonly<Record<string, string>>
+}

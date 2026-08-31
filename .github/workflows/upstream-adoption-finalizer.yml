@@ -1,0 +1,567 @@
+name: Finalize qualified upstream adoption
+
+on:
+  repository_dispatch:
+    types: [upstream-adoption-detect, upstream-adoption-candidate, upstream-adoption-finalize, upstream-adoption-publication-verified]
+  workflow_dispatch:
+    inputs:
+      validation_run:
+        description: Exact successful validation run ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-adoption-finalizer
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    if: github.repository == 'mintgao/dsh-desktop' && github.event.action == 'upstream-adoption-detect'
+    environment: mint-finalizer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: finalizer-token
+        with:
+          app-id: ${{ vars.MINT_FINALIZER_APP_ID }}
+          private-key: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+      - name: Detect only the oldest unpublished upstream Release
+        env:
+          FINALIZER_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          SIGNING_MODE: ${{ vars.DESKTOP_RELEASE_SIGNING_MODE }}
+        run: |
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          git show "$state_ref:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          test "$(jq -r '.activeDelivery == null' "$RUNNER_TEMP/state.json")" = true
+          current="$(jq -r '.lastPublishedRelease.tag' "$RUNNER_TEMP/state.json")"
+          gh api --paginate 'repos/deepseek-ai/deepseek-harness/releases?per_page=100' --slurp \
+            | jq '[.[][] | {tagName:.tag_name,isDraft:.draft,publishedAt:.published_at} | select(.isDraft == false and (.tagName | startswith("dsh-v")))] | sort_by(.publishedAt)' \
+            > "$RUNNER_TEMP/releases.json"
+          index="$(jq --arg current "$current" 'map(.tagName) | index($current)' "$RUNNER_TEMP/releases.json")"
+          test "$index" != null
+          next="$(jq --argjson index "$index" '.[$index + 1] // empty' "$RUNNER_TEMP/releases.json")"
+          if [[ -z "$next" ]]; then
+            echo 'Every public upstream Release is already published.' >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          upstream_tag="$(jq -r '.tagName' <<< "$next")"
+          published_at="$(jq -r '.publishedAt' <<< "$next")"
+          git fetch https://github.com/deepseek-ai/deepseek-harness.git "refs/tags/$upstream_tag:refs/tags/$upstream_tag"
+          upstream_commit="$(git rev-parse "$upstream_tag^{commit}")"
+          release="$(pnpm exec tsx scripts/upstream-adoption/cli.ts resolve-release "$upstream_tag" "${SIGNING_MODE:-unsigned-preview}")"
+          desktop_tag="$(jq -r '.desktopTag' <<< "$release")"
+          mode="$(jq -r '.mode' <<< "$release")"
+          current_main="$(git rev-parse refs/remotes/origin/main)"
+          jq \
+            --arg upstream_tag "$upstream_tag" --arg upstream_commit "$upstream_commit" --arg published_at "$published_at" \
+            --arg desktop_tag "$desktop_tag" --arg mode "$mode" --arg input_key "$(printf pending | sha256sum | cut -d ' ' -f 1)" \
+            --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg updated_by "${{ vars.MINT_FINALIZER_APP_SLUG }}" --argjson run "$GITHUB_RUN_ID" \
+            '.revision += 1 | .activeDelivery={upstream:{tag:$upstream_tag,commit:$upstream_commit,publishedAt:$published_at},desktopTag:$desktop_tag,mode:$mode,phase:"detected",candidate:null,validation:null,artifacts:null,attempt:{ordinal:1,inputKey:$input_key,trigger:"scheduled",forceReason:null},failure:null,publicationRun:null,paused:false} | .updatedAt=$updated_at | .updatedBy=$updated_by | .updateRunId=$run' \
+            "$RUNNER_TEMP/state.json" > "$RUNNER_TEMP/next-state.json"
+          input_key="$(pnpm exec tsx scripts/upstream-adoption/cli.ts input-key "$RUNNER_TEMP/next-state.json" "$current_main")"
+          jq --arg input_key "$input_key" '.activeDelivery.attempt.inputKey=$input_key' "$RUNNER_TEMP/next-state.json" > "$RUNNER_TEMP/final-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-transition "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/final-state.json"
+          state_dir="$RUNNER_TEMP/adoption-state"
+          git worktree add "$state_dir" "$state_ref"
+          cp "$RUNNER_TEMP/final-state.json" "$state_dir/state/upstream-adoption.json"
+          git -C "$state_dir" config user.name "${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]"
+          git -C "$state_dir" config user.email "${{ vars.MINT_FINALIZER_APP_ID }}+${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]@users.noreply.github.com"
+          git -C "$state_dir" add state/upstream-adoption.json
+          git -C "$state_dir" commit -m "chore(release): detect $upstream_tag"
+          commit="$(git -C "$state_dir" rev-parse HEAD)"
+          git remote set-url origin "https://x-access-token:${FINALIZER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "$commit:refs/heads/automation/upstream-adoption-state"
+
+  record-candidate:
+    if: github.repository == 'mintgao/dsh-desktop' && github.event.action == 'upstream-adoption-candidate'
+    environment: mint-finalizer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: finalizer-token
+        with:
+          app-id: ${{ vars.MINT_FINALIZER_APP_ID }}
+          private-key: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+      - name: Record exact candidate head and single-use nonce
+        env:
+          FINALIZER_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_QUEUE_HEAD: ${{ github.event.client_payload.queue_head }}
+        run: |
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          git show "$state_ref:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          queue_head="$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")"
+          test "$REQUESTED_QUEUE_HEAD" = "$queue_head"
+          candidate_branch="automation/adopt/${queue_head//[^0-9A-Za-z._-]/-}"
+          git fetch origin "refs/heads/$candidate_branch:refs/remotes/origin/$candidate_branch"
+          base="$(git rev-parse refs/remotes/origin/main)"
+          head="$(git rev-parse refs/remotes/origin/$candidate_branch)"
+          pr="$(gh pr list --head "$candidate_branch" --state open --json number --jq '.[0].number')"
+          test -n "$pr"
+          request_path=".github/upstream-adoption-requests/${queue_head//[^0-9A-Za-z._-]/-}.json"
+          prior_request="$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")"
+          request=null
+          request_exists=false
+          phase=candidate-open
+          if git cat-file -e "$head:$request_path" 2>/dev/null; then
+            request="\"$request_path\""
+            request_exists=true
+            phase=adoption-blocked
+          elif [[ -n "$prior_request" ]]; then
+            request="\"$prior_request\""
+          fi
+          if [[ "$phase" == candidate-open ]] && ! git merge-base --is-ancestor "$base" "$head"; then
+            phase=candidate-stale
+          fi
+          mapfile -t changed < <(git diff --name-only "$base" "$head" | sort)
+          protected=()
+          mapfile -t protected_patterns < <(jq -r '.paths[]' .github/upstream-adoption/protected-paths.json)
+          for path in "${changed[@]}"; do
+            for pattern in "${protected_patterns[@]}"; do
+              if [[ "$path" == $pattern ]]; then protected+=("$path"); break; fi
+            done
+          done
+          protected_json="$(printf '%s\n' "${protected[@]}" | sed '/^$/d' | jq -R . | jq -s .)"
+          controller_owned="$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/status" | jq -r --arg login "${{ vars.MINT_CONTROLLER_APP_SLUG }}[bot]" '[.statuses[] | select(.context == "dsh/upstream-adoption/controller-head" and .state == "success" and .creator.login == $login and .creator.type == "Bot")][0].sha // empty')"
+          human_edited=true
+          if [[ "$controller_owned" == "$head" ]]; then human_edited=false; fi
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$pr/reviews?per_page=100" --slurp | jq '[.[][]]' > "$RUNNER_TEMP/reviews.json"
+          approved_head=''
+          mapfile -t approvers < <(jq -r --arg head "$head" 'sort_by(.id) | group_by(.user.login) | map(last)[] | select(.state == "APPROVED" and .commit_id == $head) | .user.login' "$RUNNER_TEMP/reviews.json")
+          for approver in "${approvers[@]}"; do
+            permission="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$approver/permission" --jq '.permission')"
+            if [[ "$permission" == admin || "$permission" == maintain ]]; then approved_head="$head"; break; fi
+          done
+          approval_required=false
+          if [[ "$human_edited" == true || "$(jq 'length' <<< "$protected_json")" != 0 || -n "$prior_request" ]]; then approval_required=true; fi
+          if [[ "$phase" == candidate-open && "$approval_required" == true && "$approved_head" != "$head" ]]; then
+            phase=adoption-blocked
+          fi
+          nonce="$(openssl rand -hex 32)"
+          failure=null
+          if [[ "$phase" == adoption-blocked && "$request_exists" == true ]]; then
+            fingerprint="$(git show "$head:$request_path" | jq -c '{phase:"adoption-blocked",stage:"merge",failureClass:"conflict",conflictPaths}' | sha256sum | cut -d ' ' -f 1)"
+            failure="$(jq -n --arg fingerprint "$fingerprint" '{kind:"deterministic",stage:"merge",failureClass:"conflict",fingerprint:$fingerprint,retryCount:0,nextRetryAt:null}')"
+          elif [[ "$phase" == adoption-blocked && "$approval_required" == true && "$approved_head" != "$head" ]]; then
+            jq -n --arg phase "$phase" --arg stage approval --arg failureClass exact-head-maintainer-approval '{phase:$phase,stage:$stage,failureClass:$failureClass}' > "$RUNNER_TEMP/approval-fingerprint.json"
+            fingerprint="$(pnpm exec tsx scripts/upstream-adoption/cli.ts failure-fingerprint "$RUNNER_TEMP/approval-fingerprint.json")"
+            failure="$(jq -n --arg fingerprint "$fingerprint" '{kind:"deterministic",stage:"approval",failureClass:"exact-head-maintainer-approval",fingerprint:$fingerprint,retryCount:0,nextRetryAt:null}')"
+          elif [[ "$phase" == candidate-stale ]]; then
+            jq -n --arg phase "$phase" --arg stage candidate --arg failureClass base-moved '{phase:$phase,stage:$stage,failureClass:$failureClass}' > "$RUNNER_TEMP/stale-fingerprint.json"
+            fingerprint="$(pnpm exec tsx scripts/upstream-adoption/cli.ts failure-fingerprint "$RUNNER_TEMP/stale-fingerprint.json")"
+            failure="$(jq -n --arg fingerprint "$fingerprint" --arg retry "$(date -u -d '+30 minutes' +%Y-%m-%dT%H:%M:%SZ)" '{kind:"transient",stage:"candidate",failureClass:"base-moved",fingerprint:$fingerprint,retryCount:0,nextRetryAt:$retry}')"
+          elif [[ "$(jq -r '.activeDelivery.failure.kind // empty' "$RUNNER_TEMP/state.json")" == transient ]]; then
+            failure="$(jq -c '.activeDelivery.failure' "$RUNNER_TEMP/state.json")"
+          fi
+          jq \
+            --arg phase "$phase" --arg branch "$candidate_branch" --argjson pr "$pr" --arg base "$base" --arg head "$head" \
+            --argjson human_edited "$human_edited" --argjson protected "$protected_json" --arg approved "${approved_head:-}" --argjson request "$request" --arg nonce "$nonce" --argjson failure "$failure" \
+            --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg updated_by "${{ vars.MINT_FINALIZER_APP_SLUG }}" --argjson run "$GITHUB_RUN_ID" \
+            '.revision += 1 | .activeDelivery.phase=$phase | .activeDelivery.candidate={branch:$branch,pr:$pr,baseCommit:$base,headCommit:$head,humanEdited:$human_edited,protectedPathsChanged:$protected,approvedHead:(if $approved=="" then null else $approved end),requestPath:$request} | .activeDelivery.validation={nonce:$nonce,consumed:false,runId:null,runAttempt:null,receiptArtifact:null,receiptDigest:null} | .activeDelivery.artifacts=null | .activeDelivery.failure=$failure | .activeDelivery.attempt.ordinal += 1 | .updatedAt=$updated_at | .updatedBy=$updated_by | .updateRunId=$run' \
+            "$RUNNER_TEMP/state.json" > "$RUNNER_TEMP/next-state.json"
+          input_key="$(pnpm exec tsx scripts/upstream-adoption/cli.ts input-key "$RUNNER_TEMP/next-state.json" "$base")"
+          jq --arg input_key "$input_key" '.activeDelivery.attempt.inputKey=$input_key' "$RUNNER_TEMP/next-state.json" > "$RUNNER_TEMP/final-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-transition "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/final-state.json"
+          state_dir="$RUNNER_TEMP/adoption-state"
+          git worktree add "$state_dir" "$state_ref"
+          cp "$RUNNER_TEMP/final-state.json" "$state_dir/state/upstream-adoption.json"
+          git -C "$state_dir" config user.name "${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]"
+          git -C "$state_dir" config user.email "${{ vars.MINT_FINALIZER_APP_ID }}+${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]@users.noreply.github.com"
+          git -C "$state_dir" add state/upstream-adoption.json
+          git -C "$state_dir" commit -m "chore(release): record candidate for $queue_head"
+          commit="$(git -C "$state_dir" rev-parse HEAD)"
+          git remote set-url origin "https://x-access-token:${FINALIZER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "$commit:refs/heads/automation/upstream-adoption-state"
+          if [[ "$phase" == candidate-open ]]; then
+            GH_TOKEN="$FINALIZER_TOKEN" gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" -f event_type=upstream-adoption-validate -f "client_payload[input_key]=$input_key" -f "client_payload[queue_head]=$queue_head"
+          else
+            GH_TOKEN="$FINALIZER_TOKEN" gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" -f event_type=upstream-adoption-project-state -f "client_payload[queue_head]=$queue_head"
+          fi
+
+  finalize:
+    if: github.repository == 'mintgao/dsh-desktop' && (github.event_name == 'workflow_dispatch' || github.event.action == 'upstream-adoption-finalize')
+    environment: mint-finalizer
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fail closed until release policy activation
+        run: |
+          jq -e '.schemaVersion == 1 and .status == "active"' .github/release-policy/activation.json
+          test -s .github/release-policy/receipt.json
+          test -s .github/release-policy/receipt.json.sig
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: finalizer-token
+        with:
+          app-id: ${{ vars.MINT_FINALIZER_APP_ID }}
+          private-key: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+
+      - name: Verify owner-authenticated policy receipt
+        env:
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+        run: |
+          pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts \
+            .github/release-policy/activation.json \
+            .github/release-policy/receipt.json \
+            finalizer \
+            "$RUNNER_TEMP/runtime-policy-facts.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy \
+            .github/release-policy/activation.json \
+            .github/release-policy/receipt.json \
+            .github/release-policy/receipt.json.sig \
+            "$RUNNER_TEMP/runtime-policy-facts.json"
+
+      - name: Fetch authoritative state and validation receipt
+        env:
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          VALIDATION_RUN: ${{ inputs.validation_run || github.event.client_payload.validation_run }}
+        run: |
+          test -n "$VALIDATION_RUN"
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          git show "$state_ref:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VALIDATION_RUN" > "$RUNNER_TEMP/validation-run.json"
+          jq -e --argjson repository "$GITHUB_REPOSITORY_ID" '
+            .repository.id == $repository
+            and .path == ".github/workflows/upstream-adoption-validation.yml"
+            and .event == "repository_dispatch"
+            and .conclusion == "success"
+          ' "$RUNNER_TEMP/validation-run.json"
+          gh run download "$VALIDATION_RUN" --name validation-attempt-context --dir "$RUNNER_TEMP/validation-attempt-context"
+          jq -e \
+            --argjson run "$VALIDATION_RUN" \
+            --argjson attempt "$(jq -r '.run_attempt' "$RUNNER_TEMP/validation-run.json")" \
+            --arg state_ref_commit "$(git rev-parse "$state_ref")" \
+            --argjson state_revision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+            --arg input_key "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+            --arg candidate_commit "$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")" \
+            --arg base_commit "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")" \
+            --arg upstream_commit "$(jq -r '.activeDelivery.upstream.commit' "$RUNNER_TEMP/state.json")" \
+            --arg desktop_tag "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" \
+            '
+              .schemaVersion == 1
+              and .kind == "validation"
+              and .runId == $run
+              and .runAttempt == $attempt
+              and .stateRefCommit == $state_ref_commit
+              and .stateRevision == $state_revision
+              and .inputKey == $input_key
+              and .candidateCommit == $candidate_commit
+              and .baseCommit == $base_commit
+              and .upstreamCommit == $upstream_commit
+              and .desktopTag == $desktop_tag
+            ' "$RUNNER_TEMP/validation-attempt-context/validation-attempt-context.json"
+          gh run download "$VALIDATION_RUN" --name validation-receipt --dir "$RUNNER_TEMP/validation-receipt"
+          test -s "$RUNNER_TEMP/validation-receipt/receipt.json"
+
+      - name: Re-derive finalization facts
+        env:
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          REVIEW_TOKEN: ${{ github.token }}
+        run: |
+          candidate_branch="$(jq -r '.activeDelivery.candidate.branch' "$RUNNER_TEMP/state.json")"
+          candidate_head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$candidate_branch" --jq '.object.sha')"
+          upstream_commit="$(jq -r '.activeDelivery.upstream.commit' "$RUNNER_TEMP/state.json")"
+          upstream_tag="$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")"
+          git fetch origin "refs/heads/$candidate_branch:refs/remotes/origin/$candidate_branch"
+          git fetch https://github.com/deepseek-ai/deepseek-harness.git "refs/tags/$upstream_tag:refs/tags/$upstream_tag"
+          tag_commit="$(git rev-parse "$upstream_tag^{commit}")"
+          request_path="$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")"
+          request_exists=false
+          if [[ -n "$request_path" ]] && git cat-file -e "$candidate_head:$request_path" 2>/dev/null; then request_exists=true; fi
+          pr="$(jq -r '.activeDelivery.candidate.pr' "$RUNNER_TEMP/state.json")"
+          GH_TOKEN="$REVIEW_TOKEN" gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$pr/reviews?per_page=100" --slurp | jq '[.[][]]' > "$RUNNER_TEMP/reviews.json"
+          approved_head=''
+          mapfile -t approvers < <(jq -r --arg head "$candidate_head" 'sort_by(.id) | group_by(.user.login) | map(last)[] | select(.state == "APPROVED" and .commit_id == $head) | .user.login' "$RUNNER_TEMP/reviews.json")
+          for approver in "${approvers[@]}"; do
+            permission="$(GH_TOKEN="$REVIEW_TOKEN" gh api "repos/$GITHUB_REPOSITORY/collaborators/$approver/permission" --jq '.permission')"
+            if [[ "$permission" == admin || "$permission" == maintain ]]; then approved_head="$candidate_head"; break; fi
+          done
+          mapfile -t changed < <(git diff --name-only "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")" "$candidate_head" | sort)
+          protected=()
+          mapfile -t protected_patterns < <(jq -r '.paths[]' .github/upstream-adoption/protected-paths.json)
+          for path in "${changed[@]}"; do
+            for pattern in "${protected_patterns[@]}"; do
+              if [[ "$path" == $pattern ]]; then protected+=("$path"); break; fi
+            done
+          done
+          protected_json="$(printf '%s\n' "${protected[@]}" | sed '/^$/d' | jq -R . | jq -s .)"
+          test "$protected_json" = "$(jq -c '.activeDelivery.candidate.protectedPathsChanged' "$RUNNER_TEMP/state.json")"
+          while read -r workflow_path; do
+            test "$(git rev-parse "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json"):$workflow_path")" = "$(git rev-parse "$candidate_head:$workflow_path")"
+          done < <(jq -r '.workflowDigests | keys[]' .github/release-policy/receipt.json)
+          if [[ "$(jq -r '.activeDelivery.candidate.humanEdited' "$RUNNER_TEMP/state.json")" == true || "$(jq 'length' <<< "$protected_json")" != 0 || -n "$request_path" ]]; then
+            test "$approved_head" = "$candidate_head"
+            test "$(jq -r '.activeDelivery.candidate.approvedHead // empty' "$RUNNER_TEMP/state.json")" = "$candidate_head"
+          fi
+          conflict_merge_present=false
+          if [[ -n "$request_path" ]]; then
+            while read -r _commit parents; do
+              for parent in $parents; do
+                if [[ "$parent" == "$upstream_commit" ]]; then conflict_merge_present=true; fi
+              done
+            done < <(git rev-list --merges --parents "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")..$candidate_head")
+            test "$conflict_merge_present" = true
+          fi
+          ancestor=false
+          if git merge-base --is-ancestor "$upstream_commit" "$candidate_head"; then ancestor=true; fi
+          receipt_digest="$(sha256sum "$RUNNER_TEMP/validation-receipt/receipt.json" | cut -d ' ' -f 1)"
+          jq -n \
+            --arg stateRefCommit "$(git rev-parse refs/remotes/origin/automation/upstream-adoption-state)" \
+            --arg currentMain "$(git rev-parse refs/remotes/origin/main)" \
+            --arg candidateHead "$candidate_head" \
+            --arg upstreamTagCommit "$tag_commit" \
+            --arg workflowCommit "$(git rev-parse refs/remotes/origin/main)" \
+            --arg receiptArtifactDigest "$receipt_digest" \
+            --argjson requestFileExists "$request_exists" \
+            --argjson upstreamIsAncestor "$ancestor" \
+            '{stateRefCommit:$stateRefCommit,currentMain:$currentMain,candidateHead:$candidateHead,upstreamTagCommit:$upstreamTagCommit,workflowCommit:$workflowCommit,receiptArtifactDigest:$receiptArtifactDigest,requestFileExists:$requestFileExists,upstreamIsAncestor:$upstreamIsAncestor}' \
+            > "$RUNNER_TEMP/finalization-facts.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-receipt \
+            "$RUNNER_TEMP/state.json" \
+            "$RUNNER_TEMP/validation-receipt/receipt.json" \
+            "$RUNNER_TEMP/finalization-facts.json"
+
+      - name: Prepare release-pending state and immutable tag
+        run: |
+          pnpm exec tsx scripts/upstream-adoption/cli.ts policy-state \
+            .github/release-policy/activation.json \
+            .github/release-policy/receipt.json \
+            .github/release-policy/receipt.json.sig \
+            "$RUNNER_TEMP/runtime-policy-facts.json" > "$RUNNER_TEMP/policy-state.json"
+          receipt_digest="$(sha256sum "$RUNNER_TEMP/validation-receipt/receipt.json" | cut -d ' ' -f 1)"
+          epoch="$(date -u +%s)"
+          validated_at="$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)"
+          artifacts_at="$(date -u -d "@$((epoch + 1))" +%Y-%m-%dT%H:%M:%SZ)"
+          pending_at="$(date -u -d "@$((epoch + 2))" +%Y-%m-%dT%H:%M:%SZ)"
+          expires_at="$(date -u -d '@'$((epoch + 30 * 24 * 60 * 60)) +%Y-%m-%dT%H:%M:%SZ)"
+          jq \
+            --slurpfile policy "$RUNNER_TEMP/policy-state.json" \
+            --arg receipt_digest "$receipt_digest" \
+            --arg updated_at "$validated_at" \
+            --arg updated_by "${{ vars.MINT_FINALIZER_APP_SLUG }}" \
+            --argjson run "$GITHUB_RUN_ID" \
+            --argjson validation_run "$(jq -r '.runId' "$RUNNER_TEMP/validation-receipt/receipt.json")" \
+            --argjson validation_attempt "$(jq -r '.runAttempt' "$RUNNER_TEMP/validation-receipt/receipt.json")" \
+            '.revision += 1 | .policy=$policy[0] | .updatedAt=$updated_at | .updatedBy=$updated_by | .updateRunId=$run | .activeDelivery.phase="candidate-validated" | .activeDelivery.failure=null | .activeDelivery.validation.consumed=true | .activeDelivery.validation.runId=$validation_run | .activeDelivery.validation.runAttempt=$validation_attempt | .activeDelivery.validation.receiptArtifact="validation-receipt" | .activeDelivery.validation.receiptDigest=$receipt_digest' \
+            "$RUNNER_TEMP/state.json" > "$RUNNER_TEMP/state-validated.json"
+          jq \
+            --arg updated_at "$artifacts_at" --arg updated_by "${{ vars.MINT_FINALIZER_APP_SLUG }}" --argjson run "$GITHUB_RUN_ID" --arg expires_at "$expires_at" \
+            --arg artifact_name "$(jq -r '.artifactName' "$RUNNER_TEMP/validation-receipt/receipt.json")" --arg manifest_digest "$(jq -r '.manifestDigest' "$RUNNER_TEMP/validation-receipt/receipt.json")" --arg source_commit "$(jq -r '.sourceCommit' "$RUNNER_TEMP/validation-receipt/receipt.json")" --arg workflow_commit "$(jq -r '.workflowCommit' "$RUNNER_TEMP/validation-receipt/receipt.json")" \
+            --argjson validation_run "$(jq -r '.runId' "$RUNNER_TEMP/validation-receipt/receipt.json")" --argjson validation_attempt "$(jq -r '.runAttempt' "$RUNNER_TEMP/validation-receipt/receipt.json")" \
+            '.revision += 1 | .updatedAt=$updated_at | .updatedBy=$updated_by | .updateRunId=$run | .activeDelivery.phase="artifacts-validated" | .activeDelivery.artifacts={artifactName:$artifact_name,manifestDigest:$manifest_digest,sourceCommit:$source_commit,workflowCommit:$workflow_commit,runId:$validation_run,runAttempt:$validation_attempt,expiresAt:$expires_at}' \
+            "$RUNNER_TEMP/state-validated.json" > "$RUNNER_TEMP/state-artifacts.json"
+          jq --arg updated_at "$pending_at" --arg updated_by "${{ vars.MINT_FINALIZER_APP_SLUG }}" --argjson run "$GITHUB_RUN_ID" '.revision += 1 | .updatedAt=$updated_at | .updatedBy=$updated_by | .updateRunId=$run | .activeDelivery.phase="release-pending" | .activeDelivery.publicationRun=null' "$RUNNER_TEMP/state-artifacts.json" > "$RUNNER_TEMP/next-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-transition "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/state-validated.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-transition "$RUNNER_TEMP/state-validated.json" "$RUNNER_TEMP/state-artifacts.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-transition "$RUNNER_TEMP/state-artifacts.json" "$RUNNER_TEMP/next-state.json"
+
+      - name: Atomically finalize main, desktop tag, and protected state
+        env:
+          FINALIZER_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+        run: |
+          candidate_head="$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")"
+          desktop_tag="$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")"
+          upstream_tag="$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")"
+          state_dir="$RUNNER_TEMP/adoption-state"
+          git worktree add "$state_dir" refs/remotes/origin/automation/upstream-adoption-state
+          git -C "$state_dir" config user.name "${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]"
+          git -C "$state_dir" config user.email "${{ vars.MINT_FINALIZER_APP_ID }}+${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]@users.noreply.github.com"
+          for transition in state-validated state-artifacts next-state; do
+            cp "$RUNNER_TEMP/$transition.json" "$state_dir/state/upstream-adoption.json"
+            git -C "$state_dir" add state/upstream-adoption.json
+            git -C "$state_dir" commit -m "chore(release): $transition for $upstream_tag"
+          done
+          state_commit="$(git -C "$state_dir" rev-parse HEAD)"
+          git tag -a "$desktop_tag" "$candidate_head" -m "DSH Desktop Mint ${desktop_tag#desktop-v} from $upstream_tag"
+          git remote set-url origin "https://x-access-token:${FINALIZER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --atomic origin \
+            "$candidate_head:refs/heads/main" \
+            "refs/tags/$desktop_tag:refs/tags/$desktop_tag" \
+            "$state_commit:refs/heads/automation/upstream-adoption-state"
+
+  complete-publication:
+    if: github.repository == 'mintgao/dsh-desktop' && github.event.action == 'upstream-adoption-publication-verified'
+    environment: mint-finalizer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fail closed until release policy activation
+        run: |
+          jq -e '.schemaVersion == 1 and .status == "active"' .github/release-policy/activation.json
+          test -s .github/release-policy/receipt.json
+          test -s .github/release-policy/receipt.json.sig
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: finalizer-token
+        with:
+          app-id: ${{ vars.MINT_FINALIZER_APP_ID }}
+          private-key: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+      - name: Verify policy, public Release, and qualified bundle
+        env:
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          PUBLICATION_RUN: ${{ github.event.client_payload.publication_run }}
+        run: |
+          test -n "$PUBLICATION_RUN"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$PUBLICATION_RUN" > "$RUNNER_TEMP/publication-run.json"
+          jq -e --argjson repository "$GITHUB_REPOSITORY_ID" '
+            .repository.id == $repository
+            and .path == ".github/workflows/desktop-release.yml"
+            and .event == "repository_dispatch"
+            and .conclusion == "success"
+          ' "$RUNNER_TEMP/publication-run.json"
+          pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts .github/release-policy/activation.json .github/release-policy/receipt.json finalizer "$RUNNER_TEMP/runtime-policy-facts.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy .github/release-policy/activation.json .github/release-policy/receipt.json .github/release-policy/receipt.json.sig "$RUNNER_TEMP/runtime-policy-facts.json"
+          git fetch origin refs/heads/automation/upstream-adoption-state --tags
+          git show refs/remotes/origin/automation/upstream-adoption-state:state/upstream-adoption.json > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          phase="$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")"
+          [[ "$phase" == release-pending || "$phase" == publication-blocked ]]
+          gh run download "$PUBLICATION_RUN" --name publication-attempt-context --dir "$RUNNER_TEMP/publication-attempt-context"
+          jq -e \
+            --argjson run "$PUBLICATION_RUN" \
+            --argjson attempt "$(jq -r '.run_attempt' "$RUNNER_TEMP/publication-run.json")" \
+            --arg state_ref_commit "$(git rev-parse refs/remotes/origin/automation/upstream-adoption-state)" \
+            --argjson state_revision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+            --arg input_key "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+            --arg release_tag "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" \
+            --arg source_commit "$(jq -r '.activeDelivery.artifacts.sourceCommit' "$RUNNER_TEMP/state.json")" \
+            --argjson validation_run "$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")" \
+            '
+              .schemaVersion == 1
+              and .kind == "publication"
+              and .runId == $run
+              and .runAttempt == $attempt
+              and .stateRefCommit == $state_ref_commit
+              and .stateRevision == $state_revision
+              and .inputKey == $input_key
+              and .releaseTag == $release_tag
+              and .sourceCommit == $source_commit
+              and .validationRun == $validation_run
+            ' "$RUNNER_TEMP/publication-attempt-context/publication-attempt-context.json"
+          release_tag="$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")"
+          source_commit="$(jq -r '.activeDelivery.artifacts.sourceCommit' "$RUNNER_TEMP/state.json")"
+          test "$(git rev-parse "$release_tag^{commit}")" = "$source_commit"
+          gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,assets,body > "$RUNNER_TEMP/public-release.json"
+          jq -e --arg tag "$release_tag" '.isDraft == false and .tagName == $tag' "$RUNNER_TEMP/public-release.json"
+          validation_run="$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$validation_run" > "$RUNNER_TEMP/validation-run.json"
+          jq -e --argjson repository "$GITHUB_REPOSITORY_ID" '
+            .repository.id == $repository
+            and .path == ".github/workflows/upstream-adoption-validation.yml"
+            and .event == "repository_dispatch"
+            and .conclusion == "success"
+          ' "$RUNNER_TEMP/validation-run.json"
+          gh run download "$validation_run" --name desktop-bundle --dir "$RUNNER_TEMP/bundle"
+          gh run download "$validation_run" --name validation-receipt --dir "$RUNNER_TEMP/validation-receipt"
+          test "$(sha256sum "$RUNNER_TEMP/bundle/artifact-manifest.json" | cut -d ' ' -f 1)" = "$(jq -r '.activeDelivery.artifacts.manifestDigest' "$RUNNER_TEMP/state.json")"
+          test "$(sha256sum "$RUNNER_TEMP/validation-receipt/receipt.json" | cut -d ' ' -f 1)" = "$(jq -r '.activeDelivery.validation.receiptDigest' "$RUNNER_TEMP/state.json")"
+          jq -e --argjson run "$validation_run" --arg source "$source_commit" --arg tag "$release_tag" \
+            --arg manifest "$(jq -r '.activeDelivery.artifacts.manifestDigest' "$RUNNER_TEMP/state.json")" '
+              .runId == $run and .sourceCommit == $source and .desktopTag == $tag and .manifestDigest == $manifest
+            ' "$RUNNER_TEMP/validation-receipt/receipt.json"
+          jq -e --slurpfile manifest "$RUNNER_TEMP/bundle/artifact-manifest.json" '([.assets[].name] | sort) == ($manifest[0] | map(.name) | sort)' "$RUNNER_TEMP/public-release.json"
+          mkdir "$RUNNER_TEMP/public-assets"
+          gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/public-assets"
+          jq -r '.[] | [.sha256,.name] | @tsv' "$RUNNER_TEMP/bundle/artifact-manifest.json" | while IFS=$'\t' read -r sha name; do
+            test "$(sha256sum "$RUNNER_TEMP/public-assets/$name" | cut -d ' ' -f 1)" = "$sha"
+          done
+          latest=false
+          if [[ "$(jq -r '.activeDelivery.mode' "$RUNNER_TEMP/state.json")" == signed-stable ]]; then
+            test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')" = "$release_tag"
+            latest=true
+          fi
+          jq -n \
+            --arg tag "$release_tag" --arg target "$source_commit" \
+            --argjson prerelease "$(jq '.isPrerelease' "$RUNNER_TEMP/public-release.json")" --argjson latest "$latest" \
+            --arg notes "$(jq -r '.body' "$RUNNER_TEMP/public-release.json")" \
+            --slurpfile assets "$RUNNER_TEMP/bundle/artifact-manifest.json" \
+            '{tag:$tag,targetCommit:$target,draft:false,prerelease:$prerelease,latest:$latest,notes:$notes,assets:$assets[0]}' \
+            > "$RUNNER_TEMP/public-object.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts verify-release "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/public-object.json" "$RUNNER_TEMP/bundle/artifact-manifest.json" public
+          jq -n --slurpfile release "$RUNNER_TEMP/public-object.json" --slurpfile assets "$RUNNER_TEMP/bundle/artifact-manifest.json" \
+            '{release:$release[0],assets:$assets[0]}' > "$RUNNER_TEMP/publication-evidence.json"
+      - name: Advance published cursor by compare-and-swap
+        env:
+          FINALIZER_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+        run: |
+          publication_receipt="$(sha256sum "$RUNNER_TEMP/publication-evidence.json" | cut -d ' ' -f 1)"
+          jq \
+            --arg publication_receipt "$publication_receipt" \
+            --arg updated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg updated_by "${{ vars.MINT_FINALIZER_APP_SLUG }}" \
+            --argjson run "$GITHUB_RUN_ID" \
+            '.revision += 1 | .lastPublishedRelease=(.activeDelivery.upstream + {desktopTag:.activeDelivery.desktopTag,desktopCommit:.activeDelivery.artifacts.sourceCommit,publicationReceipt:$publication_receipt}) | .activeDelivery=null | .updatedAt=$updated_at | .updatedBy=$updated_by | .updateRunId=$run' \
+            "$RUNNER_TEMP/state.json" > "$RUNNER_TEMP/next-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/next-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-transition "$RUNNER_TEMP/state.json" "$RUNNER_TEMP/next-state.json"
+          state_dir="$RUNNER_TEMP/adoption-state"
+          git worktree add "$state_dir" refs/remotes/origin/automation/upstream-adoption-state
+          cp "$RUNNER_TEMP/next-state.json" "$state_dir/state/upstream-adoption.json"
+          git -C "$state_dir" config user.name "${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]"
+          git -C "$state_dir" config user.email "${{ vars.MINT_FINALIZER_APP_ID }}+${{ vars.MINT_FINALIZER_APP_SLUG }}[bot]@users.noreply.github.com"
+          git -C "$state_dir" add state/upstream-adoption.json
+          git -C "$state_dir" commit -m "chore(release): record verified publication"
+          state_commit="$(git -C "$state_dir" rev-parse HEAD)"
+          git remote set-url origin "https://x-access-token:${FINALIZER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "$state_commit:refs/heads/automation/upstream-adoption-state"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" \
+            -f event_type=upstream-adoption-project-success \
+            -f "client_payload[queue_head]=$(jq -r '.lastPublishedRelease.tag' "$RUNNER_TEMP/next-state.json")" \
+            -f "client_payload[desktop_tag]=$(jq -r '.lastPublishedRelease.desktopTag' "$RUNNER_TEMP/next-state.json")"
