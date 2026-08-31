@@ -29,12 +29,12 @@ open_context_circuit() {
   printf -v body 'Phase: `control-plane-blocked`\nFailure: `%s` run `%s` failed before its protected attempt context was available.\nInput key: `%s`\nAutomation: Scheduled reconciliations are successful no-ops until this circuit-breaker Issue is closed or the Controller is manually resumed.\n\nRecovery: inspect the failed bootstrap job, repair the runner or control plane, then manually resume the Controller with the exact queue head and a reason.' "$stage" "$run_id" "$input_key"
   issue="$(issue_number_by_title "$title" open)"
   if [[ -z "$issue" ]]; then
-    gh issue create --title "$title" --body "$body" >/dev/null
+    gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" >/dev/null
     return
   fi
-  current="$(gh issue view "$issue" --json title,body --jq '[.title,.body] | @tsv')"
+  current="$(gh issue view "$issue" --repo "$GITHUB_REPOSITORY" --json title,body --jq '[.title,.body] | @tsv')"
   desired="$(printf '%s\t%s' "$title" "$body")"
-  if [[ "$current" != "$desired" ]]; then gh issue edit "$issue" --title "$title" --body "$body" >/dev/null; fi
+  if [[ "$current" != "$desired" ]]; then gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" >/dev/null; fi
 }
 open_attempt_blocker() {
   local stage="$1"
@@ -46,12 +46,12 @@ open_attempt_blocker() {
   printf -v body 'Queue head: `%s`\nPhase: `%s-blocked`\nFailure: the exact protected attempt run `%s` failed.\nInput key: `%s`\nAutomation: unchanged scheduled reconciliations are successful no-ops.\n\nRecovery: inspect the failed run, fix the blocker or change an authoritative input, then manually dispatch the Controller with this exact queue head and a reason.' "$queue_head" "$stage" "$run_id" "$input_key"
   issue="$(issue_number_by_title "$title" open)"
   if [[ -z "$issue" ]]; then
-    gh issue create --title "$title" --body "$body" >/dev/null
+    gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" >/dev/null
     return
   fi
-  current="$(gh issue view "$issue" --json title,body --jq '[.title,.body] | @tsv')"
+  current="$(gh issue view "$issue" --repo "$GITHUB_REPOSITORY" --json title,body --jq '[.title,.body] | @tsv')"
   desired="$(printf '%s\t%s' "$title" "$body")"
-  if [[ "$current" != "$desired" ]]; then gh issue edit "$issue" --title "$title" --body "$body" >/dev/null; fi
+  if [[ "$current" != "$desired" ]]; then gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body" >/dev/null; fi
 }
 abort_conflicted_merge() {
   local stage="$1"
@@ -83,13 +83,13 @@ retry_completed_cleanup() {
   issue="$(issue_number_by_title "$blocked_title" open)"
   if [[ -n "$issue" ]]; then
     body="Delivered \`$delivered_queue\` as verified public Release \`$delivered_desktop\`. The protected publication cursor has advanced; later upstream Releases remain ordered behind it."
-    gh issue edit "$issue" --body "$body" || return 1
-    gh issue close "$issue" --reason completed || return 1
+    gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --body "$body" || return 1
+    gh issue close "$issue" --repo "$GITHUB_REPOSITORY" --reason completed || return 1
   fi
   candidate_branch="automation/adopt/${delivered_queue//[^0-9A-Za-z._-]/-}"
-  pr="$(gh pr list --head "$candidate_branch" --state open --json number --jq '.[0].number // empty')"
+  pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$candidate_branch" --state open --json number --jq '.[0].number // empty')"
   if [[ -n "$pr" ]]; then
-    gh pr close "$pr" --comment "Delivered as $delivered_desktop after verified publication." || return 1
+    gh pr close "$pr" --repo "$GITHUB_REPOSITORY" --comment "Delivered as $delivered_desktop after verified publication." || return 1
   fi
   if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$candidate_branch" >/dev/null 2>&1; then
     gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$candidate_branch" || return 1
@@ -109,7 +109,7 @@ matching_attempt_run() {
     run_conclusion="$(jq -r '.conclusion // empty' <<< "$run")"
     artifact_dir="$RUNNER_TEMP/$artifact_name-$run_id"
     artifact_path="$artifact_dir/$artifact_name.json"
-    if gh run download "$run_id" --name "$artifact_name" --dir "$artifact_dir" >/dev/null 2>&1; then
+    if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir "$artifact_dir" >/dev/null 2>&1; then
       if jq -e --slurpfile expected "$expected_path" '$expected[0] == (del(.runId,.runAttempt))' "$artifact_path" >/dev/null; then
         if [[ "$run_status" == queued || "$run_status" == in_progress || "$run_status" == waiting ]]; then
           printf 'active:%s\n' "$run_id"
@@ -145,7 +145,7 @@ if [[ -n "$circuit_issue" && "$RESUME" != true ]]; then
   exit 0
 fi
 if [[ -n "$circuit_issue" && "$RESUME" == true ]]; then
-  gh issue close "$circuit_issue" --reason completed
+  gh issue close "$circuit_issue" --repo "$GITHUB_REPOSITORY" --reason completed
 fi
 if ! retry_completed_cleanup; then
   echo 'Verified publication cleanup is still incomplete; the next scheduled reconcile will retry the same exact debt without failing this run.' >> "$GITHUB_STEP_SUMMARY"
@@ -198,7 +198,7 @@ if [[ "$phase" == release-pending || "$phase" == publication-blocked ]]; then
     esac
     exit 0
   fi
-  active="$(gh run list --workflow desktop-release.yml --limit 20 --json status --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting")] | length')"
+  active="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow desktop-release.yml --limit 20 --json status --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting")] | length')"
   if [[ "$active" == 0 ]]; then
     gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" -f event_type=upstream-adoption-publish -f "client_payload[input_key]=$input_key" -f "client_payload[release_tag]=$release_tag" -f "client_payload[validation_run]=$validation_run"
   else
@@ -237,7 +237,7 @@ if [[ "$phase" == candidate-open ]]; then
     esac
     exit 0
   fi
-  active_validation="$(gh run list --workflow upstream-adoption-validation.yml --limit 20 --json status --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting")] | length')"
+  active_validation="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow upstream-adoption-validation.yml --limit 20 --json status --jq '[.[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting")] | length')"
   if [[ "$active_validation" != 0 ]]; then
     echo 'Candidate validation is active; reconciliation is a successful no-op.' >> "$GITHUB_STEP_SUMMARY"
     exit 0
@@ -327,7 +327,7 @@ if [[ "$controller_wrote" == true ]]; then
     -f description='Candidate head last written by the Controller App' \
     -f "target_url=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 fi
-pr="$(gh pr list --head "$candidate_branch" --state all --json number --jq '.[0].number // empty')"
+pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$candidate_branch" --state all --json number --jq '.[0].number // empty')"
 if [[ -z "$pr" ]]; then
   pr="$(gh api --method POST "repos/$GITHUB_REPOSITORY/pulls" \
     -f base=main \
@@ -342,10 +342,10 @@ if git cat-file -e "refs/remotes/origin/$candidate_branch:$request_path" 2>/dev/
   issue="$(issue_number_by_title "$title" open)"
   printf -v body 'Queue head: %s\nPinned commit: %s\nIntegration PR: #%s\nPhase: adoption-blocked\nRecovery: follow %s on the candidate branch, remove the request after the exact merge, and push without force.' "$queue_head" "$upstream_commit" "$pr" "$request_path"
   if [[ -z "$issue" ]]; then
-    gh issue create --title "$title" --body "$body"
+    gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
   else
-    current_body="$(gh issue view "$issue" --json body --jq '.body')"
-    if [[ "$current_body" != "$body" ]]; then gh issue edit "$issue" --title "$title" --body "$body"; fi
+    current_body="$(gh issue view "$issue" --repo "$GITHUB_REPOSITORY" --json body --jq '.body')"
+    if [[ "$current_body" != "$body" ]]; then gh issue edit "$issue" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; fi
   fi
 fi
 gh api --method POST "repos/$GITHUB_REPOSITORY/dispatches" -f event_type=upstream-adoption-candidate -f "client_payload[queue_head]=$queue_head" -F "client_payload[pr]=$pr"
