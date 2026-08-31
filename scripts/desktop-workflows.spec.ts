@@ -267,18 +267,27 @@ describe('transactional upstream adoption workflows', () => {
     }
   })
 
-  it('protects the state ref with pull-request review while preserving only the Finalizer bypass', () => {
+  it('protects main and state with attributed exact-head review while preserving only the Finalizer state bypass', () => {
     const manifest = JSON.parse(readFileSync(resolve(root, '.github/upstream-adoption/rulesets.json'), 'utf8')) as Record<string, unknown>
     const rulesets = manifest.rulesets
     if (!Array.isArray(rulesets)) throw new Error('ruleset manifest requires rulesets')
-    const state = rulesets.map(value => asRecord(value, 'ruleset')).find(value => value.name === 'Mint adoption state')
+    const records = rulesets.map(value => asRecord(value, 'ruleset'))
+    const main = records.find(value => value.name === 'Mint main finalization')
+    const state = records.find(value => value.name === 'Mint adoption state')
     if (state === undefined || !Array.isArray(state.rules) || !Array.isArray(state.bypass)) throw new Error('state ruleset is incomplete')
-    const pullRequest = state.rules.map(value => asRecord(value, 'rule')).find(value => value.type === 'pull_request')
-    expect(asRecord(pullRequest, 'pull request rule').parameters).toMatchObject({
-      dismiss_stale_reviews_on_push: true,
-      require_last_push_approval: true,
-      required_approving_review_count: 1,
-    })
+    if (main === undefined || !Array.isArray(main.rules)) throw new Error('main ruleset is incomplete')
+    for (const ruleset of [main, state]) {
+      const rules = ruleset.rules
+      if (!Array.isArray(rules)) throw new Error('reviewed ruleset has no rules')
+      const pullRequest = rules.map(value => asRecord(value, 'rule')).find(value => value.type === 'pull_request')
+      expect(asRecord(pullRequest, 'pull request rule').parameters).toMatchObject({
+        dismiss_stale_reviews_on_push: true,
+        require_extra_approval_for_unattributed_changes: true,
+        require_last_push_approval: true,
+        required_approving_review_count: 1,
+        required_reviewers: [],
+      })
+    }
     expect(state.bypass).toEqual([{ actor: 'Mint State Finalizer', mode: 'always' }])
   })
 
