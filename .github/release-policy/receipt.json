@@ -1,1 +1,311 @@
-{}
+{
+  "schemaVersion": 1,
+  "receiptId": "9b403f84-bb67-492a-a6f5-03b6c7fcf6e3",
+  "sequence": 1,
+  "authorizationPr": 30,
+  "predecessor": null,
+  "repository": {
+    "id": 1344813014,
+    "name": "dsh-desktop",
+    "owner": {
+      "login": "mintgao",
+      "type": "User"
+    }
+  },
+  "issuedAt": "2026-08-31T17:54:59.000Z",
+  "expiresAt": "2026-09-29T17:54:59.000Z",
+  "issuer": {
+    "login": "mintgao",
+    "fingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
+  },
+  "rotationOrdinal": 1,
+  "stateRef": "refs/heads/automation/upstream-adoption-state",
+  "apps": [
+    {
+      "role": "controller",
+      "slug": "mint-adoption-controller",
+      "id": 4782984,
+      "installationId": 158011022,
+      "permissions": {
+        "issues": "write",
+        "actions": "write",
+        "contents": "write",
+        "metadata": "read",
+        "statuses": "write",
+        "workflows": "write",
+        "pull_requests": "write"
+      }
+    },
+    {
+      "role": "finalizer",
+      "slug": "mint-state-finalizer",
+      "id": 4783001,
+      "installationId": 158010848,
+      "permissions": {
+        "actions": "write",
+        "contents": "write",
+        "metadata": "read",
+        "workflows": "write"
+      }
+    },
+    {
+      "role": "publisher",
+      "slug": "mint-release-publisher",
+      "id": 4783016,
+      "installationId": 158010627,
+      "permissions": {
+        "contents": "write",
+        "metadata": "read"
+      }
+    }
+  ],
+  "environments": [
+    {
+      "id": 20943898496,
+      "name": "mint-finalizer",
+      "protection": {
+        "protectionRules": [
+          {
+            "id": 64196836,
+            "node_id": "GA_kwDOUCg31s4D05Dk",
+            "type": "branch_policy"
+          }
+        ],
+        "deploymentBranchPolicy": {
+          "protectedBranches": true,
+          "customBranchPolicies": false
+        }
+      },
+      "secretNames": [
+        "MINT_FINALIZER_APP_PRIVATE_KEY"
+      ]
+    },
+    {
+      "id": 20943901530,
+      "name": "mint-publication",
+      "protection": {
+        "protectionRules": [
+          {
+            "id": 64196846,
+            "node_id": "GA_kwDOUCg31s4D05Du",
+            "type": "branch_policy"
+          }
+        ],
+        "deploymentBranchPolicy": {
+          "protectedBranches": true,
+          "customBranchPolicies": false
+        }
+      },
+      "secretNames": [
+        "MINT_PUBLISHER_APP_PRIVATE_KEY"
+      ]
+    },
+    {
+      "id": 20943900570,
+      "name": "mint-signing",
+      "protection": {
+        "protectionRules": [
+          {
+            "id": 64196842,
+            "node_id": "GA_kwDOUCg31s4D05Dq",
+            "type": "branch_policy"
+          }
+        ],
+        "deploymentBranchPolicy": {
+          "protectedBranches": true,
+          "customBranchPolicies": false
+        }
+      },
+      "secretNames": []
+    }
+  ],
+  "rulesets": [
+    {
+      "id": 21944549,
+      "name": "Mint main finalization",
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "~DEFAULT_BRANCH"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 1,
+            "dismiss_stale_reviews_on_push": true,
+            "required_reviewers": [],
+            "require_code_owner_review": false,
+            "require_last_push_approval": true,
+            "required_review_thread_resolution": true,
+            "require_extra_approval_for_unattributed_changes": true,
+            "allowed_merge_methods": [
+              "merge",
+              "squash",
+              "rebase"
+            ]
+          }
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "updatedAt": "2026-09-01T01:12:18.665+08:00",
+      "bypassActors": [
+        {
+          "actorType": "Integration",
+          "displayName": "Mint State Finalizer",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 21944557,
+      "name": "Mint adoption state",
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/heads/automation/upstream-adoption-state"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        },
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 1,
+            "dismiss_stale_reviews_on_push": true,
+            "required_reviewers": [],
+            "require_code_owner_review": false,
+            "require_last_push_approval": true,
+            "required_review_thread_resolution": true,
+            "require_extra_approval_for_unattributed_changes": true,
+            "allowed_merge_methods": [
+              "squash"
+            ]
+          }
+        }
+      ],
+      "updatedAt": "2026-09-01T01:12:30.382+08:00",
+      "bypassActors": [
+        {
+          "actorType": "Integration",
+          "displayName": "Mint State Finalizer",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 21944569,
+      "name": "Mint adoption candidates",
+      "target": "branch",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/heads/automation/adopt/*"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "updatedAt": "2026-09-01T01:12:41.767+08:00",
+      "bypassActors": [
+        {
+          "actorType": "Integration",
+          "displayName": "Mint Adoption Controller",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 21944575,
+      "name": "Mint desktop tag creation",
+      "target": "tag",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/tags/desktop-v*"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "creation"
+        }
+      ],
+      "updatedAt": "2026-09-01T01:12:53.671+08:00",
+      "bypassActors": [
+        {
+          "actorType": "RepositoryRole",
+          "displayName": "maintain",
+          "bypassMode": "always"
+        },
+        {
+          "actorType": "Integration",
+          "displayName": "Mint State Finalizer",
+          "bypassMode": "always"
+        }
+      ]
+    },
+    {
+      "id": 21944588,
+      "name": "Mint desktop tag immutability",
+      "target": "tag",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/tags/desktop-v*"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "update"
+        },
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "updatedAt": "2026-09-01T01:13:08.297+08:00",
+      "bypassActors": []
+    }
+  ],
+  "workflowDigests": {
+    ".github/workflows/desktop-release.yml": "cfbe634f87ad183a12bbe7fab4745e1e4e65faaf3831aaf0095e40de1f2e9daa",
+    ".github/workflows/upstream-adoption-controller.yml": "8f1dd23aab3fd5336dfbfd30fd9027b175420e539b1dcc0baf015a5a06be2a3d",
+    ".github/workflows/upstream-adoption-finalizer.yml": "c1123725e9f7dff4fecfba8cb3354fdb09d35f6f22aace9713085c9483a68cfd",
+    ".github/workflows/upstream-adoption-observer.yml": "ac2f6a2bef1357405e82344abd0e1ba8c878ed1fae4e2c2742634ba8ce4e0ec7",
+    ".github/workflows/upstream-adoption-preflight.yml": "ce7c4262b5d920bce9d2dc1e43fc2b4b6b501045591da2814a78477648acd377",
+    ".github/workflows/upstream-adoption-validation.yml": "cb05adcd0fce2e2eee926629b67a51f88440738d09b1c6a73bb7526728d883b6"
+  },
+  "generatorVersion": "dsh-release-policy-v1"
+}

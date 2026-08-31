@@ -1,4 +1,20 @@
 {
   "schemaVersion": 1,
-  "status": "unconfigured"
+  "status": "active",
+  "repository": {
+    "id": 1344813014,
+    "name": "dsh-desktop",
+    "owner": {
+      "login": "mintgao",
+      "type": "User"
+    }
+  },
+  "authorizationPr": 30,
+  "rotationOrdinal": 1,
+  "signer": {
+    "identity": "mintgao",
+    "publicKey": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE8cqvx6TRcX/4xPFcwKRJhLVzQ4Evkem7h6uBa3BHOM mintgao dsh release policy 2026-09-01",
+    "fingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
+  },
+  "previousActivation": null
 }
