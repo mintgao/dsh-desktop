@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { githubAppJwt } from './github-app-auth.ts'
-import { policyWorkflowPaths } from './policy.ts'
+import { canonicalPolicyTimestamp, policyWorkflowPaths } from './policy.ts'
 
 interface GeneratorConfig {
   readonly repository: string
@@ -142,7 +142,10 @@ for (const expectedValue of expectedRulesets) {
     enforcement: string(ruleset.enforcement, `${name}.enforcement`),
     conditions: ruleset.conditions,
     rules: ruleset.rules,
-    updatedAt: string(ruleset.updated_at, `${name}.updated_at`),
+    updatedAt: canonicalPolicyTimestamp(
+      string(ruleset.updated_at, `${name}.updated_at`),
+      `${name}.updated_at`,
+    ),
     bypassActors: array(ruleset.bypass_actors, `${name}.bypass_actors`).map((value) => {
       const actor = object(value, `${name}.bypass_actor`)
       const actorType = string(actor.actor_type, 'bypass actor type')
