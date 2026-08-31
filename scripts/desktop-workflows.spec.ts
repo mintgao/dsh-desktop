@@ -40,6 +40,7 @@ describe('transactional upstream adoption workflows', () => {
     expect(text).toContain('gh api --method POST "repos/$GITHUB_REPOSITORY/pulls"')
     expect(text).not.toContain('gh pr create')
     expect(text.indexOf('statuses/$candidate_head')).toBeLessThan(text.indexOf('repos/$GITHUB_REPOSITORY/pulls"'))
+    expect(text).toContain('git push origin "$candidate_branch:refs/heads/$candidate_branch"\n    controller_wrote=true')
     expect(text).toContain('gh issue create')
     expect(text).toContain('attempt-decision')
     expect(text).toContain('Known blocker:')
