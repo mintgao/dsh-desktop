@@ -300,6 +300,7 @@ if git ls-remote --exit-code origin "refs/heads/$candidate_branch" >/dev/null 2>
     fi
     git remote set-url origin "https://x-access-token:${CONTROLLER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
     git push origin "$candidate_branch:refs/heads/$candidate_branch"
+    controller_wrote=true
   fi
 else
   git switch --create "$candidate_branch" origin/main
@@ -317,10 +318,6 @@ else
   git push origin "$candidate_branch:refs/heads/$candidate_branch"
   controller_wrote=true
 fi
-pr="$(gh pr list --head "$candidate_branch" --state all --json number --jq '.[0].number // empty')"
-if [[ -z "$pr" ]]; then
-  pr="$(gh pr create --base main --head "$candidate_branch" --title "Adopt $queue_head for DSH Desktop Mint" --body "Pinned upstream commit: \`$upstream_commit\`. This PR is owned by the transactional upstream-adoption state machine." | sed -n 's#.*/pull/##p')"
-fi
 candidate_head="$(git ls-remote origin "refs/heads/$candidate_branch" | cut -f 1)"
 test -n "$candidate_head"
 if [[ "$controller_wrote" == true ]]; then
@@ -328,7 +325,16 @@ if [[ "$controller_wrote" == true ]]; then
     -f state=success \
     -f context=dsh/upstream-adoption/controller-head \
     -f description='Candidate head last written by the Controller App' \
-    -f "target_url=https://github.com/$GITHUB_REPOSITORY/pull/$pr"
+    -f "target_url=https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+fi
+pr="$(gh pr list --head "$candidate_branch" --state all --json number --jq '.[0].number // empty')"
+if [[ -z "$pr" ]]; then
+  pr="$(gh api --method POST "repos/$GITHUB_REPOSITORY/pulls" \
+    -f base=main \
+    -f head="$candidate_branch" \
+    -f title="Adopt $queue_head for DSH Desktop Mint" \
+    -f body="Pinned upstream commit: \`$upstream_commit\`. This PR is owned by the transactional upstream-adoption state machine." \
+    --jq '.number')"
 fi
 request_path=".github/upstream-adoption-requests/${queue_head//[^0-9A-Za-z._-]/-}.json"
 if git cat-file -e "refs/remotes/origin/$candidate_branch:$request_path" 2>/dev/null || git cat-file -e "HEAD:$request_path" 2>/dev/null; then
