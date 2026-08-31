@@ -42,6 +42,11 @@ describe('transactional upstream adoption workflows', () => {
     expect(text.indexOf('statuses/$candidate_head')).toBeLessThan(text.indexOf('repos/$GITHUB_REPOSITORY/pulls"'))
     expect(text).toContain('git push origin "$candidate_branch:refs/heads/$candidate_branch"\n    controller_wrote=true')
     expect(text).toContain('gh issue create')
+    const repositoryScopedCommands = text.match(/\bgh (?:issue|pr|run) [^\n]+/g) ?? []
+    expect(repositoryScopedCommands.length).toBeGreaterThan(0)
+    for (const command of repositoryScopedCommands) {
+      expect(command).toContain('--repo "$GITHUB_REPOSITORY"')
+    }
     expect(text).toContain('attempt-decision')
     expect(text).toContain('Known blocker:')
     expect(text).not.toContain('gh issue comment')
