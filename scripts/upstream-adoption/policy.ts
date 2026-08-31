@@ -208,6 +208,15 @@ export class PolicyError extends Error {
   }
 }
 
+/** Canonicalize a GitHub policy timestamp for exact-instant comparison. */
+export function canonicalPolicyTimestamp(value: string, name: string): string {
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) {
+    throw new PolicyError('policy-drift', `${name} must be a valid timestamp.`)
+  }
+  return new Date(timestamp).toISOString()
+}
+
 /** Return the SHA-256 digest of exact bytes. */
 export function byteDigest(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex')
@@ -865,7 +874,10 @@ function parseRulesets(value: unknown): readonly ReceiptRuleset[] {
       enforcement: nonemptyString(ruleset.enforcement, 'receipt.rulesets.enforcement'),
       conditions: ruleset.conditions,
       rules: ruleset.rules,
-      updatedAt: nonemptyString(ruleset.updatedAt, 'receipt.rulesets.updatedAt'),
+      updatedAt: canonicalPolicyTimestamp(
+        nonemptyString(ruleset.updatedAt, 'receipt.rulesets.updatedAt'),
+        'receipt.rulesets.updatedAt',
+      ),
       bypassActors: ruleset.bypassActors,
     }
   })

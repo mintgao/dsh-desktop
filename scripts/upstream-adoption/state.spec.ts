@@ -398,6 +398,52 @@ describe('owner-authenticated release policy', () => {
     )
   })
 
+  it('compares equivalent ruleset timestamp offsets as the same instant', () => {
+    const signer = signingIdentity()
+    const source = receipt({ issuer: { login: 'mintgao', fingerprint: signer.fingerprint } })
+    const rawReceipt = {
+      ...source,
+      rulesets: source.rulesets.map((ruleset, index) => index === 0
+        ? { ...ruleset, updatedAt: '2026-09-01T01:12:18.665+08:00' }
+        : ruleset),
+    }
+    const receiptBytes = Buffer.from(JSON.stringify(rawReceipt, null, 2) + '\n')
+    const receiptValue = parsePolicyReceipt(rawReceipt)
+    const signature = signReceipt(receiptBytes, signer.privateKeyPath)
+    const activation = activeActivation(signer.publicKey, signer.fingerprint)
+    const activationBytes = Buffer.from(JSON.stringify(activation, null, 2) + '\n')
+    const facts = runtimeFacts(receiptValue, activationBytes, receiptBytes, signature, null)
+
+    expect(receiptValue.rulesets[0]?.updatedAt).toBe('2026-08-31T17:12:18.665Z')
+    expect(() => {
+      assertPolicy(
+        activation,
+        activationBytes,
+        receiptValue,
+        receiptBytes,
+        signature,
+        facts,
+        new Date('2026-09-01T00:00:00Z'),
+      )
+    }).not.toThrow()
+    expect(() => {
+      assertPolicy(
+        activation,
+        activationBytes,
+        receiptValue,
+        receiptBytes,
+        signature,
+        {
+          ...facts,
+          rulesets: facts.rulesets.map((ruleset, index) => index === 0
+            ? { ...ruleset, updatedAt: '2026-08-31T17:12:19.665Z' }
+            : ruleset),
+        },
+        new Date('2026-09-01T00:00:00Z'),
+      )
+    }).toThrow('Runtime-visible ruleset configuration changed')
+  })
+
   it('rejects ambiguous squash authorization and old-receipt rollback after the protected state advances', () => {
     const signer = signingIdentity()
     const initialReceipt = receipt({ issuer: { login: 'mintgao', fingerprint: signer.fingerprint } })

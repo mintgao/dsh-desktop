@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { githubAppJwtFromPrivateKey } from './github-app-auth.ts'
 import {
   byteDigest,
+  canonicalPolicyTimestamp,
   parsePolicyActivation,
   parsePolicyReceipt,
   parseProtectedPolicyState,
@@ -73,7 +74,10 @@ for (const expected of receipt.rulesets) {
     enforcement: string(value.enforcement, 'ruleset.enforcement'),
     conditions: value.conditions,
     rules: value.rules,
-    updatedAt: string(value.updated_at, 'ruleset.updated_at'),
+    updatedAt: canonicalPolicyTimestamp(
+      string(value.updated_at, 'ruleset.updated_at'),
+      'ruleset.updated_at',
+    ),
   })
 }
 
