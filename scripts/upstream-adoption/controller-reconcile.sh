@@ -61,6 +61,15 @@ abort_conflicted_merge() {
   fi
   git merge --abort
 }
+ensure_complete_origin_history() {
+  if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
+    git fetch --unshallow origin
+  fi
+}
+write_conflict_paths() {
+  local output="$1"
+  git diff --name-only --diff-filter=U | sort | jq -R . | jq -s . > "$output"
+}
 retry_completed_cleanup() {
   local delivered_queue delivered_desktop blocked_title issue candidate_branch pr body
   delivered_queue="$(jq -r '.lastPublishedRelease.tag // empty' "$state")"
@@ -240,6 +249,7 @@ if [[ "$phase" == candidate-validated || "$phase" == artifacts-validated ]]; the
   echo 'Trusted finalization is in progress; reconciliation is a successful no-op.' >> "$GITHUB_STEP_SUMMARY"
   exit 0
 fi
+ensure_complete_origin_history
 current_main="$(git rev-parse origin/main)"
 input_key="$(pnpm exec tsx scripts/upstream-adoption/cli.ts input-key "$state" "$current_main")"
 candidate_branch="automation/adopt/${queue_head//[^0-9A-Za-z._-]/-}"
@@ -279,11 +289,12 @@ if git ls-remote --exit-code origin "refs/heads/$candidate_branch" >/dev/null 2>
   git switch --create "$candidate_branch" --track "origin/$candidate_branch"
   if ! git merge-base --is-ancestor origin/main HEAD; then
     if ! git merge --no-ff origin/main -m "chore(release): refresh $queue_head on current main"; then
-      mapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)
+      conflict_paths="$RUNNER_TEMP/base-refresh-conflict-paths.json"
+      write_conflict_paths "$conflict_paths"
       abort_conflicted_merge 'Candidate base refresh'
       request_path=".github/upstream-adoption-requests/${queue_head//[^0-9A-Za-z._-]/-}.json"
       mkdir -p "$(dirname "$request_path")"
-      jq -n --arg upstreamTag "$queue_head" --arg upstreamCommit "$upstream_commit" --arg baseCommit "$current_main" --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$state")" --argjson stateRevision "$(jq -r '.revision' "$state")" --argjson conflictPaths "$(printf '%s\n' "${conflicts[@]}" | jq -R . | jq -s .)" --arg branch "$candidate_branch" '{schemaVersion:1,kind:"base-refresh",upstreamTag:$upstreamTag,upstreamCommit:$upstreamCommit,baseCommit:$baseCommit,desktopTag:$desktopTag,stateRevision:$stateRevision,conflictPaths:$conflictPaths,recovery:["git fetch origin main","git switch "+$branch,"git merge --no-ff origin/main","resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"]}' > "$request_path"
+      jq -n --arg upstreamTag "$queue_head" --arg upstreamCommit "$upstream_commit" --arg baseCommit "$current_main" --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$state")" --argjson stateRevision "$(jq -r '.revision' "$state")" --slurpfile conflictPaths "$conflict_paths" --arg branch "$candidate_branch" '{schemaVersion:1,kind:"base-refresh",upstreamTag:$upstreamTag,upstreamCommit:$upstreamCommit,baseCommit:$baseCommit,desktopTag:$desktopTag,stateRevision:$stateRevision,conflictPaths:$conflictPaths[0],recovery:["git fetch origin main","git switch "+$branch,"git merge --no-ff origin/main","resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"]}' > "$request_path"
       git add "$request_path"
       git commit -m "chore(release): request base refresh for $queue_head"
     fi
@@ -292,12 +303,13 @@ if git ls-remote --exit-code origin "refs/heads/$candidate_branch" >/dev/null 2>
   fi
 else
   git switch --create "$candidate_branch" origin/main
-  if ! git merge --no-ff --allow-unrelated-histories "$upstream_commit" -m "chore: merge upstream DSH $queue_head"; then
-    mapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)
+  if ! git merge --no-ff "$upstream_commit" -m "chore: merge upstream DSH $queue_head"; then
+    conflict_paths="$RUNNER_TEMP/upstream-merge-conflict-paths.json"
+    write_conflict_paths "$conflict_paths"
     abort_conflicted_merge 'Upstream adoption merge'
     request_path=".github/upstream-adoption-requests/${queue_head//[^0-9A-Za-z._-]/-}.json"
     mkdir -p "$(dirname "$request_path")"
-    jq -n --arg upstreamTag "$queue_head" --arg upstreamCommit "$upstream_commit" --arg baseCommit "$current_main" --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$state")" --argjson stateRevision "$(jq -r '.revision' "$state")" --argjson conflictPaths "$(printf '%s\n' "${conflicts[@]}" | jq -R . | jq -s .)" --arg branch "$candidate_branch" '{schemaVersion:1,kind:"upstream-merge",upstreamTag:$upstreamTag,upstreamCommit:$upstreamCommit,baseCommit:$baseCommit,desktopTag:$desktopTag,stateRevision:$stateRevision,conflictPaths:$conflictPaths,recovery:["git fetch upstream refs/tags/"+$upstreamTag,"git switch "+$branch,"git merge --no-ff --allow-unrelated-histories "+$upstreamCommit,"resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"]}' > "$request_path"
+    jq -n --arg upstreamTag "$queue_head" --arg upstreamCommit "$upstream_commit" --arg baseCommit "$current_main" --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$state")" --argjson stateRevision "$(jq -r '.revision' "$state")" --slurpfile conflictPaths "$conflict_paths" --arg branch "$candidate_branch" '{schemaVersion:1,kind:"upstream-merge",upstreamTag:$upstreamTag,upstreamCommit:$upstreamCommit,baseCommit:$baseCommit,desktopTag:$desktopTag,stateRevision:$stateRevision,conflictPaths:$conflictPaths[0],recovery:["git fetch upstream refs/tags/"+$upstreamTag,"git switch "+$branch,"git merge --no-ff "+$upstreamCommit,"resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"]}' > "$request_path"
     git add "$request_path"
     git commit -m "chore(release): request resolution for $queue_head"
   fi
