@@ -236,6 +236,37 @@ describe('transactional upstream adoption workflows', () => {
     }
   })
 
+  it('reads runtime installation facts with the same trusted App credentials that mint each token', () => {
+    const paths = [
+      '.github/workflows/desktop-release.yml',
+      '.github/workflows/upstream-adoption-finalizer.yml',
+      '.github/workflows/upstream-adoption-observer.yml',
+      '.github/workflows/upstream-adoption-preflight.yml',
+      '.github/workflows/upstream-adoption-validation.yml',
+    ]
+    const runtimeSteps = paths.flatMap((path) => {
+      const workflow = workflowDocument(path)
+      return Object.values(asRecord(workflow.jobs, `${path} jobs`)).flatMap((jobValue) => {
+        const job = asRecord(jobValue, `${path} job`)
+        if (!Array.isArray(job.steps)) return []
+        return job.steps
+          .map(step => asRecord(step, `${path} step`))
+          .filter(step => renderStepField(step.run).includes('runtime-facts.ts'))
+      })
+    })
+
+    expect(runtimeSteps).toHaveLength(6)
+    for (const step of runtimeSteps) {
+      const env = asRecord(step.env, 'runtime policy environment')
+      const appId = String(env.GITHUB_APP_ID)
+      const privateKey = String(env.GITHUB_APP_PRIVATE_KEY)
+      const role = /^\$\{\{ vars\.MINT_(FINALIZER|PUBLISHER)_APP_ID \}\}$/u.exec(appId)?.[1]
+      expect(String(env.GH_TOKEN)).toContain('outputs.token')
+      expect(role).toBeDefined()
+      expect(privateKey).toBe(`\${{ secrets.MINT_${String(role)}_APP_PRIVATE_KEY }}`)
+    }
+  })
+
   it('protects the state ref with pull-request review while preserving only the Finalizer bypass', () => {
     const manifest = JSON.parse(readFileSync(resolve(root, '.github/upstream-adoption/rulesets.json'), 'utf8')) as Record<string, unknown>
     const rulesets = manifest.rulesets
@@ -251,9 +282,21 @@ describe('transactional upstream adoption workflows', () => {
     expect(state.bypass).toEqual([{ actor: 'Mint State Finalizer', mode: 'always' }])
   })
 
-  it('ships owner activation in fail-closed unconfigured state', () => {
-    const activation: unknown = JSON.parse(readFileSync(resolve(root, '.github/release-policy/activation.json'), 'utf8'))
-    expect(activation).toEqual({ schemaVersion: 1, status: 'unconfigured' })
+  it('ships the owner-authenticated production activation', () => {
+    const activation = asRecord(
+      JSON.parse(readFileSync(resolve(root, '.github/release-policy/activation.json'), 'utf8')) as unknown,
+      'release policy activation',
+    )
+    const repository = asRecord(activation.repository, 'activation repository')
+    const owner = asRecord(repository.owner, 'activation owner')
+    const signer = asRecord(activation.signer, 'activation signer')
+
+    expect(activation).toMatchObject({ schemaVersion: 1, status: 'active', rotationOrdinal: 1 })
+    expect(Number(activation.authorizationPr)).toBeGreaterThan(0)
+    expect(repository.name).toBe('dsh-desktop')
+    expect(owner).toEqual({ login: 'mintgao', type: 'User' })
+    expect(String(signer.publicKey)).toMatch(/^ssh-ed25519 /u)
+    expect(String(signer.fingerprint)).toMatch(/^SHA256:/u)
   })
 
   it('keeps exceptional manual tags receipt-bound and draft-only', () => {
