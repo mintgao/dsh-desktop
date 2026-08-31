@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "receiptId": "9b403f84-bb67-492a-a6f5-03b6c7fcf6e3",
+  "receiptId": "aa164a02-f7a2-49ab-b9ed-0e761d2fb9bd",
   "sequence": 1,
-  "authorizationPr": 30,
+  "authorizationPr": 32,
   "predecessor": null,
   "repository": {
     "id": 1344813014,
@@ -12,8 +12,8 @@
       "type": "User"
     }
   },
-  "issuedAt": "2026-08-31T17:54:59.000Z",
-  "expiresAt": "2026-09-29T17:54:59.000Z",
+  "issuedAt": "2026-08-31T18:33:50.680Z",
+  "expiresAt": "2026-09-29T18:33:50.680Z",
   "issuer": {
     "login": "mintgao",
     "fingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
@@ -300,12 +300,12 @@
     }
   ],
   "workflowDigests": {
-    ".github/workflows/desktop-release.yml": "cfbe634f87ad183a12bbe7fab4745e1e4e65faaf3831aaf0095e40de1f2e9daa",
+    ".github/workflows/desktop-release.yml": "55a5c1aa4324723617b8b1db09044dff29003e98c3323ac2c659d23f4209c86f",
     ".github/workflows/upstream-adoption-controller.yml": "8f1dd23aab3fd5336dfbfd30fd9027b175420e539b1dcc0baf015a5a06be2a3d",
-    ".github/workflows/upstream-adoption-finalizer.yml": "c1123725e9f7dff4fecfba8cb3354fdb09d35f6f22aace9713085c9483a68cfd",
-    ".github/workflows/upstream-adoption-observer.yml": "ac2f6a2bef1357405e82344abd0e1ba8c878ed1fae4e2c2742634ba8ce4e0ec7",
-    ".github/workflows/upstream-adoption-preflight.yml": "ce7c4262b5d920bce9d2dc1e43fc2b4b6b501045591da2814a78477648acd377",
-    ".github/workflows/upstream-adoption-validation.yml": "cb05adcd0fce2e2eee926629b67a51f88440738d09b1c6a73bb7526728d883b6"
+    ".github/workflows/upstream-adoption-finalizer.yml": "30efd58c68504be6a9549cc34571466b41cadb572ec1e95a0f3bf0299af3d0e9",
+    ".github/workflows/upstream-adoption-observer.yml": "6d8535c4e73b4cfb73d91185b356c1b7a62ff6c9f3c2e67e1956f76f127d1d75",
+    ".github/workflows/upstream-adoption-preflight.yml": "3b26cb54189a250ff9e289ca08a9b65de87fff7791ef9f78a9601eb536f49df1",
+    ".github/workflows/upstream-adoption-validation.yml": "44b7a03d0816eda73079e939cc1af2c75d46c99dc075616cf8a72dc44483c116"
   },
   "generatorVersion": "dsh-release-policy-v1"
 }
