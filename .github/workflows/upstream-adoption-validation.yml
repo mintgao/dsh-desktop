@@ -51,7 +51,7 @@ jobs:
             --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$RUNNER_TEMP/state.json")" \
             '{schemaVersion:1,kind:"validation",runId:$runId,runAttempt:$runAttempt,stateRefCommit:$stateRefCommit,stateRevision:$stateRevision,inputKey:$inputKey,candidateCommit:$candidateCommit,baseCommit:$baseCommit,upstreamCommit:$upstreamCommit,desktopTag:$desktopTag}' \
             > "$RUNNER_TEMP/validation-attempt-context.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name == 'repository_dispatch'
         with:
           name: validation-attempt-context
@@ -230,7 +230,7 @@ jobs:
             --manifest "$manifest" \
             --architecture "$EXPECTED_ARCH" \
             --source-commit "$EXPECTED_SOURCE_COMMIT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: candidate-${{ matrix.arch }}
           path: |
@@ -344,7 +344,7 @@ jobs:
           xcrun stapler staple "$output/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
           xcrun stapler validate "$output/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.dmg"
           COPYFILE_DISABLE=1 tar -C "$RUNNER_TEMP/payload" -czf "$output/signed-app-${{ matrix.arch }}.tar.gz" 'DSH Desktop.app'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: signed-payload-${{ matrix.arch }}
           path: ${{ runner.temp }}/signed-${{ matrix.arch }}/*
@@ -401,7 +401,7 @@ jobs:
           test -s "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
           test -s apps/desktop/dist/latest-mac.yml
           mv apps/desktop/dist/latest-mac.yml "apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: signed-stable-${{ matrix.arch }}
           path: |
@@ -497,13 +497,13 @@ jobs:
             --arg manifestDigest "$manifest_digest" \
             '{schemaVersion:1,nonce:$nonce,stateRefCommit:$stateRefCommit,stateRevision:$stateRevision,inputKey:$inputKey,candidateCommit:$candidateCommit,baseCommit:$baseCommit,upstreamCommit:$upstreamCommit,desktopTag:$desktopTag,mode:$mode,workflowCommit:$workflowCommit,runId:$runId,runAttempt:$runAttempt,conclusion:"success",artifactName:"desktop-bundle",manifestDigest:$manifestDigest,sourceCommit:$candidateCommit}' \
             > receipt.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-bundle
           path: bundle
           if-no-files-found: error
           retention-days: 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: validation-receipt
           path: receipt.json
