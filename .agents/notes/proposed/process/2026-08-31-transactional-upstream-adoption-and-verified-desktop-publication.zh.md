@@ -20,7 +20,7 @@ Status: proposed
 
 ## 状态与 attempt identity
 
-受保护的线性分支 `automation/upstream-adoption-state` 保存 `state/upstream-adoption.json`。只有 State Finalizer App 可以写入；禁止 force push 和删除。Controller 与 Publisher job 只能提交转换请求与证据，不能更新该 ref。受信任 finalizer job 在提交任何转换前验证 schema、当前 ref、单调递增 revision、允许的前后 phase、不可变字段、evidence receipt 与 compare-and-swap base。它归属 detection 与 attempt claim、candidate 与 blocker phase 变化、validation 与 artifact receipt、原子 `release-pending` 转换、publication blocker 以及最终 `published` 推进。Git 历史是状态转换日志，JSON 则包含 schema 版本、单调递增 revision、上游仓库、最后一个完整发布的 Release，以及至多一个 active 队首交付。
+受保护的线性分支 `automation/upstream-adoption-state` 保存 `state/upstream-adoption.json`。只有 State Finalizer App 可以写入；禁止 force push 和删除。Controller 与 Publisher job 只能提交转换请求与证据，不能更新该 ref。controller workflow 绑定受信任 credential 与 input，然后调用 `scripts/upstream-adoption/controller-reconcile.sh`；静态覆盖确保每个 workflow `run` 值都不超过 GitHub 的 21,000 字符解析限制。受信任 finalizer job 在提交任何转换前验证 schema、当前 ref、单调递增 revision、允许的前后 phase、不可变字段、evidence receipt 与 compare-and-swap base。它归属 detection 与 attempt claim、candidate 与 blocker phase 变化、validation 与 artifact receipt、原子 `release-pending` 转换、publication blocker 以及最终 `published` 推进。Git 历史是状态转换日志，JSON 则包含 schema 版本、单调递增 revision、上游仓库、最后一个完整发布的 Release，以及至多一个 active 队首交付。
 
 active 交付记录固定的上游 tag、commit 与发布时间；desktop tag 和信任模式；phase；候选 branch、PR、base 与 head commit、验证 run 和 approval 要求；发布 run 与 draft 状态；当前 attempt；failure；blocker Issue；以及更新 provenance。上游 tag 和 commit 在 detected 后不可更改。tag 被移动或删除属于安全 blocker，而不是 retarget 信号。
 
