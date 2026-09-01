@@ -75,7 +75,7 @@ jobs:
       workflow_commit: ${{ steps.context.outputs.workflow_commit }}
       version: ${{ steps.context.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -155,7 +155,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.candidate }}
           persist-credentials: false
@@ -185,7 +185,7 @@ jobs:
           - arch: x64
             runner: macos-15-intel
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.candidate }}
           persist-credentials: false
@@ -251,7 +251,7 @@ jobs:
     environment: mint-finalizer
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.workflow_commit }}
           fetch-depth: 0
@@ -295,7 +295,7 @@ jobs:
           - arch: x64
             runner: macos-15-intel
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.workflow_commit }}
           persist-credentials: false
@@ -371,7 +371,7 @@ jobs:
           - arch: x64
             runner: macos-15-intel
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.base }}
           persist-credentials: false
@@ -439,7 +439,7 @@ jobs:
       actions: read
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.workflow_commit }}
           persist-credentials: false
