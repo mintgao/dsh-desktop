@@ -142,6 +142,45 @@ describe('upstream adoption state machine', () => {
     }).toThrow('same sequence')
   })
 
+  it('completes publication by projecting the active upstream identity into the cursor', () => {
+    const before = state(activeDelivery({
+      phase: 'publication-blocked',
+      failure: {
+        kind: 'deterministic',
+        stage: 'publication',
+        failureClass: 'failure',
+        fingerprint: 'f'.repeat(64),
+        retryCount: 0,
+        nextRetryAt: null,
+      },
+    }), 1, protectedPolicyState())
+    const delivery = before.activeDelivery!
+    const completed: AdoptionState = {
+      ...before,
+      revision: 2,
+      lastPublishedRelease: {
+        ...delivery.upstream,
+        desktopTag: delivery.desktopTag,
+        desktopCommit: delivery.artifacts!.sourceCommit,
+        publicationReceipt: 'a'.repeat(64),
+      },
+      activeDelivery: null,
+      updatedAt: '2026-08-31T00:01:00Z',
+      updatedBy: 'mint-state-finalizer',
+      updateRunId: 42,
+    }
+
+    expect(() => {
+      assertTransition(before, completed)
+    }).not.toThrow()
+    expect(() => {
+      assertTransition(before, {
+        ...completed,
+        lastPublishedRelease: { ...completed.lastPublishedRelease, commit: 'e'.repeat(40) },
+      })
+    }).toThrow('does not match active delivery')
+  })
+
   it('persists only the next owner-authorized signer rotation', () => {
     const currentPolicy = protectedPolicyState()
     const before = state(activeDelivery(), 1, currentPolicy)

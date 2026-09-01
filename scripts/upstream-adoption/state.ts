@@ -650,7 +650,9 @@ function requireArtifacts(delivery: ActiveDelivery): ArtifactBundleState {
 }
 
 function sameUpstream(left: UpstreamIdentity, right: UpstreamIdentity): boolean {
-  return canonicalJson(left) === canonicalJson(right)
+  return left.tag === right.tag
+    && left.commit === right.commit
+    && left.publishedAt === right.publishedAt
 }
 
 function adoptionPhase(value: unknown): value is AdoptionPhase {
