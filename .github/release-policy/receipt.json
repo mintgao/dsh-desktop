@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "receiptId": "647b8f13-2309-4de6-9d6d-ccfb28aca687",
-  "sequence": 2,
-  "authorizationPr": 55,
+  "receiptId": "e670fa54-d923-44b9-82c2-ef63cf451a0b",
+  "sequence": 3,
+  "authorizationPr": 57,
   "predecessor": {
-    "receiptId": "8068bb08-5029-4235-82ec-99b778dc7ffe",
-    "bundleDigest": "1601d76cf37da518ade1f3d6a5c07c562ad2462a83a602932f35e66945f19e0e"
+    "receiptId": "647b8f13-2309-4de6-9d6d-ccfb28aca687",
+    "bundleDigest": "ab8814ab15c1f674a0e1b848fc242e43f2547e7606d72c5dc619d1431d139a0d"
   },
   "repository": {
     "id": 1344813014,
@@ -15,8 +15,8 @@
       "type": "User"
     }
   },
-  "issuedAt": "2026-09-01T03:35:35.000Z",
-  "expiresAt": "2026-09-29T03:35:35.000Z",
+  "issuedAt": "2026-09-01T04:57:13.000Z",
+  "expiresAt": "2026-09-29T04:57:13.000Z",
   "issuer": {
     "login": "mintgao",
     "fingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
@@ -303,7 +303,7 @@
     }
   ],
   "workflowDigests": {
-    ".github/workflows/desktop-release.yml": "55a5c1aa4324723617b8b1db09044dff29003e98c3323ac2c659d23f4209c86f",
+    ".github/workflows/desktop-release.yml": "20649e0f530ade0a9c3b435e646b4ab9bad338586e4e1d2ae791fcba534f4615",
     ".github/workflows/upstream-adoption-controller.yml": "bdb30c31b6567e1e77e369a09c89e69aee43707dcfc5e2888c1194584a93e3d3",
     ".github/workflows/upstream-adoption-finalizer.yml": "d284b943ed73974a57fcdbf2ad0c3d7a1186e8af9af119a008e2c3d9013607a9",
     ".github/workflows/upstream-adoption-observer.yml": "5851b1bea85806a6eb8acd037f684405370c528038e91bab8dca29652bfd46c9",
