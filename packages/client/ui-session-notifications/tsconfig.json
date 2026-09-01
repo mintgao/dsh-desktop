@@ -9,28 +9,40 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
       "path": "../locale"
     },
     {
-      "path": "../runtime"
+      "path": "../store"
     },
     {
       "path": "../ui-primitives"
     },
     {
-      "path": "../ui-slots"
+      "path": "../ui-renderer"
     },
     {
-      "path": "../../../vendor/cordis"
+      "path": "../ui-session"
+    },
+    {
+      "path": "../ui-settings"
+    },
+    {
+      "path": "../ui-slots"
     },
     {
       "path": "../../settings/settings"
     },
     {
       "path": "../../runtime-diagnostics/invariants"
-    },
-    {
-      "path": "../ui-settings"
     }
   ]
 }

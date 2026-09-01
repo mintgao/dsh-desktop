@@ -1,9 +1,13 @@
 /** Task-completion notification policy over the shared session-list projection. */
 
 import {
-  createSnapshotStore, indexSubagentDescendants, type ISessions, type SessionListState,
-  type SessionId, type SessionSummary, type SettingsScope, type SnapshotStore,
-} from '@deepseek-ai/dsh-client-runtime/client'
+  type ISessions, type SessionListState, type SessionSummary,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   DEFAULT_SESSION_NOTIFICATION_MODE, SESSION_NOTIFICATION_MODE_FIELD,
   type SessionNotificationMode, type SessionNotificationSettings,
@@ -53,6 +57,7 @@ export class TaskNotificationController {
    */
   constructor(
     private readonly sessions: ISessions,
+    private readonly pendingInteractions: HostObservable<SessionPendingInteractionSnapshot>,
     private readonly settings: SettingsScope<SessionNotificationSettings>,
     private readonly presenter: TaskNotificationPresenter,
     private readonly copy: TaskNotificationCopy,
@@ -72,11 +77,13 @@ export class TaskNotificationController {
   start(): () => void {
     const releaseSettings = this.settings.subscribe(() => { this.adoptSettings() })
     const releaseSessions = this.sessions.list.subscribe(() => { this.syncSessions() })
+    const releasePendingInteractions = this.pendingInteractions.subscribe(() => { this.syncSessions() })
     const releaseEnvironment = this.presenter.subscribeEnvironment(() => { this.refreshPermission() })
     this.adoptSettings()
     this.syncSessions()
     return () => {
       releaseEnvironment()
+      releasePendingInteractions()
       releaseSessions()
       releaseSettings()
       for (const notification of this.visible.values()) notification.close()
@@ -136,6 +143,7 @@ export class TaskNotificationController {
     if (state.phase !== 'ready') return
     this.refreshPermission()
     const descendants = indexSubagentDescendants(state.byId)
+    const pendingInteractions = this.pendingInteractions.getSnapshot()
     const seen = new Set<SessionId>()
     for (const id of state.ids) {
       const root = state.byId[id]
@@ -143,7 +151,8 @@ export class TaskNotificationController {
       seen.add(root.id)
       const active = root.running || (descendants.get(root.id)?.runningCount ?? 0) > 0
       const previous = this.roots.get(root.id)
-      if (previous?.active === true && !active && !hasPendingInteraction(root, state)) {
+      if (previous?.active === true && !active
+        && !hasPendingInteraction(root, state, pendingInteractions)) {
         this.notify(root)
       }
       this.roots.set(root.id, { active })
@@ -176,10 +185,15 @@ export class TaskNotificationController {
   }
 }
 
-function hasPendingInteraction(root: SessionSummary, state: SessionListState): boolean {
-  if (root.pendingInteraction !== undefined) return true
-  for (const candidate of Object.values(state.byId)) {
-    if (candidate.pendingInteraction === undefined || candidate.origin !== 'subagent') continue
+function hasPendingInteraction(
+  root: SessionSummary,
+  state: SessionListState,
+  pendingInteractions: SessionPendingInteractionSnapshot,
+): boolean {
+  if (pendingInteractions.has(root.id)) return true
+  for (const sessionId of pendingInteractions.keys()) {
+    const candidate = state.byId[sessionId]
+    if (candidate?.origin !== 'subagent') continue
     const seen = new Set<SessionId>()
     let current: SessionSummary | undefined = candidate
     while (current?.origin === 'subagent' && current.parentId !== undefined
@@ -190,4 +204,35 @@ function hasPendingInteraction(root: SessionSummary, state: SessionListState): b
     }
   }
   return false
+}
+
+interface LineageEntry {
+  readonly id: SessionId
+  readonly parentId?: SessionId
+  readonly origin?: 'subagent'
+  readonly running: boolean
+}
+
+/** Running descendant counts for each uninterrupted subagent ancestor. */
+function indexSubagentDescendants(
+  summaries: Readonly<Record<SessionId, LineageEntry>>,
+): ReadonlyMap<SessionId, { readonly runningCount: number }> {
+  const indexed = new Map<SessionId, { runningCount: number }>()
+  for (const descendant of Object.values(summaries)) {
+    if (descendant.origin !== 'subagent') continue
+    const seen = new Set<SessionId>()
+    let current: LineageEntry | undefined = descendant
+    while (current?.origin === 'subagent' && current.parentId !== undefined
+      && !seen.has(current.id)) {
+      seen.add(current.id)
+      const aggregate = indexed.get(current.parentId)
+      if (aggregate === undefined) {
+        indexed.set(current.parentId, { runningCount: descendant.running ? 1 : 0 })
+      } else if (descendant.running) {
+        indexed.set(current.parentId, { runningCount: aggregate.runningCount + 1 })
+      }
+      current = summaries[current.parentId]
+    }
+  }
+  return indexed
 }

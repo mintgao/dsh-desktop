@@ -10,7 +10,7 @@ English | [中文](2026-08-24-electron-desktop-shell.zh.md)
 
 ## Decision
 
-`apps/desktop` is a private, root-workspace-owned Electron main process rather than another publishable npm workspace. It reuses the official Web composition across a local process boundary. This decision replaces only the hypothetical first-use IPC carrier in [GUI layering and RPC protocol](../architecture/2026-07-19-gui-layering-and-rpc-protocol.md); the client, Host, API Proxy, and plugin layering in that note remains authoritative.
+`apps/desktop` is a private, root-workspace-owned Electron main process rather than another publishable npm workspace. It reuses the official Web composition across a local process boundary. This decision replaces only the hypothetical first-use IPC carrier in [GUI layering and RPC protocol](../../archived/architecture/2026-07-19-gui-layering-and-rpc-protocol.md); the client, Host, API Proxy, and plugin layering in that note remains authoritative.
 
 ### Process and window lifecycle
 

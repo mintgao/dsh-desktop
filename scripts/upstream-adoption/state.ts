@@ -10,21 +10,21 @@ export type AdoptionPhase = 'detected' | 'candidate-open' | 'candidate-stale' | 
 export type ReleaseMode = 'unsigned-preview' | 'signed-preview' | 'signed-stable'
 
 /** Immutable public upstream Release identity. */
-export interface UpstreamIdentity {
+interface UpstreamIdentity {
   readonly tag: string
   readonly commit: string
   readonly publishedAt: string
 }
 
 /** Last publicly verified release cursor. */
-export interface PublishedCursor extends UpstreamIdentity {
+interface PublishedCursor extends UpstreamIdentity {
   readonly desktopTag: string
   readonly desktopCommit: string
   readonly publicationReceipt: string
 }
 
 /** Candidate integration facts bound to validation. */
-export interface CandidateState {
+interface CandidateState {
   readonly branch: string
   readonly pr: number
   readonly baseCommit: string
@@ -36,7 +36,7 @@ export interface CandidateState {
 }
 
 /** Single-use validation nonce state. */
-export interface ValidationState {
+interface ValidationState {
   readonly nonce: string
   readonly consumed: boolean
   readonly runId: number | null
@@ -46,7 +46,7 @@ export interface ValidationState {
 }
 
 /** Artifact bundle qualified before tag creation. */
-export interface ArtifactBundleState {
+interface ArtifactBundleState {
   readonly artifactName: string
   readonly manifestDigest: string
   readonly sourceCommit: string
@@ -57,7 +57,7 @@ export interface ArtifactBundleState {
 }
 
 /** Normalized current failure. */
-export interface FailureState {
+interface FailureState {
   readonly kind: 'deterministic' | 'transient'
   readonly stage: string
   readonly failureClass: string
@@ -67,7 +67,7 @@ export interface FailureState {
 }
 
 /** One claimed attempt. */
-export interface AttemptState {
+interface AttemptState {
   readonly ordinal: number
   readonly inputKey: string
   readonly trigger: 'scheduled' | 'authoritative-change' | 'manual-force'
@@ -183,7 +183,7 @@ export function canonicalJson(value: unknown): string {
 }
 
 /** Return a SHA-256 digest of canonical JSON. */
-export function digest(value: unknown): string {
+function digest(value: unknown): string {
   return createHash('sha256').update(canonicalJson(value)).digest('hex')
 }
 

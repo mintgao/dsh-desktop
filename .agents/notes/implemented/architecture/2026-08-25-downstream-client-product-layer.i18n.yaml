@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-25-downstream-client-product-layer.md
-2026-08-25-downstream-client-product-layer.md: 2885ffdf7657d704b651ea349bc5f0be945766d1
-2026-08-25-downstream-client-product-layer.zh.md: a33fda0d80addd450dc49c7a41e752e641ab7db1
+2026-08-25-downstream-client-product-layer.md: c2d008e3be3f1acc88594e9fd0aff13bb2ce0c2e
+2026-08-25-downstream-client-product-layer.zh.md: a6e19030b69a0f51abdb786fe3a3f59bb12d6110

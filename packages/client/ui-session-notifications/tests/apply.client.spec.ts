@@ -2,10 +2,13 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  createSnapshotStore, SlotRegistry, type ISessions, type SessionListState,
-} from '@deepseek-ai/dsh-client-runtime/client'
+  type ISessions, type SessionListState,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { UiSession } from '@deepseek-ai/dsh-client-ui-session/client'
 import {
   apply, inject, SESSION_NOTIFICATION_LOCALE_NAMESPACE,
 } from '../src/client/index.ts'
@@ -46,7 +49,9 @@ async function bench() {
     ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
   })
   const open = vi.fn()
-  ctx.provide('sessions', { list, open } as unknown as ISessions)
+  const sessions = { list, open } as unknown as ISessions
+  ctx.provide('sessions', sessions)
+  new UiSession(ctx, sessions)
   const settings = stubSettingsScope<SessionNotificationSettings>()
   ctx.provide('settingsScope', { bind: () => settings.scope } as never)
   return { ctx, list, locale, open, settings, slots }
@@ -61,7 +66,7 @@ function declareItems(slots: SlotRegistry): () => void {
 
 describe('ui-session-notifications client apply', () => {
   it('declares the exact service dependencies', () => {
-    expect(inject).toEqual(['slots', 'locale', 'sessions', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'sessions', 'uiSession', 'settingsScope'])
   })
 
   it('registers localized copy and the feature-owned settings row', async () => {

@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  createSnapshotStore, type ISessions, type SessionId, type SessionListState,
-  type SessionSummary,
-} from '@deepseek-ai/dsh-client-runtime/client'
+  type ISessions, type SessionListState, type SessionSummary,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import type {
+  SessionPendingInteraction, SessionPendingInteractionSnapshot,
+} from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   TaskNotificationController, type TaskNotificationPresenter,
   type TaskSystemNotification, type TaskSystemNotificationHandle,
@@ -72,12 +76,23 @@ function bench(
   const feed = createSnapshotStore(initial)
   const open = vi.fn()
   const sessions = { list: feed, open } as unknown as ISessions
+  const pendingInteractions = createSnapshotStore<SessionPendingInteractionSnapshot>(new Map())
   const settings = stubSettingsScope<SessionNotificationSettings>()
-  const controller = new TaskNotificationController(sessions, settings.scope, presenter, {
-    finished: () => 'Task finished',
-  }, defaultMode)
+  const controller = new TaskNotificationController(
+    sessions, pendingInteractions, settings.scope, presenter, {
+      finished: () => 'Task finished',
+    }, defaultMode,
+  )
   const dispose = controller.start()
-  return { controller, dispose, feed, open, presenter, settings }
+  return { controller, dispose, feed, open, pendingInteractions, presenter, settings }
+}
+
+function pendingMap(
+  sessionId: SessionId,
+  kind: 'question' | 'approval' | 'plan-review' = 'approval',
+): SessionPendingInteractionSnapshot {
+  const interaction = { key: `${kind}:${sessionId}`, kind, sessionId } as unknown as SessionPendingInteraction
+  return new Map([[sessionId, interaction]])
 }
 
 describe('TaskNotificationController', () => {
@@ -124,10 +139,13 @@ describe('TaskNotificationController', () => {
     const child = summary('child', { origin: 'subagent', parentId: root.id })
     const grandchild = summary('grandchild', { origin: 'subagent', parentId: child.id })
     const b = bench(list([root, child, grandchild]))
-    b.feed.set(list([{ ...root, running: false, pendingInteraction: 'approval' }, child, grandchild]))
+    b.pendingInteractions.set(pendingMap(root.id))
+    b.feed.set(list([{ ...root, running: false }, child, grandchild]))
     expect(b.presenter.shown).toEqual([])
+    b.pendingInteractions.set(new Map())
     b.feed.set(list([{ ...root, running: true }, child, grandchild]))
-    b.feed.set(list([{ ...root, running: false }, child, { ...grandchild, pendingInteraction: 'question' }]))
+    b.pendingInteractions.set(pendingMap(grandchild.id, 'question'))
+    b.feed.set(list([{ ...root, running: false }, child, grandchild]))
     expect(b.presenter.shown).toEqual([])
   })
 

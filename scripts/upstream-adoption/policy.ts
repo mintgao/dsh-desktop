@@ -41,7 +41,7 @@ export interface PolicyRepositoryIdentity {
 }
 
 /** Unconfigured policy blocks irreversible work while discovery remains quiet. */
-export interface UnconfiguredActivation {
+interface UnconfiguredActivation {
   readonly schemaVersion: 1
   readonly status: 'unconfigured'
 }
@@ -76,7 +76,7 @@ export interface ActiveActivation {
 export type PolicyActivation = UnconfiguredActivation | ActiveActivation
 
 /** Administrator-observed GitHub App configuration. */
-export interface ReceiptApp {
+interface ReceiptApp {
   readonly role: 'controller' | 'finalizer' | 'publisher'
   readonly slug: string
   readonly id: number
@@ -85,7 +85,7 @@ export interface ReceiptApp {
 }
 
 /** Administrator-observed protected environment configuration. */
-export interface ReceiptEnvironment {
+interface ReceiptEnvironment {
   readonly id: number
   readonly name: 'mint-finalizer' | 'mint-publication' | 'mint-signing'
   readonly protection: unknown
@@ -196,7 +196,7 @@ export interface RuntimePolicyFacts {
 }
 
 /** Error with a stable blocker class suitable for state and Issue projection. */
-export class PolicyError extends Error {
+class PolicyError extends Error {
   /** Stable deterministic failure class. */
   readonly failureClass: 'policy-unconfigured' | 'policy-drift' | 'policy-expired' | 'policy-signature'
 

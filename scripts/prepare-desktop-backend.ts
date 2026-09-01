@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { capture, run } from './release/process.ts'
+import { capture, runConcurrent } from './release/process.ts'
 import { releaseFamily, tarballName } from './release/families.ts'
 import { tarballFiles } from './release/tarball.ts'
 
@@ -107,7 +107,7 @@ function verifyContainedLinks(root: string, directory: string): void {
 }
 
 /** Pack the source tree and install its runtime closure into the Electron resource directory. */
-function main(): void {
+async function main(): Promise<void> {
   const root = resolve(import.meta.dirname, '..')
   const target = join(root, 'apps', 'desktop', 'backend')
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'dsh-desktop-pack-'))
@@ -130,7 +130,7 @@ function main(): void {
     }, null, 2)}\n`)
     // Koffi carries its platform binary as an optional dependency, while npm
     // already skips optional packages whose os/cpu declarations exclude macOS.
-    run('npm', ['install', '--no-audit', '--no-fund', '--package-lock=false'], {
+    await runConcurrent('npm', ['install', '--no-audit', '--no-fund', '--package-lock=false'], {
       cwd: target,
       env: process.env,
     })
@@ -152,4 +152,4 @@ function main(): void {
   }
 }
 
-main()
+await main()

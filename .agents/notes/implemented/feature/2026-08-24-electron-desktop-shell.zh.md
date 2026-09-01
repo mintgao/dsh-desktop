@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`apps/desktop` 是由私有根 workspace 持有的 Electron 主进程，而不是另一个可发布的 npm workspace。它跨本地进程边界复用官方 Web 组合。本决策只替换 [GUI 分层与 RPC 协议](../architecture/2026-07-19-gui-layering-and-rpc-protocol.zh.md)中假想的首个 IPC 载体选型；该说明里的客户端、Host、API Proxy 与插件分层仍是当前权威设计。
+`apps/desktop` 是由私有根 workspace 持有的 Electron 主进程，而不是另一个可发布的 npm workspace。它跨本地进程边界复用官方 Web 组合。本决策只替换 [GUI 分层与 RPC 协议](../../archived/architecture/2026-07-19-gui-layering-and-rpc-protocol.md)中假想的首个 IPC 载体选型；该说明里的客户端、Host、API Proxy 与插件分层仍是当前权威设计。
 
 ### 进程与窗口生命周期
 

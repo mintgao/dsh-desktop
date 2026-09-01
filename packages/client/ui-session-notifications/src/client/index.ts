@@ -1,8 +1,11 @@
 /** Browser task-completion notifications and their feature-owned settings row. */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {
   SessionNotificationConfig, SessionNotificationMode, SessionNotificationSettings,
 } from '../notification-settings.ts'
@@ -43,7 +46,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 
 /** Required client services. */
-export const inject = ['slots', 'locale', 'sessions', 'settingsScope']
+export const inject = ['slots', 'locale', 'sessions', 'uiSession', 'settingsScope']
 
 /**
  * Observe the shared session list, present task-completion system notifications,
@@ -51,16 +54,18 @@ export const inject = ['slots', 'locale', 'sessions', 'settingsScope']
  * @param ctx - client Cordis context.
  * @param config - optional local fallback; Host settings carry the product default.
  */
-export function apply(ctx: ClientContext, config: SessionNotificationConfig = {}): void {
+export function apply(ctx: Context, config: SessionNotificationConfig = {}): void {
   const resolved = resolveSessionNotificationConfig(config)
   const settings = ctx.settingsScope.bind<SessionNotificationSettings>({
     namespace: SESSION_NOTIFICATION_SETTINGS_NAMESPACE,
   })
   const presenter = new BrowserTaskNotificationPresenter()
   const t = ctx.locale.bind(SESSION_NOTIFICATION_LOCALE_NAMESPACE)
-  const controller = new TaskNotificationController(ctx.sessions, settings, presenter, {
-    finished: () => t('notification.finished'),
-  }, resolved.defaultMode)
+  const controller = new TaskNotificationController(
+    ctx.sessions, ctx.uiSession.pendingInteractions, settings, presenter, {
+      finished: () => t('notification.finished'),
+    }, resolved.defaultMode,
+  )
 
   ctx.effect(() => ctx.locale.register(
     SESSION_NOTIFICATION_LOCALE_NAMESPACE, { zh, en },
