@@ -2,7 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   DEFAULT_SESSION_NOTIFICATION_MODE, resolveSessionNotificationConfig,
   SESSION_NOTIFICATION_MODES, SESSION_NOTIFICATION_SETTINGS_NAMESPACE,
@@ -33,7 +33,7 @@ export function apply(ctx: Context, config: Config): void {
   const resolved = resolveSessionNotificationConfig(config)
   ctx.inject(['settings'], (settingsCtx) => {
     settingsCtx.settings.register(
-      settingsNamespace(SESSION_NOTIFICATION_SETTINGS_NAMESPACE),
+      SESSION_NOTIFICATION_SETTINGS_NAMESPACE,
       sessionNotificationSettingsSchema(resolved.defaultMode),
     )
   })

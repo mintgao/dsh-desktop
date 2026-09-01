@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop-mint",
   "description": "The DSH Desktop Mint product bundle: desktop-selected DSH plugins and product defaults layered over the shared Web surface",
-  "version": "0.1.2-alpha.1",
+  "version": "0.1.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

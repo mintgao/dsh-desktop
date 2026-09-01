@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-session-notifications",
   "description": "Task-finished system notifications over the shared browser session list, with a feature-owned General settings row",
-  "version": "0.1.2-alpha.1",
+  "version": "0.1.2-alpha.2",
   "publishConfig": {
     "access": "public"
   },

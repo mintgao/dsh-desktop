@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { SettingsProvider, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import {
   Config, DEFAULT_SESSION_NOTIFICATION_MODE, resolveSessionNotificationConfig,
   SESSION_NOTIFICATION_SETTINGS_NAMESPACE, apply,
@@ -20,7 +20,7 @@ describe('ui-session-notifications host', () => {
     await ctx.plugin(MemorySettings).await()
     const fiber = ctx.plugin({ Config, apply }, { defaultMode: 'background' })
     await fiber.await()
-    const ns = settingsNamespace(SESSION_NOTIFICATION_SETTINGS_NAMESPACE)
+    const ns = SESSION_NOTIFICATION_SETTINGS_NAMESPACE
     expect(ctx.settings.get(ns)).toEqual({ mode: 'background' })
     await ctx.settings.update(ns, { mode: 'always' })
     expect(ctx.settings.get(ns)).toEqual({ mode: 'always' })
