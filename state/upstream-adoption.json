@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 2,
+  "revision": 3,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.1-rc.2",
@@ -18,19 +18,22 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.1.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "adoption-blocked",
+    "phase": "candidate-open",
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.1",
       "pr": 44,
       "baseCommit": "dc1a113e19407074b7b6b593fd41590860c6f078",
-      "headCommit": "d5148197f34d6f4a0c15bd94ae8b18dbb4a159d4",
+      "headCommit": "e1a0f1eccd6e037ead8d5940c646c377e5c7276e",
       "humanEdited": true,
-      "protectedPathsChanged": [],
-      "approvedHead": null,
+      "protectedPathsChanged": [
+        "scripts/upstream-adoption/policy.ts",
+        "scripts/upstream-adoption/state.ts"
+      ],
+      "approvedHead": "e1a0f1eccd6e037ead8d5940c646c377e5c7276e",
       "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.1.json"
     },
     "validation": {
-      "nonce": "c8869973c16addd056fa587955fe65289594437379f6a08204150b6029a2dbef",
+      "nonce": "fa710bcc4330e33a5375f941622acf8eb076fed2fc16712b5ee7cb4599472b2c",
       "consumed": false,
       "runId": null,
       "runAttempt": null,
@@ -39,24 +42,17 @@
     },
     "artifacts": null,
     "attempt": {
-      "ordinal": 2,
-      "inputKey": "e4f35d894fc8a60a21427ca8bff1503428af6652395a370d4591a3c0fbe2a98b",
+      "ordinal": 3,
+      "inputKey": "e39bf7438618fd8a70934f4a17bcfbca697d4c66a921532d71f99dd131336109",
       "trigger": "scheduled",
       "forceReason": null
     },
-    "failure": {
-      "kind": "deterministic",
-      "stage": "merge",
-      "failureClass": "conflict",
-      "fingerprint": "e415e7fa92228f578cfa3b3650eab16fe989d2596693d71ac5dac6f35eb072e6",
-      "retryCount": 0,
-      "nextRetryAt": null
-    },
+    "failure": null,
     "publicationRun": null,
     "paused": false
   },
   "policy": null,
-  "updatedAt": "2026-08-31T21:16:29Z",
+  "updatedAt": "2026-09-01T00:22:40Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33440440500
+  "updateRunId": 33454449977
 }
