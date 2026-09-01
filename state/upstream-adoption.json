@@ -1,71 +1,16 @@
 {
   "schemaVersion": 2,
-  "revision": 12,
+  "revision": 13,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
-    "tag": "dsh-v0.1.1-rc.2",
-    "commit": "b150a551b8d465e31e418e1b2eaf5e79bbb7d28e",
-    "publishedAt": "2026-08-21T12:35:08Z",
-    "desktopTag": "desktop-v0.1.0-preview.5",
-    "desktopCommit": "2d173841eb8e7d74cc8702808266482ac8c156a1",
-    "publicationReceipt": "aac847142dab05ab29b82ea3672db3a6fc274b32e36b9c850dc6f892a20f0f01"
-  },
-  "activeDelivery": {
-    "upstream": {
-      "tag": "dsh-v0.1.2-alpha.1",
-      "commit": "cd5ef8148158c3a752a658978873241fdf8e2bbc",
-      "publishedAt": "2026-08-27T17:06:37Z"
-    },
+    "tag": "dsh-v0.1.2-alpha.1",
+    "commit": "cd5ef8148158c3a752a658978873241fdf8e2bbc",
+    "publishedAt": "2026-08-27T17:06:37Z",
     "desktopTag": "desktop-v0.1.2-alpha.1.unsigned.1",
-    "mode": "unsigned-preview",
-    "phase": "publication-blocked",
-    "candidate": {
-      "branch": "automation/adopt/dsh-v0.1.2-alpha.1",
-      "pr": 44,
-      "baseCommit": "553e940cb75c449729cac7cc6cd602482cdc7b33",
-      "headCommit": "2deb703c8446b81c29a0130f6ada236fb99c7c7a",
-      "humanEdited": true,
-      "protectedPathsChanged": [
-        "scripts/upstream-adoption/policy.ts",
-        "scripts/upstream-adoption/state.ts"
-      ],
-      "approvedHead": "2deb703c8446b81c29a0130f6ada236fb99c7c7a",
-      "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.1.json"
-    },
-    "validation": {
-      "nonce": "c4ccbb24dd9286fd6fa8bfb596ae03bbbf62cf69e8f6b9a2a28da3217224708c",
-      "consumed": true,
-      "runId": 33467832481,
-      "runAttempt": 1,
-      "receiptArtifact": "validation-receipt",
-      "receiptDigest": "b39156dcec4dea2e53839c986b522f1dde7388329cf184d9f2fa64696efbd0d5"
-    },
-    "artifacts": {
-      "artifactName": "desktop-bundle",
-      "manifestDigest": "474cf102c91f8388af74315543d91ac939b30ba6c5e64ba9ff15c50387397276",
-      "sourceCommit": "2deb703c8446b81c29a0130f6ada236fb99c7c7a",
-      "workflowCommit": "553e940cb75c449729cac7cc6cd602482cdc7b33",
-      "runId": 33467832481,
-      "runAttempt": 1,
-      "expiresAt": "2026-10-01T04:14:29Z"
-    },
-    "attempt": {
-      "ordinal": 7,
-      "inputKey": "cb79d0bfd5835ce4319bd87039871c4d091f802ac85e948d4a4cb2091c797434",
-      "trigger": "scheduled",
-      "forceReason": null
-    },
-    "failure": {
-      "kind": "deterministic",
-      "stage": "publication",
-      "failureClass": "failure",
-      "fingerprint": "e65f696b9b4d9db6ab3ddce3312e0c10b076502d769e3809737b773d73c0e2ae",
-      "retryCount": 0,
-      "nextRetryAt": null
-    },
-    "publicationRun": 33470292897,
-    "paused": false
+    "desktopCommit": "2deb703c8446b81c29a0130f6ada236fb99c7c7a",
+    "publicationReceipt": "cdded216afc62c98c52496f466cf5240602cebd19abba500a5250f67e3e90c06"
   },
+  "activeDelivery": null,
   "policy": {
     "activation": {
       "rotationOrdinal": 1,
@@ -83,7 +28,7 @@
       "expiresAt": "2026-09-29T03:35:35.000Z"
     }
   },
-  "updatedAt": "2026-09-01T04:37:46Z",
+  "updatedAt": "2026-09-01T05:26:43Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33470494145
+  "updateRunId": 33473551158
 }
