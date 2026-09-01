@@ -2,13 +2,26 @@ name: Verify Mint release policy
 
 on:
   workflow_dispatch:
+    inputs:
+      operation:
+        description: Zero-mutation verification or one-time initial policy-state bootstrap
+        required: true
+        default: verify-only
+        type: choice
+        options:
+          - verify-only
+          - bootstrap-initial-policy
 
 permissions:
   contents: read
 
+concurrency:
+  group: upstream-adoption-finalizer
+  cancel-in-progress: false
+
 jobs:
   verify-only:
-    if: github.repository == 'mintgao/dsh-desktop'
+    if: github.repository == 'mintgao/dsh-desktop' && inputs.operation == 'verify-only'
     environment: mint-finalizer
     runs-on: ubuntu-latest
     steps:
@@ -53,3 +66,127 @@ jobs:
             .github/release-policy/receipt.json.sig \
             "$RUNNER_TEMP/runtime-policy-facts.json"
           echo 'Owner-authenticated release policy passed the zero-mutation preflight.' >> "$GITHUB_STEP_SUMMARY"
+
+  bootstrap-initial-policy:
+    if: github.repository == 'mintgao/dsh-desktop' && inputs.operation == 'bootstrap-initial-policy'
+    environment: mint-finalizer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the initial policy chain
+        run: |
+          jq -e '.schemaVersion == 1 and .status == "active"' .github/release-policy/activation.json
+          jq -e --slurpfile activation .github/release-policy/activation.json '
+            .schemaVersion == 1
+            and .sequence == 1
+            and .predecessor == null
+            and .authorizationPr == $activation[0].authorizationPr
+            and .rotationOrdinal == $activation[0].rotationOrdinal
+          ' .github/release-policy/receipt.json
+          test -s .github/release-policy/receipt.json.sig
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - id: authorize
+        name: Prove exact owner authorization before exposing Finalizer credentials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$GITHUB_REF" = refs/heads/main
+          git fetch origin refs/heads/main refs/heads/automation/upstream-adoption-state
+          test "$GITHUB_SHA" = "$(git rev-parse refs/remotes/origin/main)"
+          pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts \
+            .github/release-policy/activation.json \
+            .github/release-policy/receipt.json \
+            bootstrap-authorization \
+            "$RUNNER_TEMP/bootstrap-authorization.json"
+          authorization_commit="$(jq -r '.authorizationCommit' "$RUNNER_TEMP/bootstrap-authorization.json")"
+          state_commit="$(jq -r '.stateRefCommit' "$RUNNER_TEMP/bootstrap-authorization.json")"
+          test "$state_commit" = "$(git rev-parse refs/remotes/origin/automation/upstream-adoption-state)"
+          history="$RUNNER_TEMP/policy-authorization"
+          git worktree add --detach "$history" "$authorization_commit"
+          for path in activation.json receipt.json receipt.json.sig; do
+            cmp ".github/release-policy/$path" "$history/.github/release-policy/$path"
+          done
+          git show "$state_commit:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          test "$(jq -r '.policy == null' "$RUNNER_TEMP/state.json")" = true
+          echo "authorization_commit=$authorization_commit" >> "$GITHUB_OUTPUT"
+          echo "state_commit=$state_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Install the exact historical verifier without credentials
+        env:
+          AUTHORIZATION_COMMIT: ${{ steps.authorize.outputs.authorization_commit }}
+        run: |
+          history="$RUNNER_TEMP/policy-authorization"
+          test "$AUTHORIZATION_COMMIT" = "$(git -C "$history" rev-parse HEAD)"
+          pnpm --dir "$history" install --frozen-lockfile --ignore-scripts
+
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: finalizer-token
+        with:
+          app-id: ${{ vars.MINT_FINALIZER_APP_ID }}
+          private-key: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+
+      - name: Verify historically and write one protected-state successor
+        env:
+          FINALIZER_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GH_TOKEN: ${{ steps.finalizer-token.outputs.token }}
+          GITHUB_APP_ID: ${{ vars.MINT_FINALIZER_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.MINT_FINALIZER_APP_PRIVATE_KEY }}
+          FINALIZER_APP_ID: ${{ vars.MINT_FINALIZER_APP_ID }}
+          FINALIZER_APP_SLUG: ${{ vars.MINT_FINALIZER_APP_SLUG }}
+          AUTHORIZATION_COMMIT: ${{ steps.authorize.outputs.authorization_commit }}
+          STATE_COMMIT: ${{ steps.authorize.outputs.state_commit }}
+        run: |
+          history="$RUNNER_TEMP/policy-authorization"
+          (
+            cd "$history"
+            pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts \
+              .github/release-policy/activation.json \
+              .github/release-policy/receipt.json \
+              finalizer \
+              "$RUNNER_TEMP/historical-runtime-policy-facts.json"
+            pnpm exec tsx scripts/upstream-adoption/cli.ts policy-state \
+              .github/release-policy/activation.json \
+              .github/release-policy/receipt.json \
+              .github/release-policy/receipt.json.sig \
+              "$RUNNER_TEMP/historical-runtime-policy-facts.json" \
+              > "$RUNNER_TEMP/policy-state.json"
+          )
+          test "$AUTHORIZATION_COMMIT" = "$(git -C "$history" rev-parse HEAD)"
+          test "$STATE_COMMIT" = "$(jq -r '.stateRef.commit' "$RUNNER_TEMP/historical-runtime-policy-facts.json")"
+          test "$(jq -r '.stateRef.policy == null' "$RUNNER_TEMP/historical-runtime-policy-facts.json")" = true
+          updated_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts bootstrap-policy-state \
+            "$RUNNER_TEMP/state.json" \
+            "$RUNNER_TEMP/policy-state.json" \
+            "$updated_at" \
+            "$FINALIZER_APP_SLUG" \
+            "$GITHUB_RUN_ID" \
+            > "$RUNNER_TEMP/next-state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-policy-bootstrap-transition \
+            "$RUNNER_TEMP/state.json" \
+            "$RUNNER_TEMP/next-state.json"
+          state_dir="$RUNNER_TEMP/adoption-state"
+          git worktree add --detach "$state_dir" "$STATE_COMMIT"
+          cp "$RUNNER_TEMP/next-state.json" "$state_dir/state/upstream-adoption.json"
+          git -C "$state_dir" config user.name "$FINALIZER_APP_SLUG[bot]"
+          git -C "$state_dir" config user.email "$FINALIZER_APP_ID+$FINALIZER_APP_SLUG[bot]@users.noreply.github.com"
+          git -C "$state_dir" add state/upstream-adoption.json
+          git -C "$state_dir" commit -m 'chore(release): initialize protected policy state'
+          successor="$(git -C "$state_dir" rev-parse HEAD)"
+          test "$(git -C "$state_dir" rev-parse "$successor^")" = "$STATE_COMMIT"
+          test "$(git -C "$state_dir" diff --name-only "$STATE_COMMIT" "$successor")" = state/upstream-adoption.json
+          git remote set-url origin "https://x-access-token:${FINALIZER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push origin "$successor:refs/heads/automation/upstream-adoption-state"
+          echo 'Initial sequence-one policy state was materialized by one non-force compare-and-swap successor.' >> "$GITHUB_STEP_SUMMARY"

@@ -195,6 +195,13 @@ export interface RuntimePolicyFacts {
   readonly workflowDigests: Readonly<Record<string, string>>
 }
 
+/** Secret-free proof needed before historical sequence-one policy verification. */
+export interface InitialPolicyBootstrapFacts {
+  readonly repository: PolicyRepositoryIdentity
+  readonly authorization: SquashAuthorizationFacts
+  readonly stateRef: RuntimePolicyFacts['stateRef']
+}
+
 /** Error with a stable blocker class suitable for state and Issue projection. */
 export class PolicyError extends Error {
   /** Stable deterministic failure class. */
@@ -321,7 +328,6 @@ export function assertPolicy(
   const activationDigest = byteDigest(activationBytes)
   const bundleDigest = receiptBundleDigest(receiptBytes, signatureBytes)
   const current = facts.stateRef?.policy ?? null
-  const rotating = current !== null && activation.rotationOrdinal === current.activation.rotationOrdinal + 1
   assertSquashAuthorization(
     facts.activationAuthorization,
     activation.repository,
@@ -334,12 +340,13 @@ export function assertPolicy(
   if (receipt.authorizationPr !== facts.receiptAuthorization.pr) {
     throw new PolicyError('policy-drift', 'Receipt authorization PR does not match the signed receipt.')
   }
-  const initial = current === null
+  const jointAuthorization = receipt.authorizationPr === activation.authorizationPr
+    && facts.receiptAuthorization.mergeSha === facts.activationAuthorization.mergeSha
   assertSquashAuthorization(
     facts.receiptAuthorization,
     activation.repository,
     receipt.authorizationPr,
-    initial || rotating ? [activationPath, receiptPath, signaturePath] : [receiptPath, signaturePath],
+    jointAuthorization ? [activationPath, receiptPath, signaturePath] : [receiptPath, signaturePath],
   )
   if (facts.receiptAuthorization.receiptBundleDigest !== bundleDigest) {
     throw new PolicyError('policy-drift', 'Current receipt bytes differ from their owner-authorized squash commit.')
@@ -361,6 +368,67 @@ export function assertPolicy(
     throw new PolicyError('policy-drift', 'Protected workflow digest changed.')
   }
   return target
+}
+
+/**
+ * Prove the exact owner authorization and null-state precondition without App credentials.
+ *
+ * @param activation - Current checked-in signer activation.
+ * @param activationBytes - Exact current activation bytes.
+ * @param receipt - Current checked-in initial receipt.
+ * @param receiptBytes - Exact current receipt bytes.
+ * @param signatureBytes - Exact current detached signature bytes.
+ * @param facts - Secret-free repository, authorization, and state-ref facts.
+ * @returns Commits that bind the historical verifier tree and compare-and-swap state parent.
+ */
+export function assertInitialPolicyBootstrapAuthorization(
+  activation: PolicyActivation,
+  activationBytes: Uint8Array,
+  receipt: PolicyReceipt,
+  receiptBytes: Uint8Array,
+  signatureBytes: Uint8Array,
+  facts: InitialPolicyBootstrapFacts,
+): { readonly authorizationCommit: string; readonly stateRefCommit: string } {
+  if (activation.status !== 'active') {
+    throw new PolicyError('policy-unconfigured', 'Initial protected-policy bootstrap requires an active policy.')
+  }
+  if (
+    canonicalJson(activation.repository) !== canonicalJson(facts.repository)
+    || canonicalJson(receipt.repository) !== canonicalJson(facts.repository)
+  ) {
+    throw new PolicyError('policy-drift', 'Initial protected-policy bootstrap repository identity changed.')
+  }
+  if (
+    receipt.sequence !== 1
+    || receipt.predecessor !== null
+    || receipt.authorizationPr !== activation.authorizationPr
+    || receipt.rotationOrdinal !== activation.rotationOrdinal
+  ) {
+    throw new PolicyError('policy-drift', 'Initial protected-policy bootstrap requires the shared sequence-one authorization.')
+  }
+  assertSquashAuthorization(
+    facts.authorization,
+    facts.repository,
+    activation.authorizationPr,
+    [activationPath, receiptPath, signaturePath],
+  )
+  if (
+    facts.authorization.activationDigest !== byteDigest(activationBytes)
+    || facts.authorization.receiptBundleDigest !== receiptBundleDigest(receiptBytes, signatureBytes)
+  ) {
+    throw new PolicyError('policy-drift', 'Current policy bytes differ from the initial owner-authorized squash commit.')
+  }
+  verifyReceiptSignature(receiptBytes, signatureBytes, activation)
+  if (facts.stateRef === null || facts.stateRef.ref !== receipt.stateRef) {
+    throw new PolicyError('policy-drift', 'Protected state ref is missing or changed.')
+  }
+  if (facts.stateRef.policy !== null) {
+    throw new PolicyError('policy-drift', 'Initial protected-policy bootstrap is permanently unavailable after policy materialization.')
+  }
+  return {
+    authorizationCommit: facts.authorization.mergeSha,
+    stateRefCommit: facts.stateRef.commit,
+  }
 }
 
 /** Assert that one receipt contains exactly one record for every runtime App role. */

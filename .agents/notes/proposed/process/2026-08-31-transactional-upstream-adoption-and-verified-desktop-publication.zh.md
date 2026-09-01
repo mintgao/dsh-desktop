@@ -104,6 +104,14 @@ signed publication 静态限制准确五个已证明的 Apple secret reference�
 
 现有政策继续把固定 public upstream Release 作为产品源码输入加以信任。signed Release secret 仍只存在于受保护 release job，在采纳验证期间绝不出现。日志、Issue 文本和 fingerprint 排除凭据、个人路径和未限制的原始输出。
 
+## 恢复修订：稳定 run identity 与 sequence-one state bootstrap
+
+workflow-run display name 不是持久 identity。Observer routing 使用稳定 workflow path 加 repository、event 与 conclusion，然后在消费 attempt context 前从权威 run 重新派生这些字段。path 缺失或不符合预期时 fail closed，绝不回退到 name 或 display title。
+
+只有现有合法状态为 `policy: null` 时，才允许一次 manual bootstrap 初始化 protected policy state。受保护 wrapper 先在没有 Finalizer credential 的条件下证明准确 owner-merged squash authorization 及其只包含 activation、receipt 与 signature 的 diff。它派生并 checkout 该 authorization merge commit，再从该准确 tree 运行历史 verifier，对 byte-identical current policy file、initial sequence-one/no-predecessor chain、live owner、repository、App、installation 与 ruleset fact、receipt expiry、signature，以及历史 protected workflow digest 进行验证。Finalizer 所有的 job 复用现有 protected environment 与 concurrency group。
+
+bootstrap 通过普通 non-force push，为准确 fetched state commit 创建一个 compare-and-swap successor。只允许改变 `policy`、加一后的 `revision`、`updatedAt`、`updatedBy` 与 `updateRunId`。它不能修改 queue 或 delivery field、`main`、candidate、tag、Release、Issue，或 dispatch 工作。non-null policy、第二次调用、stale ref、policy byte 变化、无效 authorization、过期 receipt、非 sequence one、存在 predecessor、App 或 ruleset drift，以及历史 digest mismatch 都会在无写入的情况下拒绝。初始化后 current workflow drift 仍保持 blocking，并且只能通过既有 monotonic owner-squash sequence-plus-one renewal 解决。
+
 ## 迁移
 
 在当前 v1 文件保持只读且 legacy scheduler 暂停期间，落地 controller、validator、artifact qualifier、隔离 signer、finalizer、publication verifier、schema validator、ruleset 与 App manifest，以及 policy-receipt verifier。维护者创建 App 与独立 protected environment、激活 ruleset、引入 owner-authenticated activation record 与初始 signed receipt，然后运行 zero-mutation preflight。只有验证已记录 desktop tag 与 public Release 后，才从 `.github/upstream-sync-state.json` 初始化受保护状态分支；早于新资产契约的历史 baseline 可以标记为 legacy-verified。状态 ref 存在后停止读取 v1 state，并且只启用新 controller。第一次生产采纳把 receipt ID 与 digest、verify-only run、activation PR 与 commit，以及适用的 signing smoke 记录为 acceptance evidence。

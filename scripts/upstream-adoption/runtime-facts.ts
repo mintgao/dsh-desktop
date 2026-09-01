@@ -1,15 +1,15 @@
-/** Collect runtime-visible GitHub facts for owner-authorized policy verification. */
+/** Collect GitHub facts for runtime policy verification or secret-free bootstrap authorization. */
 
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { githubAppJwtFromPrivateKey } from './github-app-auth.ts'
 import {
+  assertInitialPolicyBootstrapAuthorization,
   byteDigest,
   canonicalPolicyTimestamp,
   parsePolicyActivation,
   parsePolicyReceipt,
-  parseProtectedPolicyState,
   receiptBundleDigest,
   type AuthorizationFile,
   type PolicyRepositoryIdentity,
@@ -17,107 +17,120 @@ import {
   type RuntimePolicyFacts,
   type SquashAuthorizationFacts,
 } from './policy.ts'
+import { assertAdoptionState } from './state.ts'
 
 const [activationPath, receiptPath, role, outputPath] = process.argv.slice(2)
 if (activationPath === undefined || receiptPath === undefined || outputPath === undefined) {
   throw new Error('Usage: runtime-facts <activation> <receipt> <role> <output>')
 }
-if (role !== 'controller' && role !== 'finalizer' && role !== 'publisher') {
-  throw new Error('Runtime App role must be controller, finalizer, or publisher.')
+if (role !== 'controller' && role !== 'finalizer' && role !== 'publisher' && role !== 'bootstrap-authorization') {
+  throw new Error('Runtime fact role must be controller, finalizer, publisher, or bootstrap-authorization.')
 }
 const token = process.env.GH_TOKEN
-const appIdValue = process.env.GITHUB_APP_ID
-const appPrivateKey = process.env.GITHUB_APP_PRIVATE_KEY
 const repositoryName = process.env.GITHUB_REPOSITORY
-if (
-  token === undefined
-  || appIdValue === undefined
-  || appPrivateKey === undefined
-  || repositoryName === undefined
-) {
-  throw new Error('GH_TOKEN, GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_REPOSITORY are required.')
-}
-const appId = positiveIntegerString(appIdValue, 'GITHUB_APP_ID')
-const appToken = githubAppJwtFromPrivateKey(appId, appPrivateKey)
+if (token === undefined || repositoryName === undefined) throw new Error('GH_TOKEN and GITHUB_REPOSITORY are required.')
 
 const activationBytes = readFileSync(activationPath)
 const activation = parsePolicyActivation(JSON.parse(activationBytes.toString('utf8')) as unknown)
 if (activation.status !== 'active') throw new Error('Release policy is unconfigured.')
 const receiptBytes = readFileSync(receiptPath)
 const receipt = parsePolicyReceipt(JSON.parse(receiptBytes.toString('utf8')) as unknown)
-readFileSync(`${receiptPath}.sig`)
+const signatureBytes = readFileSync(`${receiptPath}.sig`)
 const repositoryValue = object(await api(`/repos/${repositoryName}`), 'repository')
 const repository = repositoryIdentity(repositoryValue)
-const installation = object(
-  await api(`/repos/${repositoryName}/installation`, appToken),
-  'repository installation',
-)
-const installedAppId = integer(installation.app_id, 'installation.app_id')
-if (installedAppId !== appId) throw new Error('Configured GitHub App ID does not own the repository installation.')
 const mainRef = object(await api(`/repos/${repositoryName}/git/ref/heads/main`), 'main ref')
 const mainCommit = string(object(mainRef.object, 'main ref object').sha, 'main ref sha')
 const activationAuthorization = await authorizationFacts(activation.authorizationPr, mainCommit)
-const receiptAuthorization = receipt.authorizationPr === activation.authorizationPr
-  ? activationAuthorization
-  : await authorizationFacts(receipt.authorizationPr, mainCommit)
+const stateRef = await protectedStateRef()
 
-const rulesets: Omit<ReceiptRuleset, 'bypassActors'>[] = []
-for (const expected of receipt.rulesets) {
-  const value = object(
-    await api(`/repos/${repositoryName}/rulesets/${String(expected.id)}`),
-    `ruleset ${String(expected.id)}`,
+if (role === 'bootstrap-authorization') {
+  const result = assertInitialPolicyBootstrapAuthorization(
+    activation,
+    activationBytes,
+    receipt,
+    receiptBytes,
+    signatureBytes,
+    { repository, authorization: activationAuthorization, stateRef },
   )
-  rulesets.push({
-    id: integer(value.id, 'ruleset.id'),
-    name: string(value.name, 'ruleset.name'),
-    target: string(value.target, 'ruleset.target'),
-    enforcement: string(value.enforcement, 'ruleset.enforcement'),
-    conditions: value.conditions,
-    rules: value.rules,
-    updatedAt: canonicalPolicyTimestamp(
-      string(value.updated_at, 'ruleset.updated_at'),
-      'ruleset.updated_at',
-    ),
-  })
+  writeFileSync(outputPath, `${JSON.stringify(result, null, 2)}\n`)
+} else {
+  const appIdValue = process.env.GITHUB_APP_ID
+  const appPrivateKey = process.env.GITHUB_APP_PRIVATE_KEY
+  if (appIdValue === undefined || appPrivateKey === undefined) {
+    throw new Error('GITHUB_APP_ID and GITHUB_APP_PRIVATE_KEY are required for runtime App facts.')
+  }
+  const appId = positiveIntegerString(appIdValue, 'GITHUB_APP_ID')
+  const appToken = githubAppJwtFromPrivateKey(appId, appPrivateKey)
+  const installation = object(
+    await api(`/repos/${repositoryName}/installation`, appToken),
+    'repository installation',
+  )
+  const installedAppId = integer(installation.app_id, 'installation.app_id')
+  if (installedAppId !== appId) throw new Error('Configured GitHub App ID does not own the repository installation.')
+  const receiptAuthorization = receipt.authorizationPr === activation.authorizationPr
+    ? activationAuthorization
+    : await authorizationFacts(receipt.authorizationPr, mainCommit)
+
+  const rulesets: Omit<ReceiptRuleset, 'bypassActors'>[] = []
+  for (const expected of receipt.rulesets) {
+    const value = object(
+      await api(`/repos/${repositoryName}/rulesets/${String(expected.id)}`),
+      `ruleset ${String(expected.id)}`,
+    )
+    rulesets.push({
+      id: integer(value.id, 'ruleset.id'),
+      name: string(value.name, 'ruleset.name'),
+      target: string(value.target, 'ruleset.target'),
+      enforcement: string(value.enforcement, 'ruleset.enforcement'),
+      conditions: value.conditions,
+      rules: value.rules,
+      updatedAt: canonicalPolicyTimestamp(
+        string(value.updated_at, 'ruleset.updated_at'),
+        'ruleset.updated_at',
+      ),
+    })
+  }
+
+  const workflowDigests: Record<string, string> = {}
+  for (const path of Object.keys(receipt.workflowDigests)) {
+    workflowDigests[path] = createHash('sha256').update(readFileSync(resolve(path))).digest('hex')
+  }
+
+  const facts: RuntimePolicyFacts = {
+    repository,
+    activationAuthorization,
+    receiptAuthorization,
+    executingApp: {
+      role,
+      slug: string(installation.app_slug, 'installation.app_slug'),
+      id: installedAppId,
+      installationId: integer(installation.id, 'installation.id'),
+      permissions: stringMap(installation.permissions, 'installation.permissions'),
+    },
+    stateRef,
+    rulesets,
+    workflowDigests,
+  }
+  writeFileSync(outputPath, `${JSON.stringify(facts, null, 2)}\n`)
 }
 
-const workflowDigests: Record<string, string> = {}
-for (const path of Object.keys(receipt.workflowDigests)) {
-  workflowDigests[path] = createHash('sha256').update(readFileSync(resolve(path))).digest('hex')
-}
-
-let stateRef: RuntimePolicyFacts['stateRef'] = null
-const stateRefResponse = await request(`/repos/${repositoryName}/git/ref/heads/automation/upstream-adoption-state`)
-if (stateRefResponse.ok) {
-  const ref = object(await json(stateRefResponse), 'state ref')
+async function protectedStateRef(): Promise<RuntimePolicyFacts['stateRef']> {
+  const response = await request(`/repos/${repositoryName}/git/ref/heads/automation/upstream-adoption-state`)
+  if (response.status === 404) return null
+  if (!response.ok) {
+    throw new Error(`GitHub API ${String(response.status)} while reading protected state ref.`)
+  }
+  const ref = object(await json(response), 'state ref')
   const commit = string(object(ref.object, 'state ref object').sha, 'state ref commit')
   const stateBytes = await repositoryFile('state/upstream-adoption.json', commit)
-  const state = object(JSON.parse(stateBytes.toString('utf8')) as unknown, 'protected state')
-  stateRef = {
+  const state = JSON.parse(stateBytes.toString('utf8')) as unknown
+  assertAdoptionState(state)
+  return {
     ref: 'refs/heads/automation/upstream-adoption-state',
     commit,
-    policy: parseProtectedPolicyState(state.policy ?? null),
+    policy: state.policy,
   }
-} else if (stateRefResponse.status !== 404) {
-  throw new Error(`GitHub API ${String(stateRefResponse.status)} while reading protected state ref.`)
 }
-
-const facts: RuntimePolicyFacts = {
-  repository,
-  activationAuthorization,
-  receiptAuthorization,
-  executingApp: {
-    role,
-    slug: string(installation.app_slug, 'installation.app_slug'),
-    id: installedAppId,
-    installationId: integer(installation.id, 'installation.id'),
-    permissions: stringMap(installation.permissions, 'installation.permissions'),
-  },
-  stateRef,
-  rulesets,
-  workflowDigests,
-}
-writeFileSync(outputPath, `${JSON.stringify(facts, null, 2)}\n`)
 
 async function authorizationFacts(
   prNumber: number,
