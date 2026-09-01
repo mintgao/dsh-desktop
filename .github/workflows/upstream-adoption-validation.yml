@@ -36,7 +36,6 @@ jobs:
             | base64 --decode > "$RUNNER_TEMP/state.json"
           test "$(jq -r '.schemaVersion' "$RUNNER_TEMP/state.json")" = 2
           test "$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")" = candidate-open
-          test "$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")" = ''
           test "$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")" = "$REQUESTED_QUEUE_HEAD"
           test "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" = "$REQUESTED_INPUT_KEY"
           jq -n \
@@ -107,11 +106,17 @@ jobs:
             queue_head="$(jq -r '.activeDelivery.upstream.tag' "$RUNNER_TEMP/state.json")"
             test "$REQUESTED_QUEUE_HEAD" = "$queue_head"
             test "$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")" = candidate-open
-            test "$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")" = ''
             base="$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")"
             candidate="$(jq -r '.activeDelivery.candidate.headCommit' "$RUNNER_TEMP/state.json")"
+            candidate_branch="$(jq -r '.activeDelivery.candidate.branch' "$RUNNER_TEMP/state.json")"
             test "$base" = "$trusted_main"
-            test "$candidate" = "$(git ls-remote origin "refs/heads/$(jq -r '.activeDelivery.candidate.branch' "$RUNNER_TEMP/state.json")" | cut -f 1)"
+            git fetch origin "refs/heads/$candidate_branch:refs/remotes/origin/$candidate_branch"
+            test "$candidate" = "$(git rev-parse "refs/remotes/origin/$candidate_branch")"
+            request_path=".github/upstream-adoption-requests/${queue_head//[^0-9A-Za-z._-]/-}.json"
+            if git cat-file -e "$candidate:$request_path" 2>/dev/null; then
+              echo "The conflict-resolution request still exists at $candidate:$request_path." >&2
+              exit 1
+            fi
             mode="$(jq -r '.activeDelivery.mode' "$RUNNER_TEMP/state.json")"
             nonce="$(jq -r '.activeDelivery.validation.nonce' "$RUNNER_TEMP/state.json")"
             input_key="$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")"
