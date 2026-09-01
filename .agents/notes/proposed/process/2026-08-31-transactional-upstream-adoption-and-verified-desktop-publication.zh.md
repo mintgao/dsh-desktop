@@ -54,7 +54,7 @@ flowchart LR
 
 ## 制品 qualification 与 secret 边界
 
-所有依赖源码的打包都在不可变 desktop tag 创建前完成。validation run 从 candidate commit 构建并 smoke 两个 native 架构，且没有仓库写凭据。unsigned preview 在非特权 job 中产出最终 DMG 与 checksum 输入。signed 模式先在没有 Apple 凭据的情况下生成受 manifest 约束的 unsigned application payload，再把它们交给全新 runner 上的受保护 signing job。
+所有依赖源码的打包都在不可变 desktop tag 创建前完成。validation run 从 candidate commit 构建并 smoke 两个 native 架构，且没有仓库写凭据。unsigned preview 在非特权 job 中产出最终 DMG 与 checksum 输入。signed 模式先在没有 Apple 凭据的情况下生成受 manifest 约束的 unsigned application payload，再把它们交给全新 runner 上的受保护 signing job。Attestation 不把 artifact archive 路径当作 release 名称：它只把允许发布的文件按 basename 复制到新的扁平 bundle，拒绝重复 basename，并在 hash 或上传 bundle 前把准确名称集合与 policy 对比。
 
 signing job 只检出受信任 control-plane commit，下载准确 payload 与 manifest，拒绝逃逸 link 或意外文件，并调用固定的系统 signing、packaging、notarization 与 verification 命令。pre-sign manifest 绑定 archive digest、source commit、architecture，以及每个 member 的 normalized path、type、mode、size 或 digest、或 symlink target。trusted extraction 在 materialize regular file 前拒绝 duplicate、hard link、special file、缺失 parent 与 root escape，且不会跟随 link。Apple 凭据存在时，它不运行候选 package installation、package script、Electron Builder configuration 或 hook、application code，也不运行其他候选控制的 executable。最终不可变 Actions bundle 记录 artifact ID、名称、SHA-256 digest、架构、信任模式、source commit、validator workflow 与 run 以及 retention。发布直接消费该 bundle，不重新构建。
 
