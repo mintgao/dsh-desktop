@@ -453,23 +453,29 @@ jobs:
         if: needs.prepare.outputs.mode == 'unsigned-preview'
         with:
           pattern: candidate-*
-          path: bundle
+          path: downloaded
           merge-multiple: true
       - uses: actions/download-artifact@v5
         if: needs.prepare.outputs.mode == 'signed-preview'
         with:
           pattern: signed-payload-*
-          path: bundle
+          path: downloaded
           merge-multiple: true
       - uses: actions/download-artifact@v5
         if: needs.prepare.outputs.mode == 'signed-stable'
         with:
           pattern: signed-stable-*
-          path: bundle
+          path: downloaded
           merge-multiple: true
       - name: Build immutable artifact manifest and validation receipt
         run: |
-          find bundle -type f -name 'signed-app-*.tar.gz' -delete
+          mkdir bundle
+          while IFS= read -r -d '' asset; do
+            name="$(basename "$asset")"
+            test ! -e "bundle/$name"
+            mv "$asset" "bundle/$name"
+          done < <(find downloaded -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.blockmap' -o -name 'latest-mac-*.yml' \) -print0)
+          test -n "$(find bundle -type f -print -quit)"
           if [[ "${{ needs.prepare.outputs.mode }}" == signed-stable ]]; then
             pnpm exec tsx scripts/merge-desktop-update-metadata.ts \
               --version '${{ needs.prepare.outputs.version }}' \
@@ -486,7 +492,13 @@ jobs:
               | sort_by(.name)' \
             < bundle/SHA256SUMS.txt > bundle/artifact-manifest.json
           pnpm exec tsx scripts/upstream-adoption/cli.ts expected-assets '${{ needs.prepare.outputs.version }}' '${{ needs.prepare.outputs.mode }}' > "$RUNNER_TEMP/expected-assets.json"
-          jq -e --slurpfile expected "$RUNNER_TEMP/expected-assets.json" '([.[].name] | sort) == ($expected[0] | sort)' bundle/artifact-manifest.json
+          if ! jq -e --slurpfile expected "$RUNNER_TEMP/expected-assets.json" '([.[].name] | sort) == ($expected[0] | sort)' bundle/artifact-manifest.json; then
+            echo 'Expected release assets:' >&2
+            jq -cS . "$RUNNER_TEMP/expected-assets.json" >&2
+            echo 'Actual release assets:' >&2
+            jq -c '[.[].name] | sort' bundle/artifact-manifest.json >&2
+            exit 1
+          fi
           manifest_digest="$(sha256sum bundle/artifact-manifest.json | cut -d ' ' -f 1)"
           jq -n \
             --arg nonce '${{ needs.prepare.outputs.nonce }}' \
