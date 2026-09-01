@@ -27,7 +27,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -101,7 +101,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -229,7 +229,7 @@ jobs:
           test -s .github/release-policy/receipt.json
           test -s .github/release-policy/receipt.json.sig
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -443,7 +443,7 @@ jobs:
           jq -e '.schemaVersion == 1 and .status == "active"' .github/release-policy/activation.json
           test -s .github/release-policy/receipt.json
           test -s .github/release-policy/receipt.json.sig
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
