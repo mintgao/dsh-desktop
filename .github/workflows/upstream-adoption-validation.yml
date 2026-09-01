@@ -165,6 +165,7 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run verify-package-dependencies
       - run: pnpm run test:desktop
       - run: pnpm run build:desktop
       - run: pnpm run typecheck
