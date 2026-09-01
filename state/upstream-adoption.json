@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 26,
+  "revision": 27,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.2",
@@ -18,7 +18,7 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.3.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "candidate-validated",
+    "phase": "artifacts-validated",
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.3",
       "pr": 61,
@@ -37,7 +37,15 @@
       "receiptArtifact": "validation-receipt",
       "receiptDigest": "cf6fb01b81e41540201fa15a012bb99d58c79f5b7ecacf6df3b245cbb74fac7d"
     },
-    "artifacts": null,
+    "artifacts": {
+      "artifactName": "desktop-bundle",
+      "manifestDigest": "f8b2a92a4569aac4ceda3c90c116ecd287ae19d7b2bedec731fd22f6cec63294",
+      "sourceCommit": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
+      "workflowCommit": "a82509889e77a966abf43c0b568e20edf0d6c976",
+      "runId": 33525883382,
+      "runAttempt": 1,
+      "expiresAt": "2026-10-01T15:52:31Z"
+    },
     "attempt": {
       "ordinal": 4,
       "inputKey": "f090de4214aab8b9a8f7142405662324c070186effbc46db8aa625c101be6a1b",
@@ -65,7 +73,7 @@
       "expiresAt": "2026-09-29T04:57:13.000Z"
     }
   },
-  "updatedAt": "2026-09-01T15:52:31Z",
+  "updatedAt": "2026-09-01T15:52:32Z",
   "updatedBy": "mint-state-finalizer",
   "updateRunId": 33528306880
 }
