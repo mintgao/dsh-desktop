@@ -263,7 +263,7 @@ jobs:
         run: |
           pnpm exec tsx scripts/upstream-adoption/runtime-facts.ts .github/release-policy/activation.json .github/release-policy/receipt.json publisher "$RUNNER_TEMP/runtime-policy-facts.json"
           pnpm exec tsx scripts/upstream-adoption/cli.ts verify-policy .github/release-policy/activation.json .github/release-policy/receipt.json .github/release-policy/receipt.json.sig "$RUNNER_TEMP/runtime-policy-facts.json"
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: publication-bundle
           path: bundle

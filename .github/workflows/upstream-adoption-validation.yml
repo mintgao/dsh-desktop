@@ -299,7 +299,7 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.workflow_commit }}
           persist-credentials: false
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: candidate-${{ matrix.arch }}
           path: ${{ runner.temp }}/candidate
@@ -381,7 +381,7 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           name: signed-payload-${{ matrix.arch }}
           path: ${{ runner.temp }}/signed-payload
@@ -449,19 +449,19 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         if: needs.prepare.outputs.mode == 'unsigned-preview'
         with:
           pattern: candidate-*
           path: downloaded
           merge-multiple: true
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         if: needs.prepare.outputs.mode == 'signed-preview'
         with:
           pattern: signed-payload-*
           path: downloaded
           merge-multiple: true
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         if: needs.prepare.outputs.mode == 'signed-stable'
         with:
           pattern: signed-stable-*
