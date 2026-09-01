@@ -110,6 +110,7 @@ describe('transactional upstream adoption workflows', () => {
     expect(prepareText).toContain('test "$GITHUB_REF" = refs/heads/main')
     expect(prepareText).toContain('workflow_commit="$trusted_main"')
     expect(prepareText).toContain('git cat-file -e "$candidate:$request_path"')
+    expect(candidateText).toContain('pnpm run verify-package-dependencies')
     expect(candidateText).toContain('pnpm run test:desktop')
     expect(candidateText).toContain('pnpm run doc-sync')
     expect(candidateText).not.toContain('secrets.')
