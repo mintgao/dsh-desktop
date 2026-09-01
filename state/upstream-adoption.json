@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 25,
+  "revision": 26,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.2",
@@ -18,7 +18,7 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.3.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "candidate-open",
+    "phase": "candidate-validated",
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.3",
       "pr": 61,
@@ -31,11 +31,11 @@
     },
     "validation": {
       "nonce": "874377c6f8459da6d051becfe3a155b172a50998cd9756c95edf54ac97c56e98",
-      "consumed": false,
-      "runId": null,
-      "runAttempt": null,
-      "receiptArtifact": null,
-      "receiptDigest": null
+      "consumed": true,
+      "runId": 33525883382,
+      "runAttempt": 1,
+      "receiptArtifact": "validation-receipt",
+      "receiptDigest": "cf6fb01b81e41540201fa15a012bb99d58c79f5b7ecacf6df3b245cbb74fac7d"
     },
     "artifacts": null,
     "attempt": {
@@ -65,7 +65,7 @@
       "expiresAt": "2026-09-29T04:57:13.000Z"
     }
   },
-  "updatedAt": "2026-09-01T15:27:45Z",
+  "updatedAt": "2026-09-01T15:52:31Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33525807453
+  "updateRunId": 33528306880
 }
