@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { assertAdoptionState, assertReleaseObject, assertTransition, assertValidationReceipt, attemptInputKey, bootstrapAdoptionState, decideAttempt, expectedReleaseAssetNames, failureFingerprint, nextTransientRetry, resolveDesktopRelease, type AdoptionState, type BootstrapFacts, type FinalizationFacts, type ReleaseAsset, type ReleaseObject, type ValidationReceipt } from './state.ts'
+import { assertAdoptionState, assertPolicyBootstrapTransition, assertReleaseObject, assertTransition, assertValidationReceipt, attemptInputKey, bootstrapAdoptionState, bootstrapProtectedPolicyState, decideAttempt, expectedReleaseAssetNames, failureFingerprint, nextTransientRetry, resolveDesktopRelease, type AdoptionState, type BootstrapFacts, type FinalizationFacts, type ReleaseAsset, type ReleaseObject, type ValidationReceipt } from './state.ts'
 import { assertEnvironmentSecrets, assertPolicy, assertReceiptAppRoles, parsePolicyActivation, parsePolicyReceipt, rotationApprovalStatement, type RuntimePolicyFacts, verifyReceiptSignature } from './policy.ts'
 
 const [command, ...arguments_] = process.argv.slice(2)
@@ -20,6 +20,12 @@ async function run(): Promise<void> {
       const previous = state(arguments_[0])
       const next = state(arguments_[1])
       assertTransition(previous, next)
+      break
+    }
+    case 'validate-policy-bootstrap-transition': {
+      const previous = state(arguments_[0])
+      const next = state(arguments_[1])
+      assertPolicyBootstrapTransition(previous, next)
       break
     }
     case 'validate-receipt': {
@@ -56,6 +62,17 @@ async function run(): Promise<void> {
       assertEnvironmentSecrets(receipt)
       process.stdout.write(
         `${JSON.stringify(assertPolicy(activation, activationBytes, receipt, receiptBytes, signature, facts, new Date()))}\n`,
+      )
+      break
+    }
+    case 'bootstrap-policy-state': {
+      const current = state(arguments_[0])
+      const policy = json(arguments_[1], 'protected policy state') as Parameters<typeof bootstrapProtectedPolicyState>[1]
+      const updatedAt = required(arguments_[2], 'updated time')
+      const updatedBy = required(arguments_[3], 'updated by')
+      const updateRunId = Number(required(arguments_[4], 'update run ID'))
+      process.stdout.write(
+        `${JSON.stringify(bootstrapProtectedPolicyState(current, policy, updatedAt, updatedBy, updateRunId), null, 2)}\n`,
       )
       break
     }
