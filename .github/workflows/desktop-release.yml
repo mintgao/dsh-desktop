@@ -267,6 +267,31 @@ jobs:
         with:
           name: publication-bundle
           path: bundle
+      - uses: actions/download-artifact@v5
+        if: needs.prepare.outputs.automatic == 'true'
+        with:
+          name: publication-attempt-context
+          path: ${{ runner.temp }}/publication-attempt-context
+      - name: Re-derive protected publication state
+        if: needs.prepare.outputs.automatic == 'true'
+        run: |
+          state_ref=refs/remotes/origin/automation/upstream-adoption-state
+          git fetch origin "refs/heads/automation/upstream-adoption-state:$state_ref"
+          state_ref_commit="$(git rev-parse "$state_ref")"
+          test "$state_ref_commit" = "$(jq -r '.stateRefCommit' "$RUNNER_TEMP/publication-attempt-context/publication-attempt-context.json")"
+          git show "${state_ref_commit}:state/upstream-adoption.json" > "$RUNNER_TEMP/state.json"
+          pnpm exec tsx scripts/upstream-adoption/cli.ts validate-state "$RUNNER_TEMP/state.json"
+          phase="$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")"
+          [[ "$phase" == release-pending || "$phase" == publication-blocked ]]
+          jq -e \
+            --arg state_ref_commit "$state_ref_commit" \
+            --argjson state_revision "$(jq -r '.revision' "$RUNNER_TEMP/state.json")" \
+            --arg input_key "$(jq -r '.activeDelivery.attempt.inputKey' "$RUNNER_TEMP/state.json")" \
+            --arg release_tag '${{ needs.prepare.outputs.release_tag }}' \
+            --arg source_commit '${{ needs.prepare.outputs.source_commit }}' \
+            --argjson validation_run '${{ needs.prepare.outputs.validation_run }}' \
+            '.schemaVersion == 1 and .kind == "publication" and .stateRefCommit == $state_ref_commit and .stateRevision == $state_revision and .inputKey == $input_key and .releaseTag == $release_tag and .sourceCommit == $source_commit and .validationRun == $validation_run' \
+            "$RUNNER_TEMP/publication-attempt-context/publication-attempt-context.json"
       - name: Reconcile and verify draft before publication
         env:
           AUTOMATIC: ${{ needs.prepare.outputs.automatic }}
