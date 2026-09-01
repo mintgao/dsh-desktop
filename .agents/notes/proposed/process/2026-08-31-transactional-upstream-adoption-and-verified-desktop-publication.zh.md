@@ -38,7 +38,7 @@ flowchart LR
   R --> P
 ```
 
-只有公开 GitHub Release 通过发布后验证，`lastPublishedRelease` 才会推进。定时 run 根据 phase 与不可变输入派生规范化 SHA-256 input key：采纳使用上游 tag 和 commit、当前 `main`、desktop tag 与模式；验证还包含候选 head；发布使用 desktop tag、source commit 与模式。failure fingerprint 则分别哈希 phase、失败 stage、归一化失败类别，以及排序后的冲突路径或失败检查名称。URL、时间戳、runner 名称与原始日志不参与哈希。
+只有公开 GitHub Release 通过发布后验证，`lastPublishedRelease` 才会推进。完成转换按 `tag`、`commit` 和 `publishedAt` 比较 cursor 的上游投影；desktop tag、desktop commit 与 publication receipt 仍是分别验证的 cursor 字段。定时 run 根据 phase 与不可变输入派生规范化 SHA-256 input key：采纳使用上游 tag 和 commit、当前 `main`、desktop tag 与模式；验证还包含候选 head；发布使用 desktop tag、source commit 与模式。failure fingerprint 则分别哈希 phase、失败 stage、归一化失败类别，以及排序后的冲突路径或失败检查名称。URL、时间戳、runner 名称与原始日志不参与哈希。
 
 合并冲突、检查失败、配置错误、tag 或 provenance 不匹配以及未知失败都是确定性 blocker。输入未变化的定时 run 成功 no-op，不执行失败阶段，也不改变 PR 或 Issue。allowlist 中的 API、网络、runner、upload 和 dispatch 中断可以在 30 分钟、2 小时与 6 小时后重试；用尽次数后成为确定性 blocker。权威输入变化只产生一次新 attempt。手工 force 需要准确的队首 tag 与原因，只把 attempt ordinal 增加一次，绝不绕过顺序、approval、检查、签名、制品验证或 tag 不可变性。
 
