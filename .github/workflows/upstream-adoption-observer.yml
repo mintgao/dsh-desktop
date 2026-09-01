@@ -250,7 +250,6 @@ jobs:
               exit 0
             fi
             if [[ "$(jq -r '.activeDelivery.phase' "$RUNNER_TEMP/state.json")" != candidate-open ]] \
-              || [[ "$(jq -r '.activeDelivery.candidate.requestPath // empty' "$RUNNER_TEMP/state.json")" != '' ]] \
               || [[ "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json")" != "$(git rev-parse refs/remotes/origin/main)" ]]; then
               echo 'project=false' >> "$GITHUB_OUTPUT"
               echo 'The failed validation run no longer matches the current protected candidate state.' >> "$GITHUB_STEP_SUMMARY"
