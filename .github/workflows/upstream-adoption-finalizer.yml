@@ -153,7 +153,7 @@ jobs:
               if [[ "$path" == $pattern ]]; then protected+=("$path"); break; fi
             done
           done
-          protected_json="$(printf '%s\n' "${protected[@]}" | sed '/^$/d' | jq -R . | jq -s .)"
+          protected_json="$(printf '%s\n' "${protected[@]}" | sed '/^$/d' | jq -R . | jq -cs .)"
           controller_owned="$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/status" | jq -r --arg login "${{ vars.MINT_CONTROLLER_APP_SLUG }}[bot]" '[.statuses[] | select(.context == "dsh/upstream-adoption/controller-head" and .state == "success" and .creator.login == $login and .creator.type == "Bot")][0].sha // empty')"
           human_edited=true
           if [[ "$controller_owned" == "$head" ]]; then human_edited=false; fi
@@ -334,7 +334,7 @@ jobs:
               if [[ "$path" == $pattern ]]; then protected+=("$path"); break; fi
             done
           done
-          protected_json="$(printf '%s\n' "${protected[@]}" | sed '/^$/d' | jq -R . | jq -s .)"
+          protected_json="$(printf '%s\n' "${protected[@]}" | sed '/^$/d' | jq -R . | jq -cs .)"
           test "$protected_json" = "$(jq -c '.activeDelivery.candidate.protectedPathsChanged' "$RUNNER_TEMP/state.json")"
           while read -r workflow_path; do
             test "$(git rev-parse "$(jq -r '.activeDelivery.candidate.baseCommit' "$RUNNER_TEMP/state.json"):$workflow_path")" = "$(git rev-parse "$candidate_head:$workflow_path")"
