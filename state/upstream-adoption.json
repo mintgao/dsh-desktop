@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 11,
+  "revision": 12,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.1-rc.2",
@@ -18,7 +18,7 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.1.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "release-pending",
+    "phase": "publication-blocked",
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.1",
       "pr": 44,
@@ -51,12 +51,19 @@
     },
     "attempt": {
       "ordinal": 7,
-      "inputKey": "911aa8eeff244b8ddb5d38fd4151665f15fdfb96356eaf91cdb2edb84e6b5cf8",
+      "inputKey": "cb79d0bfd5835ce4319bd87039871c4d091f802ac85e948d4a4cb2091c797434",
       "trigger": "scheduled",
       "forceReason": null
     },
-    "failure": null,
-    "publicationRun": null,
+    "failure": {
+      "kind": "deterministic",
+      "stage": "publication",
+      "failureClass": "failure",
+      "fingerprint": "e65f696b9b4d9db6ab3ddce3312e0c10b076502d769e3809737b773d73c0e2ae",
+      "retryCount": 0,
+      "nextRetryAt": null
+    },
+    "publicationRun": 33470292897,
     "paused": false
   },
   "policy": {
@@ -76,7 +83,7 @@
       "expiresAt": "2026-09-29T03:35:35.000Z"
     }
   },
-  "updatedAt": "2026-09-01T04:14:31Z",
+  "updatedAt": "2026-09-01T04:37:46Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33469048474
+  "updateRunId": 33470494145
 }
