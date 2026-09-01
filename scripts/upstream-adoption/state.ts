@@ -344,6 +344,62 @@ export function assertTransition(previous: AdoptionState, next: AdoptionState): 
   }
 }
 
+/**
+ * Build the only state successor allowed to materialize initial protected policy.
+ *
+ * @param previous - Exact protected state read before verification.
+ * @param policy - Sequence-one policy target returned by the historical verifier.
+ * @param updatedAt - Fresh state-update timestamp.
+ * @param updatedBy - Finalizer App identity recording the update.
+ * @param updateRunId - Workflow run that owns the update.
+ * @returns One field-limited protected-state successor.
+ */
+export function bootstrapProtectedPolicyState(
+  previous: AdoptionState,
+  policy: ProtectedPolicyState,
+  updatedAt: string,
+  updatedBy: string,
+  updateRunId: number,
+): AdoptionState {
+  const next: AdoptionState = {
+    ...previous,
+    revision: previous.revision + 1,
+    policy,
+    updatedAt,
+    updatedBy,
+    updateRunId,
+  }
+  assertPolicyBootstrapTransition(previous, next)
+  return next
+}
+
+/**
+ * Validate the field-limited, one-time initial protected-policy transition.
+ *
+ * @param previous - Exact protected state parent.
+ * @param next - Proposed bootstrap successor.
+ */
+export function assertPolicyBootstrapTransition(previous: AdoptionState, next: AdoptionState): void {
+  assertAdoptionState(previous)
+  assertAdoptionState(next)
+  if (previous.policy !== null || next.policy === null) {
+    throw new Error('Initial protected-policy bootstrap requires null to non-null policy state.')
+  }
+  if (next.revision !== previous.revision + 1) {
+    throw new Error('Initial protected-policy bootstrap must increment revision exactly once.')
+  }
+  if (
+    Date.parse(next.updatedAt) <= Date.parse(previous.updatedAt)
+    || next.updatedBy === ''
+    || next.updateRunId <= 0
+  ) {
+    throw new Error('Initial protected-policy bootstrap requires fresh update provenance.')
+  }
+  if (canonicalJson(policyBootstrapStableFields(next)) !== canonicalJson(policyBootstrapStableFields(previous))) {
+    throw new Error('Initial protected-policy bootstrap may change only policy, revision, and update provenance.')
+  }
+}
+
 /** Validate an immutable receipt against protected state and live GitHub facts. */
 export function assertValidationReceipt(state: AdoptionState, receipt: ValidationReceipt, facts: FinalizationFacts): void {
   const delivery = requireDelivery(state)
@@ -532,6 +588,15 @@ function exactKeys(value: Record<string, unknown>, expected: readonly string[], 
   const actual = Object.keys(value).sort()
   const required = [...expected].sort()
   if (canonicalJson(actual) !== canonicalJson(required)) throw new Error(`${name} has unknown or missing fields.`)
+}
+
+function policyBootstrapStableFields(state: AdoptionState): object {
+  return {
+    schemaVersion: state.schemaVersion,
+    upstreamRepository: state.upstreamRepository,
+    lastPublishedRelease: state.lastPublishedRelease,
+    activeDelivery: state.activeDelivery,
+  }
 }
 
 function assertPolicyTransition(

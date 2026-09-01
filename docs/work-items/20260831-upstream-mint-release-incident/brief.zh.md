@@ -12,17 +12,17 @@
 - Outcome: `decision-accepted`
 - Trigger evidence: 修复会改变上游同步与桌面发布 workflow 之间的持久采纳状态、重试和恢复语义、GitHub workflow 所有权、发布完成判据、通知行为，以及 owner-authenticated policy-attestation boundary
 - Decision owner: Tech Lead (`release_redesign_author`)
-- Governing decision: [事务化上游采纳与经验证的 Mint 发布](technical-decision.zh.md)（`Status: Accepted`，包含 policy-attestation、squash authorization 与 monotonic receipt renewal）
+- Governing decision: [事务化上游采纳与经验证的 Mint 发布](technical-decision.zh.md)（`Status: Accepted`，包含 Observer path 与初始 policy bootstrap 修订）
 - Review mode: `independent-agent`
 - Review result: `approved`
-- Review evidence: 独立 Tech Lead `release_redesign_review` 批准准确持久化的 non-self-referential、squash-only activation 与 monotonic receipt-renewal protocol；评审先要求 direct-fast-forward rejection 与准确 domain-separated bundle framing
+- Review evidence: 独立 Tech Lead `policy_bootstrap_decision_review` 在验证 stable path routing、pre-credential authorization、可执行 historical verification、一次性 monotonic initialization、field-limited CAS mutation、drift blocking 与 sequence-plus-one recovery 后，批准了准确持久化的修订
 - Material product decisions: none；建议保留有序采纳、无签名预览默认值以及用户控制安装
 - Open blockers: none
 - Gate: `implementation-ready`
 - Gate owner: Workflow orchestrator
-- Confirmed at: 2026-08-31T15:55:48+08:00
-- Confirmation basis: Accepted 修订现在采用 squash-only owner PR、derived commit evidence、immutable signer activation、准确 domain-separated receipt framing 与受保护 monotonic renewal chain；独立评审已批准准确持久化的 protocol，且没有实施 blocker
-- Readiness history: 2026-08-31 — 已在不编辑生产 workflow 的前提下完成诊断；实施曾因缺少决策和评审而阻塞。2026-08-31 — 第一次独立评审把工作从 M 重分类为 L，并要求六项边界修正。2026-08-31 — 后续评审要求准确分离 state writer、finalizer/publication credential 与 tag creation；持久化的三 App 与双 tag ruleset 设计满足这些修正并获得批准。2026-08-31T15:10:27+08:00 — 实施在共享代码编辑前重新打开 readiness，因为 GitHub 在调用者没有 ruleset write access 时隐藏 `bypass_actors`，并要求 `Environments: read` 才能列出 environment secret name；这两项都不属于已接受的三 App least-privilege 模型。2026-08-31T15:18:25+08:00 — owner-authenticated policy-attestation 修订获得独立批准并恢复 implementation gate；在 live App、ruleset、environment、activation record、signed receipt 与 verify-only evidence 齐备前，生产仍为 activation-blocked。2026-08-31T15:41:26+08:00 — 实施证明 activation file 无法包含其所在 commit 的 SHA 后使 gate 失效；activation code 恢复前必须采用 non-self-referential owner proof。2026-08-31T15:55:48+08:00 — 独立评审批准已持久化的 squash-only authorization 与 monotonic receipt-renewal 修订，恢复 implementation-ready，同时把 production activation 保留为独立 live-evidence gate。
+- Confirmed at: 2026-09-01T10:13:30+08:00
+- Confirmation basis: 独立评审批准准确持久化的恢复边界，且没有未解决 trigger、product decision 或 implementation blocker
+- Readiness history: 2026-08-31 — 已在不编辑生产 workflow 的前提下完成诊断；实施曾因缺少决策和评审而阻塞。2026-08-31 — 第一次独立评审把工作从 M 重分类为 L，并要求六项边界修正。2026-08-31 — 后续评审要求准确分离 state writer、finalizer/publication credential 与 tag creation；持久化的三 App 与双 tag ruleset 设计满足这些修正并获得批准。2026-08-31T15:10:27+08:00 — 实施在共享代码编辑前重新打开 readiness，因为 GitHub 在调用者没有 ruleset write access 时隐藏 `bypass_actors`，并要求 `Environments: read` 才能列出 environment secret name；这两项都不属于已接受的三 App least-privilege 模型。2026-08-31T15:18:25+08:00 — owner-authenticated policy-attestation 修订获得独立批准并恢复 implementation gate；在 live App、ruleset、environment、activation record、signed receipt 与 verify-only evidence 齐备前，生产仍为 activation-blocked。2026-08-31T15:41:26+08:00 — 实施证明 activation file 无法包含其所在 commit 的 SHA 后使 gate 失效；activation code 恢复前必须采用 non-self-referential owner proof。2026-08-31T15:55:48+08:00 — 独立评审批准已持久化的 squash-only authorization 与 monotonic receipt-renewal 修订，恢复 implementation-ready，同时把 production activation 保留为独立 live-evidence gate。2026-09-01 — live validation 成功，但 Observer job 因 control flow 使用动态 run name 而全部跳过；必要 workflow hotfix 之后，sequence-one policy 在 protected state 初始化前发生 drift，monotonic sequence-two renewal 正确拒绝 null predecessor。门禁因 Observer path 与一次性 bootstrap 修订重新打开。2026-09-01T10:13:30+08:00 — 独立评审批准准确持久化的修订，并恢复 implementation-ready。
 
 ## 目标
 

@@ -17,7 +17,7 @@ jobs:
   finalize-success:
     if: >-
       github.repository == 'mintgao/dsh-desktop'
-      && github.event.workflow_run.name == 'Validate and qualify upstream candidate'
+      && github.event.workflow_run.path == '.github/workflows/upstream-adoption-validation.yml'
       && github.event.workflow_run.event == 'repository_dispatch'
       && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
   finalize-publication-success:
     if: >-
       github.repository == 'mintgao/dsh-desktop'
-      && github.event.workflow_run.name == 'Publish qualified DSH Desktop bundle'
+      && github.event.workflow_run.path == '.github/workflows/desktop-release.yml'
       && github.event.workflow_run.event == 'repository_dispatch'
       && github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
@@ -132,6 +132,13 @@ jobs:
   record-failure:
     if: >-
       github.repository == 'mintgao/dsh-desktop'
+      && (github.event.workflow_run.path == '.github/workflows/upstream-adoption-controller.yml'
+        || github.event.workflow_run.path == '.github/workflows/upstream-adoption-finalizer.yml'
+        || github.event.workflow_run.path == '.github/workflows/upstream-adoption-validation.yml'
+        || github.event.workflow_run.path == '.github/workflows/desktop-release.yml')
+      && (github.event.workflow_run.event == 'schedule'
+        || github.event.workflow_run.event == 'repository_dispatch'
+        || github.event.workflow_run.event == 'workflow_dispatch')
       && github.event.workflow_run.conclusion != 'success'
       && github.event.workflow_run.conclusion != 'skipped'
     environment: mint-finalizer

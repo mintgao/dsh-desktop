@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertControlPlaneManifests,
   assertEnvironmentSecrets,
+  assertInitialPolicyBootstrapAuthorization,
   assertPolicy,
   assertReceiptAppRoles,
   byteDigest,
@@ -21,11 +22,13 @@ import {
 } from './policy.ts'
 import {
   assertAdoptionState,
+  assertPolicyBootstrapTransition,
   assertReleaseObject,
   assertTransition,
   assertValidationReceipt,
   attemptInputKey,
   bootstrapAdoptionState,
+  bootstrapProtectedPolicyState,
   decideAttempt,
   expectedReleaseAssetNames,
   failureFingerprint,
@@ -184,6 +187,45 @@ describe('upstream adoption state machine', () => {
         },
       }))
     }).toThrow('new signer fingerprint')
+  })
+
+  it('materializes initial policy without changing delivery or cursor state', () => {
+    const before = state(activeDelivery(), 1, null)
+    const policy = protectedPolicyState()
+    const next = bootstrapProtectedPolicyState(
+      before,
+      policy,
+      '2026-08-31T00:02:00Z',
+      'mint-state-finalizer',
+      42,
+    )
+
+    expect(next).toEqual({
+      ...before,
+      revision: 2,
+      policy,
+      updatedAt: '2026-08-31T00:02:00Z',
+      updatedBy: 'mint-state-finalizer',
+      updateRunId: 42,
+    })
+    expect(() => {
+      assertPolicyBootstrapTransition(before, next)
+    }).not.toThrow()
+    expect(() => {
+      assertPolicyBootstrapTransition(before, {
+        ...next,
+        activeDelivery: activeDelivery({ paused: true }),
+      })
+    }).toThrow('may change only policy')
+    expect(() => {
+      assertPolicyBootstrapTransition(before, {
+        ...next,
+        lastPublishedRelease: { ...next.lastPublishedRelease, publicationReceipt: 'e'.repeat(64) },
+      })
+    }).toThrow('may change only policy')
+    expect(() => {
+      bootstrapProtectedPolicyState(next, policy, '2026-08-31T00:03:00Z', 'mint-state-finalizer', 43)
+    }).toThrow('null to non-null')
   })
 
   it('pins qualified candidate, validation, and artifact identities once protected state advances', () => {
@@ -396,6 +438,99 @@ describe('owner-authenticated release policy', () => {
         },
       },
     )
+  })
+
+  it('authorizes initial bootstrap only for the exact sequence-one squash and null state', () => {
+    const signer = signingIdentity()
+    const receiptValue = receipt({ issuer: { login: 'mintgao', fingerprint: signer.fingerprint } })
+    const receiptBytes = Buffer.from(JSON.stringify(receiptValue, null, 2) + '\n')
+    const signature = signReceipt(receiptBytes, signer.privateKeyPath)
+    const activation = activeActivation(signer.publicKey, signer.fingerprint)
+    const activationBytes = Buffer.from(JSON.stringify(activation, null, 2) + '\n')
+    const authorization = authorizationFacts(
+      activation.authorizationPr,
+      ['.github/release-policy/activation.json', '.github/release-policy/receipt.json', '.github/release-policy/receipt.json.sig'],
+      byteDigest(activationBytes),
+      receiptBundleDigest(receiptBytes, signature),
+    )
+    const facts = {
+      repository: receiptValue.repository,
+      authorization,
+      stateRef: {
+        ref: receiptValue.stateRef,
+        commit: 'f'.repeat(40),
+        policy: null,
+      },
+    }
+
+    expect(assertInitialPolicyBootstrapAuthorization(
+      activation,
+      activationBytes,
+      receiptValue,
+      receiptBytes,
+      signature,
+      facts,
+    )).toEqual({ authorizationCommit: authorization.mergeSha, stateRefCommit: 'f'.repeat(40) })
+    expect(() => {
+      assertInitialPolicyBootstrapAuthorization(
+        activation,
+        activationBytes,
+        { ...receiptValue, sequence: 2 },
+        receiptBytes,
+        signature,
+        facts,
+      )
+    }).toThrow('shared sequence-one authorization')
+    expect(() => {
+      assertInitialPolicyBootstrapAuthorization(
+        activation,
+        activationBytes,
+        { ...receiptValue, predecessor: { receiptId: 'older', bundleDigest: '1'.repeat(64) } },
+        receiptBytes,
+        signature,
+        facts,
+      )
+    }).toThrow('shared sequence-one authorization')
+    expect(() => {
+      assertInitialPolicyBootstrapAuthorization(
+        activation,
+        activationBytes,
+        receiptValue,
+        Buffer.concat([receiptBytes, Buffer.from(' ')]),
+        signature,
+        facts,
+      )
+    }).toThrow('bytes differ')
+    expect(() => {
+      assertInitialPolicyBootstrapAuthorization(
+        activation,
+        activationBytes,
+        receiptValue,
+        receiptBytes,
+        signature,
+        { ...facts, authorization: { ...authorization, mergeSha: authorization.headSha } },
+      )
+    }).toThrow('exact owner-merged squash authorization')
+    expect(() => {
+      assertInitialPolicyBootstrapAuthorization(
+        activation,
+        activationBytes,
+        receiptValue,
+        receiptBytes,
+        signature,
+        { ...facts, stateRef: null },
+      )
+    }).toThrow('state ref is missing')
+    expect(() => {
+      assertInitialPolicyBootstrapAuthorization(
+        activation,
+        activationBytes,
+        receiptValue,
+        receiptBytes,
+        signature,
+        { ...facts, stateRef: { ...facts.stateRef, policy: protectedPolicyState() } },
+      )
+    }).toThrow('permanently unavailable')
   })
 
   it('compares equivalent ruleset timestamp offsets as the same instant', () => {
@@ -689,6 +824,45 @@ describe('owner-authenticated release policy', () => {
         new Date('2026-09-01T00:00:00Z'),
       )
     }).toThrow('state ref')
+
+    const protectedPolicy = assertPolicy(
+      activation,
+      activationBytes,
+      receiptValue,
+      receiptBytes,
+      signature,
+      facts,
+      new Date('2026-09-01T00:00:00Z'),
+    )
+    expect(() => {
+      assertPolicy(
+        activation,
+        activationBytes,
+        receiptValue,
+        receiptBytes,
+        signature,
+        {
+          ...facts,
+          stateRef: { ...facts.stateRef!, policy: protectedPolicy },
+          workflowDigests: { ...facts.workflowDigests, '.github/workflows/upstream-adoption-observer.yml': '0'.repeat(64) },
+        },
+        new Date('2026-09-01T00:00:00Z'),
+      )
+    }).toThrow('Protected workflow digest changed')
+    expect(() => {
+      assertPolicy(
+        activation,
+        activationBytes,
+        receiptValue,
+        receiptBytes,
+        signature,
+        {
+          ...facts,
+          executingApp: { ...facts.executingApp, permissions: { ...facts.executingApp.permissions, contents: 'read' } },
+        },
+        new Date('2026-09-01T00:00:00Z'),
+      )
+    }).toThrow('Executing GitHub App identity or permissions changed')
   })
 
   it('keeps the example receipt aligned with the current runtime schema and secret boundary', () => {

@@ -152,7 +152,19 @@ describe('transactional upstream adoption workflows', () => {
     expect(attestText).toContain('validation-receipt')
     expect(String(attest.if)).toContain("needs.prepare.outputs.mode == 'signed-stable'")
     const observer = workflowDocument('.github/workflows/upstream-adoption-observer.yml')
-    expect(commands(workflowJob(observer, 'finalize-success'))).toContain('upstream-adoption-finalize')
+    const observerFinalize = workflowJob(observer, 'finalize-success')
+    const observerFinalizeIf = String(observerFinalize.if)
+    const observerFinalizeText = commands(observerFinalize)
+    expect(observerFinalizeIf).toContain("github.repository == 'mintgao/dsh-desktop'")
+    expect(observerFinalizeIf).toContain("workflow_run.path == '.github/workflows/upstream-adoption-validation.yml'")
+    expect(observerFinalizeIf).toContain("workflow_run.event == 'repository_dispatch'")
+    expect(observerFinalizeIf).toContain("workflow_run.conclusion == 'success'")
+    expect(observerFinalizeIf).not.toContain('workflow_run.name')
+    expect(observerFinalizeText).toContain('.repository.id == $repository')
+    expect(observerFinalizeText).toContain('.path == ".github/workflows/upstream-adoption-validation.yml"')
+    expect(observerFinalizeText).toContain('.event == "repository_dispatch"')
+    expect(observerFinalizeText).toContain('.conclusion == "success"')
+    expect(observerFinalizeText).toContain('upstream-adoption-finalize')
     expect(attestText).not.toContain('upstream-adoption-finalize')
   })
 
@@ -193,6 +205,7 @@ describe('transactional upstream adoption workflows', () => {
     const publishText = commands(publish)
     const bindAttemptText = commands(bindAttempt)
     const completionText = commands(workflowJob(observer, 'finalize-publication-success'))
+    const completionIf = String(workflowJob(observer, 'finalize-publication-success').if)
 
     expect(bindAttemptText).toContain('publication-attempt-context')
     expect(bindAttemptText).toContain('runAttempt')
@@ -222,6 +235,10 @@ describe('transactional upstream adoption workflows', () => {
     expect(completionText).toContain('artifact-manifest.json')
     expect(completionText).toContain('upstream-adoption-publication-verified')
     expect(completionText).toContain('.github/workflows/desktop-release.yml')
+    expect(completionIf).toContain("workflow_run.path == '.github/workflows/desktop-release.yml'")
+    expect(completionIf).toContain("workflow_run.event == 'repository_dispatch'")
+    expect(completionIf).toContain("workflow_run.conclusion == 'success'")
+    expect(completionIf).not.toContain('workflow_run.name')
     expect(publishText).not.toContain('pnpm run desktop:stage')
   })
 
@@ -301,8 +318,15 @@ describe('transactional upstream adoption workflows', () => {
       })
     })
 
-    expect(runtimeSteps).toHaveLength(6)
-    for (const step of runtimeSteps) {
+    const bootstrapAuthorizationSteps = runtimeSteps.filter(step => renderStepField(step.run).includes('bootstrap-authorization'))
+    const appRuntimeSteps = runtimeSteps.filter(step => !renderStepField(step.run).includes('bootstrap-authorization'))
+
+    expect(bootstrapAuthorizationSteps).toHaveLength(1)
+    expect(asRecord(bootstrapAuthorizationSteps[0]!.env, 'bootstrap authorization environment')).toEqual({
+      GH_TOKEN: '${{ github.token }}',
+    })
+    expect(appRuntimeSteps).toHaveLength(7)
+    for (const step of appRuntimeSteps) {
       const env = asRecord(step.env, 'runtime policy environment')
       const appId = String(env.GITHUB_APP_ID)
       const privateKey = String(env.GITHUB_APP_PRIVATE_KEY)
@@ -311,6 +335,42 @@ describe('transactional upstream adoption workflows', () => {
       expect(role).toBeDefined()
       expect(privateKey).toBe(`\${{ secrets.MINT_${String(role)}_APP_PRIVATE_KEY }}`)
     }
+  })
+
+  it('bootstraps sequence-one policy only after secret-free owner authorization', () => {
+    const workflow = workflowDocument('.github/workflows/upstream-adoption-preflight.yml')
+    const bootstrap = workflowJob(workflow, 'bootstrap-initial-policy')
+    if (!Array.isArray(bootstrap.steps)) throw new Error('bootstrap job has no steps')
+    const steps = bootstrap.steps.map(step => asRecord(step, 'bootstrap step'))
+    const authorizationIndex = steps.findIndex(step => step.name === 'Prove exact owner authorization before exposing Finalizer credentials')
+    const historicalInstallIndex = steps.findIndex(step => step.name === 'Install the exact historical verifier without credentials')
+    const tokenIndex = steps.findIndex(step => renderStepField(step.uses).includes('actions/create-github-app-token'))
+    const beforeAuthorization = JSON.stringify(steps.slice(0, authorizationIndex + 1))
+    const beforeToken = JSON.stringify(steps.slice(0, tokenIndex))
+    const text = commands(bootstrap)
+
+    expect(workflow.concurrency).toEqual({ group: 'upstream-adoption-finalizer', 'cancel-in-progress': false })
+    expect(bootstrap.environment).toBe('mint-finalizer')
+    expect(authorizationIndex).toBeGreaterThan(-1)
+    expect(historicalInstallIndex).toBeGreaterThan(authorizationIndex)
+    expect(historicalInstallIndex).toBeLessThan(tokenIndex)
+    expect(tokenIndex).toBeGreaterThan(authorizationIndex)
+    expect(beforeAuthorization).not.toContain('MINT_FINALIZER_APP_PRIVATE_KEY')
+    expect(beforeAuthorization).not.toContain('steps.finalizer-token.outputs.token')
+    expect(beforeToken).not.toContain('MINT_FINALIZER_APP_PRIVATE_KEY')
+    expect(beforeToken).not.toContain('steps.finalizer-token.outputs.token')
+    expect(beforeAuthorization).toContain('bootstrap-authorization')
+    expect(text).toContain('cmp ".github/release-policy/$path"')
+    expect(text).toContain('pnpm --dir "$history" install --frozen-lockfile --ignore-scripts')
+    expect(text).toContain('policy-state')
+    expect(text).toContain('bootstrap-policy-state')
+    expect(text).toContain('validate-policy-bootstrap-transition')
+    expect(text).toContain('git push origin "$successor:refs/heads/automation/upstream-adoption-state"')
+    expect(text).not.toContain('git push --force')
+    expect(text).not.toContain('gh api --method POST')
+    expect(text).not.toContain('gh release')
+    expect(text).not.toContain('refs/heads/main:')
+    expect(text).not.toContain('refs/tags/')
   })
 
   it('protects main and state with attributed exact-head review while preserving only the Finalizer state bypass', () => {

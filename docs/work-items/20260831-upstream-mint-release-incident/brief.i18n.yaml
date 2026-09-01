@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/work-items/20260831-upstream-mint-release-incident/brief.md
-brief.md: 08a9301b421dc3c67b6a3d73d8ef0cbad37595c2
-brief.zh.md: 292125498fe21fac2f54208201900905def9a596
+brief.md: b82e33270b8e1e1566634c863f6f4fc03cc71843
+brief.zh.md: f421e13bf8e15badb34b59fd6797e2f299511b5b

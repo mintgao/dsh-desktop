@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/work-items/20260831-upstream-mint-release-incident/technical-decision.md
-technical-decision.md: 0c5e2a0a452f9fd9f65c7399edfb97625c281f2b
-technical-decision.zh.md: 5a5563aea81f728bac59d40f1aaaeef92275b595
+technical-decision.md: 2fe91629a833a67b1146d3721643ca5d03ee19a9
+technical-decision.zh.md: 009d80038af44b7bc072c97dd9f3c19f715467de
