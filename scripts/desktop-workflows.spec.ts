@@ -183,6 +183,8 @@ describe('transactional upstream adoption workflows', () => {
     expect(text).toContain('policy-state')
     expect(text).toContain('.policy=$policy[0]')
     expect(text).toContain('validate-receipt')
+    expect(text).toContain("protected_json=\"$(printf '%s\\n' \"${protected[@]}\" | sed '/^$/d' | jq -R . | jq -cs .)\"")
+    expect(text).not.toContain('| jq -s .)')
     expect(text).toContain('state-validated')
     expect(text).toContain('state-artifacts')
     expect(text).toContain('$candidate_head:refs/heads/main')
