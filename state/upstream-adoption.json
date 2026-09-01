@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 22,
+  "revision": 23,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.2",
@@ -18,17 +18,40 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.3.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "detected",
-    "candidate": null,
-    "validation": null,
+    "phase": "adoption-blocked",
+    "candidate": {
+      "branch": "automation/adopt/dsh-v0.1.2-alpha.3",
+      "pr": 61,
+      "baseCommit": "a82509889e77a966abf43c0b568e20edf0d6c976",
+      "headCommit": "993acb45be8201b3cde4dea6c272ebd3a262a6a0",
+      "humanEdited": true,
+      "protectedPathsChanged": [],
+      "approvedHead": null,
+      "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.3.json"
+    },
+    "validation": {
+      "nonce": "90d65d5f856a0797aebb98ecf93496c887c5948cab91f039e7471cc12274e3e3",
+      "consumed": false,
+      "runId": null,
+      "runAttempt": null,
+      "receiptArtifact": null,
+      "receiptDigest": null
+    },
     "artifacts": null,
     "attempt": {
-      "ordinal": 1,
-      "inputKey": "232444332a9612707b1f54d16eb81007269f7b285cbe699b7126a97939e98ab1",
+      "ordinal": 2,
+      "inputKey": "8043769427578472fcd34937a7cc048e5dc3713b3dbd426948574c850f6a727d",
       "trigger": "scheduled",
       "forceReason": null
     },
-    "failure": null,
+    "failure": {
+      "kind": "deterministic",
+      "stage": "merge",
+      "failureClass": "conflict",
+      "fingerprint": "15e30daab46a934953ce9308d862952a84716df5ba4dbc80ac7752a469e705a8",
+      "retryCount": 0,
+      "nextRetryAt": null
+    },
     "publicationRun": null,
     "paused": false
   },
@@ -49,7 +72,7 @@
       "expiresAt": "2026-09-29T04:57:13.000Z"
     }
   },
-  "updatedAt": "2026-09-01T06:22:14Z",
+  "updatedAt": "2026-09-01T06:25:04Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33477236545
+  "updateRunId": 33477448944
 }
