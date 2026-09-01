@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "kind": "upstream-merge",
+  "upstreamTag": "dsh-v0.1.2-alpha.4",
+  "upstreamCommit": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+  "baseCommit": "089d92d9f6e051472c2522af32aac75ed3e04742",
+  "desktopTag": "desktop-v0.1.2-alpha.4.unsigned.1",
+  "stateRevision": 30,
+  "conflictPaths": [
+    "AGENTS.md",
+    "apps/cli/reference/README.i18n.yaml",
+    "docs/config-catalog.i18n.yaml",
+    "packages/boot/app-boot/README.i18n.yaml",
+    "tsconfig.base.json"
+  ],
+  "recovery": [
+    "git fetch upstream refs/tags/dsh-v0.1.2-alpha.4",
+    "git switch automation/adopt/dsh-v0.1.2-alpha.4",
+    "git merge --no-ff 4e84901e6471b79ec0338099867ebb4606d12bb5",
+    "resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"
+  ]
+}
