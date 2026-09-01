@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 27,
+  "revision": 28,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.2",
@@ -18,7 +18,7 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.3.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "artifacts-validated",
+    "phase": "release-pending",
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.3",
       "pr": 61,
@@ -73,7 +73,7 @@
       "expiresAt": "2026-09-29T04:57:13.000Z"
     }
   },
-  "updatedAt": "2026-09-01T15:52:32Z",
+  "updatedAt": "2026-09-01T15:52:33Z",
   "updatedBy": "mint-state-finalizer",
   "updateRunId": 33528306880
 }
