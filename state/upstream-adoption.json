@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 8,
+  "revision": 9,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.1-rc.2",
@@ -18,7 +18,7 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.1.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "candidate-open",
+    "phase": "candidate-validated",
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.1",
       "pr": 44,
@@ -34,11 +34,11 @@
     },
     "validation": {
       "nonce": "c4ccbb24dd9286fd6fa8bfb596ae03bbbf62cf69e8f6b9a2a28da3217224708c",
-      "consumed": false,
-      "runId": null,
-      "runAttempt": null,
-      "receiptArtifact": null,
-      "receiptDigest": null
+      "consumed": true,
+      "runId": 33467832481,
+      "runAttempt": 1,
+      "receiptArtifact": "validation-receipt",
+      "receiptDigest": "b39156dcec4dea2e53839c986b522f1dde7388329cf184d9f2fa64696efbd0d5"
     },
     "artifacts": null,
     "attempt": {
@@ -60,15 +60,15 @@
       "signerFingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
     },
     "receipt": {
-      "sequence": 1,
-      "id": "8068bb08-5029-4235-82ec-99b778dc7ffe",
-      "bundleDigest": "1601d76cf37da518ade1f3d6a5c07c562ad2462a83a602932f35e66945f19e0e",
-      "authorizationPr": 36,
-      "authorizationCommit": "add9ca24e580306e0fa67faf7bff2483a8f9cbaf",
-      "expiresAt": "2026-09-29T19:38:01.595Z"
+      "sequence": 2,
+      "id": "647b8f13-2309-4de6-9d6d-ccfb28aca687",
+      "bundleDigest": "ab8814ab15c1f674a0e1b848fc242e43f2547e7606d72c5dc619d1431d139a0d",
+      "authorizationPr": 55,
+      "authorizationCommit": "553e940cb75c449729cac7cc6cd602482cdc7b33",
+      "expiresAt": "2026-09-29T03:35:35.000Z"
     }
   },
-  "updatedAt": "2026-09-01T03:53:14Z",
+  "updatedAt": "2026-09-01T04:14:29Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33467791181
+  "updateRunId": 33469048474
 }
