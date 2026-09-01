@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "receiptId": "d801cbc8-0a3c-4276-8025-049577ebefa8",
+  "receiptId": "647b8f13-2309-4de6-9d6d-ccfb28aca687",
   "sequence": 2,
-  "authorizationPr": 53,
+  "authorizationPr": 55,
   "predecessor": {
     "receiptId": "8068bb08-5029-4235-82ec-99b778dc7ffe",
     "bundleDigest": "1601d76cf37da518ade1f3d6a5c07c562ad2462a83a602932f35e66945f19e0e"
@@ -15,8 +15,8 @@
       "type": "User"
     }
   },
-  "issuedAt": "2026-09-01T02:47:11.124Z",
-  "expiresAt": "2026-09-29T02:47:11.124Z",
+  "issuedAt": "2026-09-01T03:35:35.000Z",
+  "expiresAt": "2026-09-29T03:35:35.000Z",
   "issuer": {
     "login": "mintgao",
     "fingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
@@ -305,7 +305,7 @@
   "workflowDigests": {
     ".github/workflows/desktop-release.yml": "55a5c1aa4324723617b8b1db09044dff29003e98c3323ac2c659d23f4209c86f",
     ".github/workflows/upstream-adoption-controller.yml": "bdb30c31b6567e1e77e369a09c89e69aee43707dcfc5e2888c1194584a93e3d3",
-    ".github/workflows/upstream-adoption-finalizer.yml": "30efd58c68504be6a9549cc34571466b41cadb572ec1e95a0f3bf0299af3d0e9",
+    ".github/workflows/upstream-adoption-finalizer.yml": "d284b943ed73974a57fcdbf2ad0c3d7a1186e8af9af119a008e2c3d9013607a9",
     ".github/workflows/upstream-adoption-observer.yml": "5851b1bea85806a6eb8acd037f684405370c528038e91bab8dca29652bfd46c9",
     ".github/workflows/upstream-adoption-preflight.yml": "6c3b404cddf4ff140d0eaebb35d99f8cb1c31e6b74ba042208e14563d54b59f6",
     ".github/workflows/upstream-adoption-validation.yml": "2683fc4cb388e77feb91fa802b1ee79cfb3df209caba4f9afadc684c426d4f19"
