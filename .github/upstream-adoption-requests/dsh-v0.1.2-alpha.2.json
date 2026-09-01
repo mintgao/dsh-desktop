@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "upstream-merge",
+  "upstreamTag": "dsh-v0.1.2-alpha.2",
+  "upstreamCommit": "0a53fb55bea101816fa226bb964ae2bed71c343b",
+  "baseCommit": "93271c156a52804e18902045c7264ab22aa878c9",
+  "desktopTag": "desktop-v0.1.2-alpha.2.unsigned.1",
+  "stateRevision": 14,
+  "conflictPaths": [
+    "apps/cli/package.json",
+    "docs/config-catalog.i18n.yaml",
+    "docs/config-catalog.md",
+    "docs/config-catalog.zh.md",
+    "knip.json",
+    "packages/client/README.i18n.yaml",
+    "pnpm-lock.yaml",
+    "scripts/rescope-vendor.ts",
+    "tsconfig.base.json"
+  ],
+  "recovery": [
+    "git fetch upstream refs/tags/dsh-v0.1.2-alpha.2",
+    "git switch automation/adopt/dsh-v0.1.2-alpha.2",
+    "git merge --no-ff 0a53fb55bea101816fa226bb964ae2bed71c343b",
+    "resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"
+  ]
+}
