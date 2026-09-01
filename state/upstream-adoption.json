@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 4,
+  "revision": 5,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.1-rc.2",
@@ -22,18 +22,18 @@
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.1",
       "pr": 44,
-      "baseCommit": "4af93dcf504c3287c4acc56ad3c6cdfe890bca6d",
-      "headCommit": "a553cd6e02b6f32d47e2bbfbbe1129c64d80765b",
+      "baseCommit": "87b64f20de915f9ecc1b91847a79db8fd102d504",
+      "headCommit": "a3bf8a9baf3196e2b791981124343d71122c524a",
       "humanEdited": true,
       "protectedPathsChanged": [
         "scripts/upstream-adoption/policy.ts",
         "scripts/upstream-adoption/state.ts"
       ],
-      "approvedHead": "a553cd6e02b6f32d47e2bbfbbe1129c64d80765b",
+      "approvedHead": "a3bf8a9baf3196e2b791981124343d71122c524a",
       "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.1.json"
     },
     "validation": {
-      "nonce": "7bd1c6be9629a1f6fc4c87d40b67361d2700a526f7c331a38e98a39533747484",
+      "nonce": "37e69f9bbddfa5ba292a141fbc781ee74b967cb1b8dd1637a25798b25b2225d1",
       "consumed": false,
       "runId": null,
       "runAttempt": null,
@@ -42,8 +42,8 @@
     },
     "artifacts": null,
     "attempt": {
-      "ordinal": 4,
-      "inputKey": "caa9bc3db776005c71ccef85934aef12d981a9a46f0edb6c536f83698963a781",
+      "ordinal": 5,
+      "inputKey": "fb54c54458180873f41efefd1acce8f3e2b6e1c6e33225837975d08893f28689",
       "trigger": "scheduled",
       "forceReason": null
     },
@@ -52,7 +52,7 @@
     "paused": false
   },
   "policy": null,
-  "updatedAt": "2026-09-01T00:53:51Z",
+  "updatedAt": "2026-09-01T01:37:14Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33456551800
+  "updateRunId": 33459400937
 }
