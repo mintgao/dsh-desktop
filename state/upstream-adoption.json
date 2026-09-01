@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 13,
+  "revision": 14,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.1",
@@ -10,7 +10,28 @@
     "desktopCommit": "2deb703c8446b81c29a0130f6ada236fb99c7c7a",
     "publicationReceipt": "cdded216afc62c98c52496f466cf5240602cebd19abba500a5250f67e3e90c06"
   },
-  "activeDelivery": null,
+  "activeDelivery": {
+    "upstream": {
+      "tag": "dsh-v0.1.2-alpha.2",
+      "commit": "0a53fb55bea101816fa226bb964ae2bed71c343b",
+      "publishedAt": "2026-08-30T13:52:14Z"
+    },
+    "desktopTag": "desktop-v0.1.2-alpha.2.unsigned.1",
+    "mode": "unsigned-preview",
+    "phase": "detected",
+    "candidate": null,
+    "validation": null,
+    "artifacts": null,
+    "attempt": {
+      "ordinal": 1,
+      "inputKey": "a4b0d356c920264f5a41ca257af775811914120395a5cdeb92eaa67d781a6bb8",
+      "trigger": "scheduled",
+      "forceReason": null
+    },
+    "failure": null,
+    "publicationRun": null,
+    "paused": false
+  },
   "policy": {
     "activation": {
       "rotationOrdinal": 1,
@@ -28,7 +49,7 @@
       "expiresAt": "2026-09-29T03:35:35.000Z"
     }
   },
-  "updatedAt": "2026-09-01T05:26:43Z",
+  "updatedAt": "2026-09-01T05:30:09Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33473551158
+  "updateRunId": 33473798724
 }
