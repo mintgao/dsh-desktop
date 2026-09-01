@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "upstream-merge",
+  "upstreamTag": "dsh-v0.1.2-alpha.3",
+  "upstreamCommit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+  "baseCommit": "a82509889e77a966abf43c0b568e20edf0d6c976",
+  "desktopTag": "desktop-v0.1.2-alpha.3.unsigned.1",
+  "stateRevision": 22,
+  "conflictPaths": [
+    "docs/config-catalog.i18n.yaml",
+    "scripts/rescope-vendor.ts"
+  ],
+  "recovery": [
+    "git fetch upstream refs/tags/dsh-v0.1.2-alpha.3",
+    "git switch automation/adopt/dsh-v0.1.2-alpha.3",
+    "git merge --no-ff dd6322d604e00eec1ba5e0c8541159906a21094a",
+    "resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"
+  ]
+}
