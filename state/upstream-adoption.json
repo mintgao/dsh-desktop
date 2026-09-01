@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 23,
+  "revision": 24,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.2",
@@ -23,14 +23,14 @@
       "branch": "automation/adopt/dsh-v0.1.2-alpha.3",
       "pr": 61,
       "baseCommit": "a82509889e77a966abf43c0b568e20edf0d6c976",
-      "headCommit": "993acb45be8201b3cde4dea6c272ebd3a262a6a0",
+      "headCommit": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
       "humanEdited": true,
       "protectedPathsChanged": [],
       "approvedHead": null,
       "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.3.json"
     },
     "validation": {
-      "nonce": "90d65d5f856a0797aebb98ecf93496c887c5948cab91f039e7471cc12274e3e3",
+      "nonce": "729ee979ecbac6bbd092723d5adf0f4e0fd710f24530b5ab4ef9278a2694f264",
       "consumed": false,
       "runId": null,
       "runAttempt": null,
@@ -39,16 +39,16 @@
     },
     "artifacts": null,
     "attempt": {
-      "ordinal": 2,
-      "inputKey": "8043769427578472fcd34937a7cc048e5dc3713b3dbd426948574c850f6a727d",
+      "ordinal": 3,
+      "inputKey": "172965ce7bb76db19bf7e0c9f1aa5117c91fc1314868ab8c1730660aee887b99",
       "trigger": "scheduled",
       "forceReason": null
     },
     "failure": {
       "kind": "deterministic",
-      "stage": "merge",
-      "failureClass": "conflict",
-      "fingerprint": "15e30daab46a934953ce9308d862952a84716df5ba4dbc80ac7752a469e705a8",
+      "stage": "approval",
+      "failureClass": "exact-head-maintainer-approval",
+      "fingerprint": "b9d07c13a10dafcb7751a5bbc552e24d816bc63841fc2e3774d0b4dc900e209e",
       "retryCount": 0,
       "nextRetryAt": null
     },
@@ -72,7 +72,7 @@
       "expiresAt": "2026-09-29T04:57:13.000Z"
     }
   },
-  "updatedAt": "2026-09-01T06:25:04Z",
+  "updatedAt": "2026-09-01T15:24:27Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33477448944
+  "updateRunId": 33525464511
 }
