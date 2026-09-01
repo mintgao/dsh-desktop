@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 16,
+  "revision": 17,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.1",
@@ -18,7 +18,7 @@
     },
     "desktopTag": "desktop-v0.1.2-alpha.2.unsigned.1",
     "mode": "unsigned-preview",
-    "phase": "adoption-blocked",
+    "phase": "candidate-open",
     "candidate": {
       "branch": "automation/adopt/dsh-v0.1.2-alpha.2",
       "pr": 59,
@@ -26,11 +26,11 @@
       "headCommit": "a82509889e77a966abf43c0b568e20edf0d6c976",
       "humanEdited": true,
       "protectedPathsChanged": [],
-      "approvedHead": null,
+      "approvedHead": "a82509889e77a966abf43c0b568e20edf0d6c976",
       "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.2.json"
     },
     "validation": {
-      "nonce": "a18820d2640931593d0a4f0be08a60e2fc88c660629dfd888e608f8298a3dd44",
+      "nonce": "12c931148cc942ecd1b1d4dae6ac21d8e83c475f556b7187a92e25b506241bc5",
       "consumed": false,
       "runId": null,
       "runAttempt": null,
@@ -39,19 +39,12 @@
     },
     "artifacts": null,
     "attempt": {
-      "ordinal": 3,
-      "inputKey": "a677de83681010c12368428e407e0582d852c3769b557dae3d2aab4986ab38fb",
+      "ordinal": 4,
+      "inputKey": "a81ec46de3e74d32a39b7d32e2c74d9af7a90785ef5af29a22575406b123f275",
       "trigger": "scheduled",
       "forceReason": null
     },
-    "failure": {
-      "kind": "deterministic",
-      "stage": "approval",
-      "failureClass": "exact-head-maintainer-approval",
-      "fingerprint": "b9d07c13a10dafcb7751a5bbc552e24d816bc63841fc2e3774d0b4dc900e209e",
-      "retryCount": 0,
-      "nextRetryAt": null
-    },
+    "failure": null,
     "publicationRun": null,
     "paused": false
   },
@@ -72,7 +65,7 @@
       "expiresAt": "2026-09-29T03:35:35.000Z"
     }
   },
-  "updatedAt": "2026-09-01T05:55:01Z",
+  "updatedAt": "2026-09-01T05:57:50Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33475395918
+  "updateRunId": 33475574112
 }
