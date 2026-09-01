@@ -79,7 +79,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       workflow_commit: ${{ steps.release.outputs.workflow_commit }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -142,7 +142,7 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.workflow_commit }}
           persist-credentials: false
@@ -229,7 +229,7 @@ jobs:
     environment: mint-publication
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.workflow_commit }}
           fetch-depth: 0
