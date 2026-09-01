@@ -1,9 +1,12 @@
 {
   "schemaVersion": 1,
-  "receiptId": "8068bb08-5029-4235-82ec-99b778dc7ffe",
-  "sequence": 1,
-  "authorizationPr": 36,
-  "predecessor": null,
+  "receiptId": "d801cbc8-0a3c-4276-8025-049577ebefa8",
+  "sequence": 2,
+  "authorizationPr": 53,
+  "predecessor": {
+    "receiptId": "8068bb08-5029-4235-82ec-99b778dc7ffe",
+    "bundleDigest": "1601d76cf37da518ade1f3d6a5c07c562ad2462a83a602932f35e66945f19e0e"
+  },
   "repository": {
     "id": 1344813014,
     "name": "dsh-desktop",
@@ -12,8 +15,8 @@
       "type": "User"
     }
   },
-  "issuedAt": "2026-08-31T19:38:01.595Z",
-  "expiresAt": "2026-09-29T19:38:01.595Z",
+  "issuedAt": "2026-09-01T02:47:11.124Z",
+  "expiresAt": "2026-09-29T02:47:11.124Z",
   "issuer": {
     "login": "mintgao",
     "fingerprint": "SHA256:cnIz1LLXsNiUIAjGRm9h9JcZSS+PAwNSlEir5S2Vnxk"
@@ -303,9 +306,9 @@
     ".github/workflows/desktop-release.yml": "55a5c1aa4324723617b8b1db09044dff29003e98c3323ac2c659d23f4209c86f",
     ".github/workflows/upstream-adoption-controller.yml": "bdb30c31b6567e1e77e369a09c89e69aee43707dcfc5e2888c1194584a93e3d3",
     ".github/workflows/upstream-adoption-finalizer.yml": "30efd58c68504be6a9549cc34571466b41cadb572ec1e95a0f3bf0299af3d0e9",
-    ".github/workflows/upstream-adoption-observer.yml": "6d8535c4e73b4cfb73d91185b356c1b7a62ff6c9f3c2e67e1956f76f127d1d75",
-    ".github/workflows/upstream-adoption-preflight.yml": "3b26cb54189a250ff9e289ca08a9b65de87fff7791ef9f78a9601eb536f49df1",
-    ".github/workflows/upstream-adoption-validation.yml": "44b7a03d0816eda73079e939cc1af2c75d46c99dc075616cf8a72dc44483c116"
+    ".github/workflows/upstream-adoption-observer.yml": "5851b1bea85806a6eb8acd037f684405370c528038e91bab8dca29652bfd46c9",
+    ".github/workflows/upstream-adoption-preflight.yml": "6c3b404cddf4ff140d0eaebb35d99f8cb1c31e6b74ba042208e14563d54b59f6",
+    ".github/workflows/upstream-adoption-validation.yml": "2683fc4cb388e77feb91fa802b1ee79cfb3df209caba4f9afadc684c426d4f19"
   },
   "generatorVersion": "dsh-release-policy-v1"
 }
