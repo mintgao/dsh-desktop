@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 31,
+  "revision": 32,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.3",
@@ -23,14 +23,17 @@
       "branch": "automation/adopt/dsh-v0.1.2-alpha.4",
       "pr": 64,
       "baseCommit": "089d92d9f6e051472c2522af32aac75ed3e04742",
-      "headCommit": "8fbdade07a28f929f415d3db94c8ed17406973f5",
+      "headCommit": "963fed7add258732254c92894650f979693e37a2",
       "humanEdited": true,
-      "protectedPathsChanged": [],
+      "protectedPathsChanged": [
+        "scripts/desktop-workflows.spec.ts",
+        "scripts/upstream-adoption/controller-reconcile.sh"
+      ],
       "approvedHead": null,
       "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.4.json"
     },
     "validation": {
-      "nonce": "7c91c5bf3b469aee47d13edbb335c4ebb0e5e7bc246f035b9255df2349a6941e",
+      "nonce": "ba1a303b02a683a3ed68ce14d3f32bd4a5c0b39c3d56c1c92fa7f69803a8e03d",
       "consumed": false,
       "runId": null,
       "runAttempt": null,
@@ -39,16 +42,16 @@
     },
     "artifacts": null,
     "attempt": {
-      "ordinal": 2,
-      "inputKey": "396fe22eac6ca3d1a5d3c37dd689b26d90749462c313764380735d9d935481aa",
+      "ordinal": 3,
+      "inputKey": "0f41e993ecf2810c517cde9503c124b07fb79927b4ee0d6cc7574382886c6a36",
       "trigger": "scheduled",
       "forceReason": null
     },
     "failure": {
       "kind": "deterministic",
-      "stage": "merge",
-      "failureClass": "conflict",
-      "fingerprint": "c7bedd49f740e5647d663142e94c7a96dd3a8f6e8ebc9459cc2e086bbe0efc57",
+      "stage": "approval",
+      "failureClass": "exact-head-maintainer-approval",
+      "fingerprint": "b9d07c13a10dafcb7751a5bbc552e24d816bc63841fc2e3774d0b4dc900e209e",
       "retryCount": 0,
       "nextRetryAt": null
     },
@@ -72,7 +75,7 @@
       "expiresAt": "2026-09-29T04:57:13.000Z"
     }
   },
-  "updatedAt": "2026-09-01T17:29:19Z",
+  "updatedAt": "2026-09-04T21:05:13Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33537990323
+  "updateRunId": 33919358215
 }
