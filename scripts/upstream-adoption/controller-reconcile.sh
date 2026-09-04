@@ -66,6 +66,28 @@ ensure_complete_origin_history() {
     git fetch --unshallow origin
   fi
 }
+configure_translation_pairing_merge_driver() {
+  local trusted_main="$1"
+  local repository_root driver_directory driver_file driver_command
+  repository_root="$(git rev-parse --show-toplevel)"
+  driver_directory="$(mktemp -d "$RUNNER_TEMP/upstream-adoption-translation-pairing.XXXXXX")"
+  for driver_file in \
+    merge-translation-pairing-driver.sh \
+    merge-translation-pairing.ts \
+    translation-links.ts \
+    translation-pairing-git.ts \
+    translation-pairing-merge.ts \
+    translation-pairing-record.ts \
+    translation-pairing.ts; do
+    git show "$trusted_main:scripts/$driver_file" > "$driver_directory/$driver_file"
+  done
+  chmod +x "$driver_directory/merge-translation-pairing-driver.sh"
+  ln -s "$repository_root/node_modules" "$driver_directory/node_modules"
+  node --import tsx/esm "$driver_directory/merge-translation-pairing.ts" --probe
+  printf -v driver_command '"%s" %%O %%A %%B %%P' "$driver_directory/merge-translation-pairing-driver.sh"
+  git config --local merge.dsh-translation-pairing.name 'DeepSeek Harness bilingual pairing records'
+  git config --local merge.dsh-translation-pairing.driver "$driver_command"
+}
 write_conflict_paths() {
   local output="$1"
   git diff --name-only --diff-filter=U | sort | jq -R . | jq -s . > "$output"
@@ -283,6 +305,7 @@ git fetch upstream "refs/tags/$queue_head:refs/tags/$queue_head"
 test "$(git rev-parse "$queue_head^{commit}")" = "$upstream_commit"
 git config user.name "$CONTROLLER_APP_SLUG[bot]"
 git config user.email "$CONTROLLER_APP_ID+$CONTROLLER_APP_SLUG[bot]@users.noreply.github.com"
+configure_translation_pairing_merge_driver "$current_main"
 controller_wrote=false
 if git ls-remote --exit-code origin "refs/heads/$candidate_branch" >/dev/null 2>&1; then
   git fetch origin "refs/heads/$candidate_branch:refs/remotes/origin/$candidate_branch"

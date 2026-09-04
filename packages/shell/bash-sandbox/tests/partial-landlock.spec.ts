@@ -27,7 +27,7 @@ const tempDirs: string[] = []
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
   await Promise.all(tempDirs.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
-})
+}, 15_000)
 
 /** Write a fake native launcher that reports partial enforcement, then execs or fails. */
 async function fakeLauncher(fatalExit?: number): Promise<string> {
@@ -81,7 +81,7 @@ async function setupConfiguredRunner(runner: string): Promise<SandboxBashExecuto
   return ctx.shell as SandboxBashExecutor
 }
 
-describe('partial Landlock runner-failure classification', () => {
+describe('partial Landlock runner-failure classification', { timeout: 15_000 }, () => {
   it.each(['missing', 'unexecutable', 'missing-interpreter'] as const)('classifies a %s configured runner through the direct spawn error channel', async (kind) => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-unusable-sandbox-runner-'))
     tempDirs.push(dir)

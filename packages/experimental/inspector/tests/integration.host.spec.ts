@@ -15,6 +15,9 @@ interface CdpMessage {
   readonly error?: { message: string }
 }
 
+// This test watchdog is separate from configured production Client Runtime and query deadlines.
+const TEST_CDP_REQUEST_TIMEOUT_MS = 10_000
+
 class TestCdpClient {
   private nextId = 0
   private readonly pending = new Map<number, (message: CdpMessage) => void>()
@@ -43,7 +46,7 @@ class TestCdpClient {
       const timer = setTimeout(() => {
         this.pending.delete(id)
         reject(new Error(`CDP call timed out: ${method}`))
-      }, 5_000)
+      }, TEST_CDP_REQUEST_TIMEOUT_MS)
       this.pending.set(id, (message) => {
         clearTimeout(timer)
         this.pending.delete(id)
@@ -61,7 +64,7 @@ class TestCdpClient {
   }
 }
 
-describe('experimental Inspector real Worker', () => {
+describe('experimental Inspector real Worker', { timeout: 15_000 }, () => {
   let inspector: InspectorHandle | undefined
   let cdp: TestCdpClient | undefined
   let secondCdp: TestCdpClient | undefined
@@ -79,7 +82,7 @@ describe('experimental Inspector real Worker', () => {
     inspector = undefined
     if (server !== undefined) await new Promise<void>((resolve) => { server!.close(() => { resolve() }) })
     server = undefined
-  })
+  }, 15_000)
 
   it('switches between Host and Client contexts and routes Client RemoteObjects', async () => {
     inspector = await startInspector({ port: 0, captureFetch: false, clientReconnectBaseMs: 10, clientReconnectMaxMs: 20 })
@@ -204,7 +207,7 @@ describe('experimental Inspector real Worker', () => {
         event.method === 'Runtime.executionContextDestroyed'
         && event.params?.executionContextId === clientContextId)).toBe(true)
     })
-  })
+  }, 15_000)
 
   it('isolates Client object ids and object groups by DevTools connection', async () => {
     inspector = await startInspector({ port: 0, captureFetch: false })

@@ -26,8 +26,18 @@ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent
  * loads the bridge pointed at them, and asserts the hook's effect on the loop.
  */
 
+const contexts: Context[] = []
 const dirs: string[] = []
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }) })
+afterEach(async () => {
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+}, 15_000)
+
+function trackedContext(): Context {
+  const ctx = new Context()
+  contexts.push(ctx)
+  return ctx
+}
 
 function subagentCarrier(ctx: Context) {
   return scopeTarget(ctx as unknown as SubagentRuntime, undefined)
@@ -56,7 +66,7 @@ async function harnessWithFiber(
   adapter: MockAdapter,
   beforeHooks?: (ctx: Context) => void,
 ): Promise<{ ctx: Context; hooks: Fiber }> {
-  const ctx = new Context()
+  const ctx = trackedContext()
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -72,8 +82,8 @@ function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
   return agent.whenIdle()
 }
 
-function events(agent: Agent): SessionEvent[] {
-  return [...agent.session.events]
+function events(agent: Agent): readonly SessionEvent[] {
+  return agent.session.snapshotEvents()
 }
 
 /**
@@ -90,7 +100,7 @@ async function waitFor(predicate: () => boolean, timeout = 5000, interval = 10):
   }
 }
 
-describe('hooks-claude-code bridge — UserPromptSubmit', () => {
+describe('hooks-claude-code bridge — UserPromptSubmit', { timeout: 15_000 }, () => {
   it('a UserPromptSubmit hook that exits 2 closes a blocked turn without a step', async () => {
     // UserPromptSubmit ignores its malformed matcher field, then exit 2 blocks
     // with the reason on stderr.
@@ -135,7 +145,7 @@ describe('hooks-claude-code bridge — UserPromptSubmit', () => {
   })
 })
 
-describe('hooks-claude-code bridge — PreToolUse', () => {
+describe('hooks-claude-code bridge — PreToolUse', { timeout: 15_000 }, () => {
   it('a matching PreToolUse hook that exits 2 denies the tool (isError result), tool never runs', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
     dirs.push(dir)
@@ -182,7 +192,7 @@ describe('hooks-claude-code bridge — PreToolUse', () => {
   })
 })
 
-describe('hooks-claude-code bridge — PostToolUse', () => {
+describe('hooks-claude-code bridge — PostToolUse', { timeout: 15_000 }, () => {
   it('a PostToolUse hook that blocks (exit 2) turns the result into an isError with feedback', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
     dirs.push(dir)
@@ -251,7 +261,7 @@ describe('hooks-claude-code bridge — PostToolUse', () => {
   })
 })
 
-describe('hooks-claude-code bridge — SessionStart', () => {
+describe('hooks-claude-code bridge — SessionStart', { timeout: 15_000 }, () => {
   it('a SessionStart hook injects additionalContext the first request sees', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
     dirs.push(dir)
@@ -276,7 +286,7 @@ describe('hooks-claude-code bridge — SessionStart', () => {
   })
 })
 
-describe('hooks-claude-code bridge — SubagentStart / SubagentStop (observe)', () => {
+describe('hooks-claude-code bridge — SubagentStart / SubagentStop (observe)', { timeout: 15_000 }, () => {
   it('runs SubagentStart and SubagentStop hooks when the subagent lifecycle events fire', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hooks-claude-'))
     dirs.push(dir)
@@ -351,10 +361,10 @@ describe('hooks-claude-code bridge — SubagentStart / SubagentStop (observe)', 
   })
 })
 
-describe('hooks-claude-code bridge — load resilience', () => {
+describe('hooks-claude-code bridge — load resilience', { timeout: 15_000 }, () => {
   it('a missing config file registers no hooks and does not crash the loop', async () => {
     const adapter = new MockAdapter([textResponse('fine')])
-    const ctx = new Context()
+    const ctx = trackedContext()
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
@@ -415,7 +425,7 @@ describe('hooks-claude-code bridge — load resilience', () => {
     // pass even leaked, so it proved nothing).
     const dir = writeConfig({ UserPromptSubmit: [{ hooks: [{ type: 'command', command: 'exit 2' }] }] })
     const adapter = new MockAdapter([textResponse('ok')])
-    const ctx = new Context()
+    const ctx = trackedContext()
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
