@@ -1,5 +1,7 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { load } from 'js-yaml'
 import { describe, expect, it } from 'vitest'
 
@@ -33,6 +35,38 @@ describe('transactional upstream adoption workflows', () => {
     expect(text).toContain('git rev-parse --is-shallow-repository')
     expect(text).toContain('git fetch --unshallow origin')
     expect(text).toContain('git rev-parse -q --verify MERGE_HEAD')
+    const configurePairingDriverIndex = text.indexOf('configure_translation_pairing_merge_driver "$current_main"')
+    const prepareVersionAlignerIndex = text.indexOf('prepare_trusted_version_aligner "$current_main"')
+    const baseRefreshMergeIndex = text.indexOf('git merge --no-ff origin/main')
+    const upstreamMergeIndex = text.indexOf('git merge --no-ff "$upstream_commit"')
+    expect(text).toContain("git config --local merge.dsh-translation-pairing.name 'DeepSeek Harness bilingual pairing records'")
+    expect(text).toContain('git config --local merge.dsh-translation-pairing.driver "$driver_command"')
+    expect(text).toContain('git show "$trusted_main:scripts/$driver_file"')
+    expect(configurePairingDriverIndex).toBeGreaterThan(-1)
+    expect(prepareVersionAlignerIndex).toBeGreaterThan(-1)
+    expect(baseRefreshMergeIndex).toBeGreaterThan(configurePairingDriverIndex)
+    expect(upstreamMergeIndex).toBeGreaterThan(configurePairingDriverIndex)
+    expect(baseRefreshMergeIndex).toBeGreaterThan(prepareVersionAlignerIndex)
+    expect(upstreamMergeIndex).toBeGreaterThan(prepareVersionAlignerIndex)
+    expect(text).toContain('git show "$trusted_main:scripts/upstream-adoption/align-downstream-package-versions.mjs" > "$trusted_version_aligner"')
+    expect(text).toContain('env -u CONTROLLER_TOKEN -u GH_TOKEN -u GITHUB_TOKEN \\\n    node "$trusted_version_aligner"')
+    expect(text).toContain('git add -- "$changed_path"')
+    expect(text).toContain('git commit -m "chore(release): align downstream packages with $queue_head"')
+    expect(text).not.toContain('node scripts/upstream-adoption/align-downstream-package-versions.mjs')
+    expect(text).not.toContain('< <(env -u CONTROLLER_TOKEN')
+    expect(text).toContain('else\n      if git merge-base --is-ancestor "$upstream_commit" HEAD; then')
+    expect(text).toMatch(/if ! git merge --no-ff "\$upstream_commit"[^]*?else\n\s+align_downstream_package_versions\n\s+fi/u)
+    const baseAlignmentIndex = text.indexOf('align_downstream_package_versions', baseRefreshMergeIndex)
+    const baseUpstreamGuardIndex = text.indexOf('git merge-base --is-ancestor "$upstream_commit" HEAD', baseRefreshMergeIndex)
+    const upstreamAlignmentIndex = text.indexOf('align_downstream_package_versions', upstreamMergeIndex)
+    const firstCandidatePushIndex = text.indexOf('git push origin "$candidate_branch:refs/heads/$candidate_branch"', baseRefreshMergeIndex)
+    const secondCandidatePushIndex = text.indexOf('git push origin "$candidate_branch:refs/heads/$candidate_branch"', upstreamMergeIndex)
+    expect(baseAlignmentIndex).toBeGreaterThan(baseRefreshMergeIndex)
+    expect(baseUpstreamGuardIndex).toBeGreaterThan(baseRefreshMergeIndex)
+    expect(baseAlignmentIndex).toBeGreaterThan(baseUpstreamGuardIndex)
+    expect(baseAlignmentIndex).toBeLessThan(firstCandidatePushIndex)
+    expect(upstreamAlignmentIndex).toBeGreaterThan(upstreamMergeIndex)
+    expect(upstreamAlignmentIndex).toBeLessThan(secondCandidatePushIndex)
     expect(text).toContain('--slurpfile conflictPaths')
     expect(text).not.toContain('--argjson conflictPaths')
     expect(text).not.toContain('--allow-unrelated-histories')
@@ -436,6 +470,210 @@ describe('transactional upstream adoption workflows', () => {
   })
 })
 
+describe('upstream adoption package version alignment', () => {
+  it('aligns the current downstream packages and a future Mint package', () => {
+    const upstream = baseDshManifests()
+    const main = {
+      ...upstream,
+      'packages/bundle/desktop-mint/package.json': manifest('@deepseek-ai/dsh-desktop-mint', '1.2.2'),
+      'packages/client/ui-session-notifications/package.json': manifest('@deepseek-ai/dsh-client-ui-session-notifications', '1.2.2'),
+      'packages/mint/future/package.json': manifest('@deepseek-ai/dsh-mint-future', '1.2.2'),
+    }
+    const fixture = versionFixture(upstream, main, main)
+    try {
+      const result = runVersionAligner(fixture, 'dsh-v1.2.3')
+      const changed = result.stdout.trim().split('\n')
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(changed).toEqual([
+        'packages/bundle/desktop-mint/package.json',
+        'packages/client/ui-session-notifications/package.json',
+        'packages/mint/future/package.json',
+      ])
+      for (const path of changed) {
+        expect(readManifestVersion(fixture.root, path)).toBe('1.2.3')
+      }
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it('rejects an upstream-owned mismatch without writing any manifest', () => {
+    const upstream = baseDshManifests()
+    const main = {
+      ...upstream,
+      'packages/mint/downstream/package.json': manifest('@deepseek-ai/dsh-mint-downstream', '1.2.2'),
+    }
+    const candidate = {
+      ...main,
+      'packages/core/upstream/package.json': manifest('@deepseek-ai/dsh-upstream', '1.2.2'),
+    }
+    const fixture = versionFixture(upstream, main, candidate)
+    try {
+      const before = candidateManifestContents(fixture.root)
+      const result = runVersionAligner(fixture, 'dsh-v1.2.3')
+
+      expect(result.status).toBe(1)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain('candidate packages/core/upstream/package.json has version 1.2.2; expected 1.2.3')
+      expect(candidateManifestContents(fixture.root)).toEqual(before)
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it('does not resurrect a deleted package and leaves aligned manifests unchanged', () => {
+    const upstream = baseDshManifests()
+    const main = {
+      ...upstream,
+      'packages/mint/deleted/package.json': manifest('@deepseek-ai/dsh-mint-deleted', '1.2.2'),
+      'packages/mint/present/package.json': manifest('@deepseek-ai/dsh-mint-present', '1.2.2'),
+    }
+    const candidate = {
+      ...upstream,
+      'packages/mint/present/package.json': manifest('@deepseek-ai/dsh-mint-present', '1.2.3'),
+    }
+    const fixture = versionFixture(upstream, main, candidate)
+    try {
+      const result = runVersionAligner(fixture, 'dsh-v1.2.3')
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('')
+      expect(existsSync(resolve(fixture.root, 'packages/mint/deleted/package.json'))).toBe(false)
+      expect(readManifestVersion(fixture.root, 'packages/mint/present/package.json')).toBe('1.2.3')
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it('rejects a malformed tag before writing any manifest', () => {
+    const upstream = baseDshManifests()
+    const main = {
+      ...upstream,
+      'packages/mint/one/package.json': manifest('@deepseek-ai/dsh-mint-one', '1.2.2'),
+      'packages/mint/two/package.json': manifest('@deepseek-ai/dsh-mint-two', '1.2.2'),
+    }
+    const fixture = versionFixture(upstream, main, main)
+    try {
+      const before = candidateManifestContents(fixture.root)
+      const result = runVersionAligner(fixture, 'desktop-v1.2.3')
+
+      expect(result.status).toBe(1)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain('invalid DSH release tag')
+      expect(candidateManifestContents(fixture.root)).toEqual(before)
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it('accepts authoritative release tags with build metadata', () => {
+    const targetVersion = '1.2.3+build.7'
+    const upstream = baseDshManifests(targetVersion)
+    const main = {
+      ...upstream,
+      'packages/mint/build/package.json': manifest('@deepseek-ai/dsh-mint-build', '1.2.2'),
+    }
+    const fixture = versionFixture(upstream, main, main)
+    try {
+      const result = runVersionAligner(fixture, `dsh-v${targetVersion}`)
+
+      expect(result.status).toBe(0)
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toBe('packages/mint/build/package.json\n')
+      expect(readManifestVersion(fixture.root, 'packages/mint/build/package.json')).toBe(targetVersion)
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it.each(['package.json', 'apps/cli/package.json'])('requires pinned upstream to contain %s', (requiredPath) => {
+    const upstream = Object.fromEntries(Object.entries(baseDshManifests()).filter(([path]) => path !== requiredPath))
+    const main = {
+      ...baseDshManifests(),
+      'packages/mint/downstream/package.json': manifest('@deepseek-ai/dsh-mint-downstream', '1.2.2'),
+    }
+    const fixture = versionFixture(upstream, main, main)
+    try {
+      const before = candidateManifestContents(fixture.root)
+      const result = runVersionAligner(fixture, 'dsh-v1.2.3')
+
+      expect(result.status).toBe(1)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain(`pinned upstream is missing required ${requiredPath}`)
+      expect(candidateManifestContents(fixture.root)).toEqual(before)
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it.each([
+    {
+      requiredPath: 'package.json',
+      upstreamManifest: manifest('@deepseek-ai/dsh-other-root', '1.2.3'),
+      error: 'package.json does not match its pinned upstream package ownership',
+    },
+    {
+      requiredPath: 'apps/cli/package.json',
+      upstreamManifest: manifest('@deepseek-ai/dsh', '1.2.2'),
+      error: 'pinned upstream apps/cli/package.json has version 1.2.2; expected 1.2.3',
+    },
+  ])('validates pinned upstream $requiredPath identity and target version', ({ requiredPath, upstreamManifest, error }) => {
+    const upstream = { ...baseDshManifests(), [requiredPath]: upstreamManifest }
+    const main = {
+      ...baseDshManifests(),
+      'packages/mint/downstream/package.json': manifest('@deepseek-ai/dsh-mint-downstream', '1.2.2'),
+    }
+    const fixture = versionFixture(upstream, main, main)
+    try {
+      const before = candidateManifestContents(fixture.root)
+      const result = runVersionAligner(fixture, 'dsh-v1.2.3')
+
+      expect(result.status).toBe(1)
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain(error)
+      expect(candidateManifestContents(fixture.root)).toEqual(before)
+    } finally {
+      fixture.cleanup()
+    }
+  })
+
+  it('validates every manifest and its ownership before writing', () => {
+    const upstream = baseDshManifests()
+    const main = {
+      ...upstream,
+      'packages/mint/one/package.json': manifest('@deepseek-ai/dsh-mint-one', '1.2.2'),
+    }
+    const candidate = {
+      ...main,
+      'packages/zzz/broken/package.json': '{',
+    }
+    const fixture = versionFixture(upstream, main, candidate)
+    try {
+      const before = candidateManifestContents(fixture.root)
+      const malformed = runVersionAligner(fixture, 'dsh-v1.2.3')
+
+      expect(malformed.status).toBe(1)
+      expect(malformed.stdout).toBe('')
+      expect(malformed.stderr).toContain('packages/zzz/broken/package.json is not valid JSON')
+      expect(candidateManifestContents(fixture.root)).toEqual(before)
+
+      rmSync(resolve(fixture.root, 'packages/zzz'), { recursive: true, force: true })
+      const unknownPath = resolve(fixture.root, 'packages/mint/unknown/package.json')
+      mkdirSync(resolve(unknownPath, '..'), { recursive: true })
+      writeFileSync(unknownPath, `${JSON.stringify(manifest('@deepseek-ai/dsh-mint-unknown', '1.2.2'), null, 2)}\n`)
+      const unknown = runVersionAligner(fixture, 'dsh-v1.2.3')
+      expect(unknown.status).toBe(1)
+      expect(unknown.stdout).toBe('')
+      expect(unknown.stderr).toContain('packages/mint/unknown/package.json has no known owner')
+      expect(readManifestVersion(fixture.root, 'packages/mint/one/package.json')).toBe('1.2.2')
+    } finally {
+      fixture.cleanup()
+    }
+  })
+})
+
 describe('desktop release withdrawal workflow', () => {
   it('withdraws without deleting recovery data and restores the previous stable release', () => {
     const workflow = workflowDocument('.github/workflows/desktop-release-withdraw.yml')
@@ -458,6 +696,100 @@ function workflowDocument(path: string): Record<string, unknown> {
 
 function controllerReconcileScript(): string {
   return readFileSync(resolve(root, 'scripts/upstream-adoption/controller-reconcile.sh'), 'utf8')
+}
+
+function baseDshManifests(version = '1.2.3'): Record<string, Record<string, string>> {
+  return {
+    'package.json': manifest('@deepseek-ai/dsh-root', version),
+    'apps/cli/package.json': manifest('@deepseek-ai/dsh', version),
+    'packages/core/upstream/package.json': manifest('@deepseek-ai/dsh-upstream', version),
+  }
+}
+
+function manifest(name: string, version: string): Record<string, string> {
+  return { name, version }
+}
+
+interface VersionFixture {
+  root: string
+  currentMain: string
+  pinnedUpstream: string
+  cleanup(): void
+}
+
+function versionFixture(
+  upstream: Record<string, Record<string, string> | string>,
+  main: Record<string, Record<string, string> | string>,
+  candidate: Record<string, Record<string, string> | string>,
+): VersionFixture {
+  const fixtureRoot = mkdtempSync(join(tmpdir(), 'dsh-version-alignment-'))
+  gitFixture(fixtureRoot, ['init', '--quiet'])
+  gitFixture(fixtureRoot, ['config', 'user.name', 'DSH Test'])
+  gitFixture(fixtureRoot, ['config', 'user.email', 'dsh-test@example.invalid'])
+  writeFixtureTree(fixtureRoot, upstream)
+  gitFixture(fixtureRoot, ['add', '--all'])
+  gitFixture(fixtureRoot, ['commit', '--quiet', '-m', 'pinned upstream'])
+  const pinnedUpstream = gitFixture(fixtureRoot, ['rev-parse', 'HEAD']).trim()
+  writeFixtureTree(fixtureRoot, main)
+  gitFixture(fixtureRoot, ['add', '--all'])
+  gitFixture(fixtureRoot, ['commit', '--quiet', '--allow-empty', '-m', 'current main'])
+  const currentMain = gitFixture(fixtureRoot, ['rev-parse', 'HEAD']).trim()
+  writeFixtureTree(fixtureRoot, candidate)
+  return {
+    root: fixtureRoot,
+    currentMain,
+    pinnedUpstream,
+    cleanup: () => {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    },
+  }
+}
+
+function writeFixtureTree(rootPath: string, files: Record<string, Record<string, string> | string>): void {
+  rmSync(resolve(rootPath, 'apps'), { recursive: true, force: true })
+  rmSync(resolve(rootPath, 'packages'), { recursive: true, force: true })
+  rmSync(resolve(rootPath, 'package.json'), { force: true })
+  for (const [path, value] of Object.entries(files)) {
+    const absolutePath = resolve(rootPath, path)
+    mkdirSync(resolve(absolutePath, '..'), { recursive: true })
+    writeFileSync(absolutePath, typeof value === 'string' ? value : `${JSON.stringify(value, null, 2)}\n`)
+  }
+}
+
+function gitFixture(cwd: string, args: string[]): string {
+  return execFileSync('git', args, { cwd, encoding: 'utf8' })
+}
+
+function runVersionAligner(fixture: VersionFixture, tag: string): { status: number | null; stdout: string; stderr: string } {
+  const result = spawnSync(
+    process.execPath,
+    [
+      resolve(root, 'scripts/upstream-adoption/align-downstream-package-versions.mjs'),
+      tag,
+      fixture.currentMain,
+      fixture.pinnedUpstream,
+    ],
+    { cwd: fixture.root, encoding: 'utf8' },
+  )
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr }
+}
+
+function candidateManifestContents(rootPath: string): Record<string, string> {
+  const result: Record<string, string> = {}
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === '.git') continue
+      const path = resolve(directory, entry.name)
+      if (entry.isDirectory()) visit(path)
+      else if (entry.name === 'package.json') result[path.slice(rootPath.length + 1)] = readFileSync(path, 'utf8')
+    }
+  }
+  visit(rootPath)
+  return result
+}
+
+function readManifestVersion(rootPath: string, path: string): string {
+  return (JSON.parse(readFileSync(resolve(rootPath, path), 'utf8')) as { version: string }).version
 }
 
 function workflowJob(workflow: Record<string, unknown>, name: string): Record<string, unknown> {

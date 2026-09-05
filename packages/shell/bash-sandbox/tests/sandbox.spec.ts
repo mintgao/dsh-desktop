@@ -640,14 +640,13 @@ describe('background sandbox facts', () => {
     expect(quick.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
   })
 
-  it('a signal-killed task is never a denial (null exit code)', async () => {
+  it('a signal-killed task is never a denial', async () => {
     const { bash } = await setup()
-    const task = bash.start(bash.resolve({ command: 'echo "Permission denied" >&2; sleep 30' }))
-    // Let the stderr land before the kill so the classifier sees the
-    // signature and must still refuse it on the null exit code alone.
-    await vi.waitFor(() => { expect(task.readOutput().delta).toContain('Permission denied') })
-    task.kill()
+    const task = bash.start(bash.resolve({ command: 'printf "Permission denied\\n" >&2; kill -TERM $$' }))
     await task.done
+    expect(task.readOutput().delta).toContain('Permission denied')
+    expect(task.exitCode).toBeNull()
+    expect(task.signal).toBe('SIGTERM')
     expect(task.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
   })
 

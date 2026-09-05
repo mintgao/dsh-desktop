@@ -308,7 +308,7 @@ describe('process lifecycle ownership (the subprocess service, not the executor)
 
     // The child prints its own pid ($$ = the detached bash group leader) so
     // the test can probe liveness through the public read API alone.
-    const proc = bash.start(bash.resolve({ command: 'echo $$; sleep 60' }))
+    const proc = bash.start(bash.resolve({ command: 'echo $$; exec sleep 60' }))
     const pid = Number((await readUntil(proc, '\n')).trim())
     expect(Number.isInteger(pid) && pid > 0).toBe(true)
 
@@ -324,6 +324,8 @@ describe('process lifecycle ownership (the subprocess service, not the executor)
     expect(() => process.kill(pid, 0)).toThrow()
     await proc.done
     expect(proc.status).toBe('killed')
+    expect(proc.exitCode).toBeNull()
+    expect(proc.signal).toBe('SIGTERM')
   })
 
   it('service disposal escalates to SIGKILL for TERM-trapping children and settles handles', async () => {

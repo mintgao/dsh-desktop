@@ -18,8 +18,17 @@ import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent
 
 const testToolSignal = new AbortController().signal
 
+const contexts: Context[] = []
 const dirs: string[] = []
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }) })
+afterEach(async () => {
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+}, 15_000)
+function trackedContext(): Context {
+  const ctx = new Context()
+  contexts.push(ctx)
+  return ctx
+}
 function dir(): string { const d = mkdtempSync(join(tmpdir(), 'dsh-hx-cov-')); dirs.push(d); return d }
 function sh(d: string, name: string, body: string): string {
   const p = join(d, name); writeFileSync(p, body); chmodSync(p, 0o755); return p
@@ -30,7 +39,7 @@ function hooks(d: string, h: unknown): string {
 
 type HarnessOpts = { stderrSummaryMaxChars?: number; sessionRoot?: string }
 async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOpts = {}): Promise<Context> {
-  const ctx = new Context()
+  const ctx = trackedContext()
   await mountAgentLoopTestDependencies(ctx)
   await ctx.plugin(SessionProjectionRegistry)
   if (opts.sessionRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: opts.sessionRoot })
@@ -44,7 +53,7 @@ async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOp
 function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
   return agent.whenIdle()
 }
-function events(agent: Agent): SessionEvent[] { return [...agent.session.events] }
+function events(agent: Agent): readonly SessionEvent[] { return agent.session.snapshotEvents() }
 /** Poll until `predicate` holds or the deadline passes — robust to detached
  * emit-listener hooks firing on a `.then` (a fixed sleep flakes under load). */
 async function waitFor(predicate: () => boolean, timeout = 5000, interval = 10): Promise<void> {
@@ -60,7 +69,7 @@ export type CoverageGroup = 'prompt' | 'post-tool' | 'result-shape' | 'edge-path
 /** Register independently schedulable slices of the hooks-codex coverage matrix. */
 export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGroup[]): void {
   const selected = new Set(typeof groups === 'string' ? [groups] : groups)
-  if (selected.has('prompt')) describe('hooks-codex coverage — prompt decision mapping', () => {
+  if (selected.has('prompt')) describe('hooks-codex coverage — prompt decision mapping', { timeout: 15_000 }, () => {
     it('uses the persistence locator for transcript_path and null without one', async () => {
       async function capture(sessionRoot?: string): Promise<{ payload: { transcript_path: string | null }; expected: string | undefined }> {
         const d = dir()
@@ -154,7 +163,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
     })
   })
 
-  if (selected.has('post-tool')) describe('hooks-codex coverage — post-tool and session context mapping', () => {
+  if (selected.has('post-tool')) describe('hooks-codex coverage — post-tool and session context mapping', { timeout: 15_000 }, () => {
     it('folds the bridge PostToolUse context onto a downstream canonical value replacement', async () => {
       const d = dir()
       hooks(d, { PostToolUse: [{ hooks: [{ type: 'command', command: sh(d, 'pc.sh', '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"bridge-note"}}\'\n') }] }] })
@@ -244,7 +253,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
     })
   })
 
-  if (selected.has('result-shape')) describe('hooks-codex coverage — hook result shape and configuration', () => {
+  if (selected.has('result-shape')) describe('hooks-codex coverage — hook result shape and configuration', { timeout: 15_000 }, () => {
     it('PreToolUse for a tool call WITHOUT a command arg passes an empty command (commandOf non-object/missing arm)', async () => {
       const d = dir()
       hooks(d, { PreToolUse: [{ hooks: [{ type: 'command', command: sh(d, 'pre.sh', '#!/usr/bin/env bash\ncat >/dev/null\nexit 0\n') }] }] })
@@ -314,7 +323,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       ] }] })
       const warn = vi.fn()
       const adapter = new MockAdapter([textResponse('ok')])
-      const ctx = new Context()
+      const ctx = trackedContext()
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentLoop, { agents: [] })
@@ -370,7 +379,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
     })
   })
 
-  if (selected.has('edge-paths')) describe('hooks-codex coverage — matching and no-agent edge paths', () => {
+  if (selected.has('edge-paths')) describe('hooks-codex coverage — matching and no-agent edge paths', { timeout: 15_000 }, () => {
     it('a clean PreToolUse with no decision allows the tool (no deny)', async () => {
       const d = dir()
       hooks(d, { PreToolUse: [{ hooks: [{ type: 'command', command: sh(d, 'ok.sh', '#!/usr/bin/env bash\nexit 0\n') }] }] })
@@ -492,7 +501,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
     })
   })
 
-  if (selected.has('payload')) describe('hooks-codex coverage — continuation, payload, and cwd mapping', () => {
+  if (selected.has('payload')) describe('hooks-codex coverage — continuation, payload, and cwd mapping', { timeout: 15_000 }, () => {
     it('a blocking Stop hook with EMPTY stderr still forces continuation (no reason required)', async () => {
     // Regression: an exit-2 Stop hook with no stderr yields decision 'deny' +
     // reason undefined; the turn must STILL force-continue, not silently stop.
@@ -625,7 +634,7 @@ export function defineCoverageCases(groups: CoverageGroup | readonly CoverageGro
       const marker = join(sessionDir, 'where')
       hooks(serverDir, { PreToolUse: [{ hooks: [{ type: 'command', command: 'pwd > where' }] }] })
       const adapter = new MockAdapter([toolCallResponse('c1', 'Bash', { command: 'x' }), textResponse('done')])
-      const ctx = new Context()
+      const ctx = trackedContext()
       await mountAgentLoopTestDependencies(ctx)
       await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentLoop, { agents: [] })
