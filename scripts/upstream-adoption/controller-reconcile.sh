@@ -88,6 +88,26 @@ configure_translation_pairing_merge_driver() {
   git config --local merge.dsh-translation-pairing.name 'DeepSeek Harness bilingual pairing records'
   git config --local merge.dsh-translation-pairing.driver "$driver_command"
 }
+prepare_trusted_version_aligner() {
+  local trusted_main="$1"
+  trusted_version_aligner="$RUNNER_TEMP/align-downstream-package-versions.mjs"
+  git show "$trusted_main:scripts/upstream-adoption/align-downstream-package-versions.mjs" > "$trusted_version_aligner"
+}
+align_downstream_package_versions() {
+  local changed_paths changed_path
+  changed_paths="$RUNNER_TEMP/aligned-downstream-package-paths.txt"
+  env -u CONTROLLER_TOKEN -u GH_TOKEN -u GITHUB_TOKEN \
+    node "$trusted_version_aligner" "$queue_head" "$current_main" "$upstream_commit" > "$changed_paths"
+  [[ -s "$changed_paths" ]] || return 0
+  while IFS= read -r changed_path; do
+    if [[ "$changed_path" != package.json && ! "$changed_path" =~ ^(apps/[^/]+|packages/[^/]+/[^/]+)/package.json$ ]]; then
+      echo "Trusted version aligner returned invalid path: $changed_path" >&2
+      exit 1
+    fi
+    git add -- "$changed_path"
+  done < "$changed_paths"
+  git commit -m "chore(release): align downstream packages with $queue_head"
+}
 write_conflict_paths() {
   local output="$1"
   git diff --name-only --diff-filter=U | sort | jq -R . | jq -s . > "$output"
@@ -305,6 +325,7 @@ git fetch upstream "refs/tags/$queue_head:refs/tags/$queue_head"
 test "$(git rev-parse "$queue_head^{commit}")" = "$upstream_commit"
 git config user.name "$CONTROLLER_APP_SLUG[bot]"
 git config user.email "$CONTROLLER_APP_ID+$CONTROLLER_APP_SLUG[bot]@users.noreply.github.com"
+prepare_trusted_version_aligner "$current_main"
 configure_translation_pairing_merge_driver "$current_main"
 controller_wrote=false
 if git ls-remote --exit-code origin "refs/heads/$candidate_branch" >/dev/null 2>&1; then
@@ -320,6 +341,16 @@ if git ls-remote --exit-code origin "refs/heads/$candidate_branch" >/dev/null 2>
       jq -n --arg upstreamTag "$queue_head" --arg upstreamCommit "$upstream_commit" --arg baseCommit "$current_main" --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$state")" --argjson stateRevision "$(jq -r '.revision' "$state")" --slurpfile conflictPaths "$conflict_paths" --arg branch "$candidate_branch" '{schemaVersion:1,kind:"base-refresh",upstreamTag:$upstreamTag,upstreamCommit:$upstreamCommit,baseCommit:$baseCommit,desktopTag:$desktopTag,stateRevision:$stateRevision,conflictPaths:$conflictPaths[0],recovery:["git fetch origin main","git switch "+$branch,"git merge --no-ff origin/main","resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"]}' > "$request_path"
       git add "$request_path"
       git commit -m "chore(release): request base refresh for $queue_head"
+    else
+      if git merge-base --is-ancestor "$upstream_commit" HEAD; then
+        align_downstream_package_versions
+      else
+        upstream_ancestor_status=$?
+        if [[ "$upstream_ancestor_status" != 1 ]]; then
+          echo 'Failed to determine whether the refreshed candidate contains pinned upstream.' >&2
+          exit "$upstream_ancestor_status"
+        fi
+      fi
     fi
     git remote set-url origin "https://x-access-token:${CONTROLLER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
     git push origin "$candidate_branch:refs/heads/$candidate_branch"
@@ -336,6 +367,8 @@ else
     jq -n --arg upstreamTag "$queue_head" --arg upstreamCommit "$upstream_commit" --arg baseCommit "$current_main" --arg desktopTag "$(jq -r '.activeDelivery.desktopTag' "$state")" --argjson stateRevision "$(jq -r '.revision' "$state")" --slurpfile conflictPaths "$conflict_paths" --arg branch "$candidate_branch" '{schemaVersion:1,kind:"upstream-merge",upstreamTag:$upstreamTag,upstreamCommit:$upstreamCommit,baseCommit:$baseCommit,desktopTag:$desktopTag,stateRevision:$stateRevision,conflictPaths:$conflictPaths[0],recovery:["git fetch upstream refs/tags/"+$upstreamTag,"git switch "+$branch,"git merge --no-ff "+$upstreamCommit,"resolve every listed conflict by ownership, remove this request, run focused checks, and push without force"]}' > "$request_path"
     git add "$request_path"
     git commit -m "chore(release): request resolution for $queue_head"
+  else
+    align_downstream_package_versions
   fi
   git remote set-url origin "https://x-access-token:${CONTROLLER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
   git push origin "$candidate_branch:refs/heads/$candidate_branch"

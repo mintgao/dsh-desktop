@@ -32,6 +32,8 @@
 
 受保护的采用状态将 `dsh-v0.1.2-alpha.3` 记录为最后发布的上游 Release，并在确定性合并冲突后将 `dsh-v0.1.2-alpha.4` 记录为 `adoption-blocked` 交付。2026-09-05 对[上游公开 Release](https://github.com/deepseek-ai/deepseek-harness/releases) 的最新观察确认 `dsh-v0.1.3-alpha.1`（提交 `d347e703908d0406b7a7ef80e3a0e594d86b2215`）是排在 `dsh-v0.1.2-rc.1` 之后的最新队列 Release。有序恢复目标为 `dsh-v0.1.2-alpha.4` → `dsh-v0.1.2-alpha.5` → `dsh-v0.1.2-rc.1` → `dsh-v0.1.3-alpha.1`；后续 Release 只能在前一个 Release 完成后推进。
 
+恢复后的 `alpha.4` 候选已将两个仅下游 DSH 包的 manifest 与目标版本对齐，并加入来自受信任 `main` 的 Controller 辅助程序，在后续采用合并无冲突完成后应用同一规则。受 receipt 固定的 `.github/workflows/upstream-adoption-validation.yml` 尚未运行 Release 元数据闸门；若要在本候选中改动它，必须使用 owner 密钥单独续签 receipt。该后续事项不阻塞本次恢复：`.github/workflows/release.yml` 仍通过 `release:verify` 和 npm 安装布局验证采取失败关闭策略，而受信任辅助程序与聚焦工作流规格会强制当前及未来采用时完成版本对齐。
+
 ## 范围
 
 - 包含：在 Controller 所有的候选分支上检查并解决 `alpha.4` 的精确语义冲突；取得所需的精确 head 审批；运行聚焦检查和配置检查；让已接受的 Finalizer 与 Publisher 路径推进受保护状态、标签、产物和公开 Release；继续处理所有后续上游 Release；将最终公开游标与最新获取的上游 Release 观察结果比对。

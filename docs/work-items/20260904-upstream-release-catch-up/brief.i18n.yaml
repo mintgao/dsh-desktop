@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/work-items/20260904-upstream-release-catch-up/brief.md
-brief.md: b989d17cf43deb1780322a214825e66ef33de015
-brief.zh.md: 3a1abc61ff982024ac71306ff6e8c4e1a679aea1
+brief.md: 910aa7454d39adaa8a174f1248fa1a3ba2ca9150
+brief.zh.md: 24fb6a0e37fee720c3fa98f1c5f8521750e1ab01
