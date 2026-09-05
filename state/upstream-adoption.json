@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "revision": 32,
+  "revision": 33,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "lastPublishedRelease": {
     "tag": "dsh-v0.1.2-alpha.3",
@@ -23,17 +23,18 @@
       "branch": "automation/adopt/dsh-v0.1.2-alpha.4",
       "pr": 64,
       "baseCommit": "089d92d9f6e051472c2522af32aac75ed3e04742",
-      "headCommit": "963fed7add258732254c92894650f979693e37a2",
+      "headCommit": "b02b0bc1ed4492715b7003a0b19b8fe38901cd20",
       "humanEdited": true,
       "protectedPathsChanged": [
         "scripts/desktop-workflows.spec.ts",
+        "scripts/upstream-adoption/align-downstream-package-versions.mjs",
         "scripts/upstream-adoption/controller-reconcile.sh"
       ],
       "approvedHead": null,
       "requestPath": ".github/upstream-adoption-requests/dsh-v0.1.2-alpha.4.json"
     },
     "validation": {
-      "nonce": "ba1a303b02a683a3ed68ce14d3f32bd4a5c0b39c3d56c1c92fa7f69803a8e03d",
+      "nonce": "12cd508d0bb54fc8516ba708450304779603e2a83f0f9fd05ff3653d2b56004b",
       "consumed": false,
       "runId": null,
       "runAttempt": null,
@@ -42,8 +43,8 @@
     },
     "artifacts": null,
     "attempt": {
-      "ordinal": 3,
-      "inputKey": "0f41e993ecf2810c517cde9503c124b07fb79927b4ee0d6cc7574382886c6a36",
+      "ordinal": 4,
+      "inputKey": "b75b421c50161d6c17bc1f1532b2dc35af0b8d30cb8ce87664f2fc56fc1fbf83",
       "trigger": "scheduled",
       "forceReason": null
     },
@@ -75,7 +76,7 @@
       "expiresAt": "2026-09-29T04:57:13.000Z"
     }
   },
-  "updatedAt": "2026-09-04T21:05:13Z",
+  "updatedAt": "2026-09-05T05:48:22Z",
   "updatedBy": "mint-state-finalizer",
-  "updateRunId": 33919358215
+  "updateRunId": 33948128048
 }
