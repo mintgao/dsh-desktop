@@ -21,7 +21,7 @@
 ## 布局与响应式行为
 
 - 主 `AppFrame` 是三列 grid：264–420px 的 sidebar（默认 280px，收起 rail 为 56px）、最小宽度 640px 的 conversation 列，以及 300–520px 的 detail 列（默认 360px）。
-- 可用空间缩小时，sidebar 在 1024px 以下收起，detail 列先让出宽度、随后关闭，conversation 列最后收缩。拖动边界可调整桌面端宽度；details 是可选区域，当前没有已发布的产品内容占用它。
+- 可用空间缩小时，sidebar 在 1024px 以下收起，detail 列先让出宽度、随后关闭，conversation 列最后收缩。拖动边界可调整桌面端宽度；details 是可选区域，已发布的 conversation details 外壳没有入口，因此仍无法访问。
 - Conversation 内容以 748px 宽度居中。Composer 是一个 22px 圆角的浮起 dock，比消息内容更宽；用户气泡最大宽度为 `min(525px, 82%)`。
 - Settings 使用居中且受 viewport 限制的 modal，带左侧导航和约 800px 宽的内容框。各功能界面会在约 560–760px 处增加较窄断点，而不是依赖一个全局 mobile 布局。
 

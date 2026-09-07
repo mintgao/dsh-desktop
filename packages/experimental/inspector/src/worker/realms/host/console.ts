@@ -6,7 +6,7 @@ import type {
   RuntimeConsoleType,
 } from '../../../shared/cdp/index.ts'
 import type { HostInspectorSession } from './bridge.ts'
-import type { ConsoleBackend } from '../../../shared/cdp/realm.ts'
+import type { ConsoleBackend, ConsoleSubscriptionHandle } from '../../../shared/cdp/realm.ts'
 import { isNativeRecord } from './values.ts'
 import { HostNotificationChannel } from './bridge.ts'
 import type { HostRuntimeBackend } from './runtime.ts'
@@ -36,10 +36,13 @@ export class HostConsoleBackend implements ConsoleBackend {
   /**
    * Subscribe to native Console and exception events.
    * @param listener - Connection-local event consumer.
-   * @returns A disposer removing the consumer.
+   * @returns An already-ready subscription handle.
    */
-  subscribe(listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void): () => void {
-    return this.events.subscribe(listener)
+  subscribe(
+    listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void,
+  ): ConsoleSubscriptionHandle {
+    const dispose = this.events.subscribe(listener)
+    return { ready: Promise.resolve(), dispose }
   }
 
   async clear(): Promise<void> {

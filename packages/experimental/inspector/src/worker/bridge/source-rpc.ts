@@ -134,6 +134,7 @@ export class ClientSourceRouter {
         return
       case 'opened':
       case 'client-runtime-response':
+      case 'client-console-enable-result':
       case 'client-console-event':
         return
       default:

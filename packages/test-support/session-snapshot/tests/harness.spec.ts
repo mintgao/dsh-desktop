@@ -8,7 +8,10 @@ import { PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { runScenario, snapshotSpillRoot, type AgentUnderTest, type InputStep } from '../src/harness.ts'
 import { launchAcpTestAgent } from '../src/launcher.ts'
 
-const fsControl = vi.hoisted(() => ({ cleanupFailure: undefined as Error | undefined }))
+const fsControl = vi.hoisted(() => ({
+  cleanupFailure: undefined as Error | undefined,
+  sessionReadDelayMs: undefined as number | undefined,
+}))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>()
@@ -22,6 +25,14 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         throw failure
       }
       await actual.rm(...args)
+    },
+    async readdir(...args: Parameters<typeof actual.readdir>) {
+      if (String(args[0]).includes('acp-snap-sessions-') && fsControl.sessionReadDelayMs !== undefined) {
+        const delayMs = fsControl.sessionReadDelayMs
+        fsControl.sessionReadDelayMs = undefined
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+      return await actual.readdir(...args)
     },
   }
 })
@@ -1039,6 +1050,26 @@ describe('runScenario', () => {
       { steps: [...boot, { op: 'waitForSubagentTurnEnd', child: 2, timeoutMs: 20 }] },
       { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
     )).rejects.toThrow(/subagent child #2 did not persist closed turn 1 within 20ms/)
+  })
+
+  it('keeps the child-turn diagnostic when harvesting outlives the exact deadline', { timeout: 20_000 }, async () => {
+    const missing = await scenario({})
+    fsControl.sessionReadDelayMs = 40
+    let failure: unknown
+    try {
+      await runScenario(
+        { steps: [...boot, { op: 'waitForSubagentTurnEnd', child: 2, minimumTurn: 3, timeoutMs: 20 }] },
+        { agent: AGENT, mode: 'replay', fixtureFile: missing.fixtureFile },
+      )
+    } catch (error) {
+      failure = error
+    } finally {
+      fsControl.sessionReadDelayMs = undefined
+    }
+    expect(failure).toBeInstanceOf(Error)
+    expect((failure as Error).message)
+      .toMatch(/subagent child #2 did not persist closed turn 3 within 20ms/)
+    expect((failure as Error & { cause?: unknown }).cause).toMatchObject({ message: 'Timed out in waitFor!' })
   })
 
   it('waitForTitleAfterTurnEnd times out when the title precedes the boundary', { timeout: 20_000 }, async () => {

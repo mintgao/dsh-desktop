@@ -19,7 +19,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { SandboxPwshExecutor } from '../src/index.ts'
-import { classifyRunnerFailure, isRunnerSpawnFailure, matchesSignature } from '../src/helpers.ts'
+import { classifyBackgroundProcess, classifyRunnerFailure, isRunnerSpawnFailure, matchesSignature } from '../src/helpers.ts'
 
 // The same probe pwsh-local's suites and the vitest coverage exemption use:
 // spawnSync never throws on a missing binary (it reports status null), and
@@ -147,6 +147,24 @@ describe('helpers (pure)', () => {
       expect(matchesSignature(1, 'clean', ['access is denied'])).toBe(false)
       expect(matchesSignature(0, 'access is denied', ['access is denied'])).toBe(false)
       expect(matchesSignature(null, 'access is denied', ['access is denied'])).toBe(false)
+    })
+  })
+
+  describe('classifyBackgroundProcess', () => {
+    const rules: readonly RunnerFailureRule[] = [{ allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] }]
+
+    it('treats killed lifecycle state as authoritative over numeric PowerShell settlement', () => {
+      expect(classifyBackgroundProcess('killed', 1, 'Access is denied.', ['access is denied'], rules))
+        .toEqual({ runnerFailed: false, denied: false })
+      expect(classifyBackgroundProcess('killed', 127, 'windows-acl-run: Access is denied.', ['access is denied'], rules))
+        .toEqual({ runnerFailed: false, denied: false })
+    })
+
+    it('keeps completed-process runner failure ahead of denial', () => {
+      expect(classifyBackgroundProcess('completed', 1, 'Access is denied.', ['access is denied'], rules))
+        .toEqual({ runnerFailed: false, denied: true })
+      expect(classifyBackgroundProcess('completed', 127, 'windows-acl-run: Access is denied.', ['access is denied'], rules))
+        .toEqual({ runnerFailed: true, denied: false })
     })
   })
 })

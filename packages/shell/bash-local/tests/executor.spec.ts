@@ -1,4 +1,5 @@
-import { mkdtempSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -161,13 +162,23 @@ describe('LocalBashExecutor.run', () => {
 describe('LocalBashExecutor.start (background process handles)', () => {
   it('start returns immediately with a running handle that settles as completed', async () => {
     const { bash } = await setup()
-    const before = Date.now()
-    const proc = bash.start(bash.resolve({ command: 'sleep 0.2; echo done' }))
-    expect(Date.now() - before).toBeLessThan(150)
-    expect(proc.status).toBe('running')
-    await proc.done
-    expect(proc.status).toBe('completed')
-    expect(proc.exitCode).toBe(0)
+    const gate = join(spillDir, `start-gate-${randomUUID()}`)
+    const proc = bash.start(bash.resolve({
+      command: 'while [ ! -f "$DSH_START_TEST_GATE" ]; do sleep 0.01; done; echo done',
+      env: { DSH_START_TEST_GATE: gate },
+    }))
+    try {
+      expect(proc.status).toBe('running')
+      writeFileSync(gate, '')
+      await proc.done
+      expect(proc.status).toBe('completed')
+      expect(proc.exitCode).toBe(0)
+    } finally {
+      writeFileSync(gate, '')
+      if (proc.status === 'running') proc.kill()
+      await proc.done
+      rmSync(gate, { force: true })
+    }
   })
 
   it('threads stdin and extra env into a background process', async () => {

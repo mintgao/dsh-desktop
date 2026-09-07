@@ -67,7 +67,7 @@ export class ClientInspectorSource extends InspectorSourceConnection {
       maxPropertiesPerResult: bootstrap.maxRuntimePropertiesPerResult,
       maxResponseBytes: bootstrap.maxFrameBytes,
     }, url => this.sourceCatalog?.scriptKeyForUrl(url))
-    this.console = new ClientConsoleObserver(this.runtime, (sessionId, event) => {
+    this.console = new ClientConsoleObserver(this.runtime, (sessionId, subscriptionId, event) => {
       const socket = this.socket
       const generation = this.generation
       if (this.closed
@@ -80,6 +80,7 @@ export class ClientInspectorSource extends InspectorSourceConnection {
         sourceId: this.realmSource.sourceId,
         generation,
         sessionId,
+        subscriptionId,
         event,
       } as const
       if (!isJsonValue(frame) || jsonByteLength(frame) > this.bootstrap.maxFrameBytes) return
@@ -186,11 +187,23 @@ export class ClientInspectorSource extends InspectorSourceConnection {
           },
           runtimeClosed: (closed) => {
             this.cancelRuntimeSession(closed.sessionId)
-            this.console.disable(closed.sessionId)
+            this.console.disableSession(closed.sessionId)
             this.runtime.closeSession(closed.sessionId)
           },
-          consoleEnabled: (enabled) => { this.console.enable(enabled.sessionId) },
-          consoleDisabled: (disabled) => { this.console.disable(disabled.sessionId) },
+          consoleEnabled: (enabled) => {
+            socket.send(JSON.stringify({
+              v: INSPECTOR_PROTOCOL_VERSION,
+              t: 'client-console/enable-result',
+              sourceId: enabled.sourceId,
+              generation: enabled.generation,
+              sessionId: enabled.sessionId,
+              subscriptionId: enabled.subscriptionId,
+              outcome: this.console.enable(enabled.sessionId, enabled.subscriptionId),
+            }))
+          },
+          consoleDisabled: (disabled) => {
+            this.console.disable(disabled.sessionId, disabled.subscriptionId)
+          },
           sources: (request) => {
             void this.executeSourceRequest(socket, generation, request).catch((error: unknown) => {
               console.error('[inspector] Client Sources transport failed:', error)

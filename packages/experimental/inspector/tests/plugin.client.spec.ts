@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/client/index.ts'
 import { ClientRealmSource } from '../src/client/inspection/realm.ts'
 import type { InspectorClientBootstrap } from '../src/shared/bridge/messages/control.ts'
+import { INSPECTOR_PROTOCOL_VERSION } from '../src/shared/bridge/version.ts'
 
 class FakeWebSocket extends EventTarget {
   static readonly CONNECTING = 0
@@ -90,7 +91,7 @@ describe('experimental Inspector Client plugin', () => {
       source: { sourceId: string; generation: string }
     }
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'source/accepted',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -105,7 +106,7 @@ describe('experimental Inspector Client plugin', () => {
       .find(frame => frame.t === 'query/request')
     expect(treeRequest?.requestId).toBeTypeOf('string')
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'query/response',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -130,7 +131,7 @@ describe('experimental Inspector Client plugin', () => {
 
     document.title = 'Inspector Client Realm'
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'client-runtime/request',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -155,6 +156,135 @@ describe('experimental Inspector Client plugin', () => {
     await fiber.dispose()
     expect(JSON.parse(socket.sent.at(-1)!)).toMatchObject({ t: 'source/close' })
     expect(socket.readyState).toBe(FakeWebSocket.CLOSED)
+  })
+
+  it('acknowledges exact Console subscriptions and retains idempotent outcomes', async () => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    globalThis.__DSH_INSPECTOR__ = bootstrap
+    const pageLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const ctx = new Context()
+    const fiber = ctx.plugin({ apply })
+    await fiber.await()
+    const socket = FakeWebSocket.sockets[0]!
+    socket.open()
+    const open = JSON.parse(socket.sent[0]!) as {
+      source: { sourceId: string; generation: string }
+    }
+    socket.receive({
+      v: INSPECTOR_PROTOCOL_VERSION,
+      t: 'source/accepted',
+      sourceId: open.source.sourceId,
+      generation: open.source.generation,
+    })
+    const enable = {
+      v: INSPECTOR_PROTOCOL_VERSION,
+      t: 'client-console/enable',
+      sourceId: open.source.sourceId,
+      generation: open.source.generation,
+      sessionId: 'devtools-console',
+      subscriptionId: 'subscription-1',
+    }
+    socket.receive(enable)
+    socket.receive(enable)
+    expect(sentFrames(socket, 'client-console/enable-result').slice(-2)).toEqual([
+      expect.objectContaining({ subscriptionId: 'subscription-1', outcome: { ok: true } }),
+      expect.objectContaining({ subscriptionId: 'subscription-1', outcome: { ok: true } }),
+    ])
+
+    socket.receive({ ...enable, subscriptionId: 'subscription-conflict' })
+    expect(sentFrames(socket, 'client-console/enable-result').at(-1)).toMatchObject({
+      subscriptionId: 'subscription-conflict',
+      outcome: { ok: false, error: { code: 'session-conflict' } },
+    })
+    console.log({ ready: true }, 'client-console-active')
+    await Promise.resolve()
+    expect(sentFrames(socket, 'client-console/event').at(-1)).toMatchObject({
+      sessionId: 'devtools-console',
+      subscriptionId: 'subscription-1',
+    })
+
+    const beforeConflictCleanup = sentFrames(socket, 'client-console/event').length
+    socket.receive({
+      ...enable,
+      t: 'client-console/disable',
+      subscriptionId: 'subscription-conflict',
+    })
+    console.log('still active')
+    await Promise.resolve()
+    expect(sentFrames(socket, 'client-console/event')).toHaveLength(beforeConflictCleanup + 1)
+
+    socket.receive({ ...enable, t: 'client-console/disable' })
+    const beforeMatchingCleanup = sentFrames(socket, 'client-console/event').length
+    console.log('disabled')
+    await Promise.resolve()
+    expect(sentFrames(socket, 'client-console/event')).toHaveLength(beforeMatchingCleanup)
+
+    socket.receive({ ...enable, subscriptionId: 'subscription-2' })
+    expect(sentFrames(socket, 'client-console/enable-result').at(-1)).toMatchObject({
+      subscriptionId: 'subscription-2',
+      outcome: { ok: true },
+    })
+    await fiber.dispose()
+    expect(pageLog).toHaveBeenCalled()
+  })
+
+  it('rolls back a partial Console installation and retries after exact cleanup', async () => {
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket
+    globalThis.__DSH_INSPECTOR__ = bootstrap
+    const debugDescriptor = Object.getOwnPropertyDescriptor(console, 'debug')
+    const originalLog = console.log
+    const ctx = new Context()
+    const fiber = ctx.plugin({ apply })
+    await fiber.await()
+    try {
+      const socket = FakeWebSocket.sockets[0]!
+      socket.open()
+      const open = JSON.parse(socket.sent[0]!) as {
+        source: { sourceId: string; generation: string }
+      }
+      socket.receive({
+        v: INSPECTOR_PROTOCOL_VERSION,
+        t: 'source/accepted',
+        sourceId: open.source.sourceId,
+        generation: open.source.generation,
+      })
+      Object.defineProperty(console, 'debug', {
+        configurable: true,
+        enumerable: debugDescriptor?.enumerable ?? true,
+        writable: false,
+        value: console.debug,
+      })
+      const enable = {
+        v: INSPECTOR_PROTOCOL_VERSION,
+        t: 'client-console/enable',
+        sourceId: open.source.sourceId,
+        generation: open.source.generation,
+        sessionId: 'devtools-rollback',
+        subscriptionId: 'subscription-rollback',
+      }
+      socket.receive(enable)
+      expect(sentFrames(socket, 'client-console/enable-result').at(-1)).toMatchObject({
+        subscriptionId: 'subscription-rollback',
+        outcome: { ok: false, error: { code: 'installation-failed' } },
+      })
+      expect(console.log).toBe(originalLog)
+
+      restoreProperty(console, 'debug', debugDescriptor)
+      socket.receive(enable)
+      expect(sentFrames(socket, 'client-console/enable-result').at(-1)).toMatchObject({
+        subscriptionId: 'subscription-rollback',
+        outcome: { ok: false, error: { code: 'installation-failed' } },
+      })
+      socket.receive({ ...enable, t: 'client-console/disable' })
+      socket.receive(enable)
+      expect(sentFrames(socket, 'client-console/enable-result').at(-1)).toMatchObject({
+        subscriptionId: 'subscription-rollback',
+        outcome: { ok: true },
+      })
+    } finally {
+      restoreProperty(console, 'debug', debugDescriptor)
+      await fiber.dispose()
+    }
   })
 
   it('keeps the realm source id and rotates the transport generation on reconnect', async () => {
@@ -280,13 +410,13 @@ describe('experimental Inspector Client plugin', () => {
       source: { sourceId: string; generation: string }
     }
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'source/accepted',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
     })
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'client-runtime/request',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -295,7 +425,7 @@ describe('experimental Inspector Client plugin', () => {
       command: { op: 'evaluate', expression: 'new Promise(() => {})', awaitPromise: true },
     })
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'client-runtime/cancel',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -307,7 +437,7 @@ describe('experimental Inspector Client plugin', () => {
       .some(frame => frame.requestId === 'runtime-cancel')).toBe(false)
 
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'client-runtime/request',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -338,7 +468,7 @@ describe('experimental Inspector Client plugin', () => {
       source: { sourceId: string; generation: string }
     }
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'source/accepted',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -387,13 +517,13 @@ describe('experimental Inspector Client plugin', () => {
     }
     expect(open.source.capabilities).toEqual(expect.arrayContaining([{ type: 'client-sources' }]))
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'source/accepted',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
     })
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'client-sources/request',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -415,7 +545,7 @@ describe('experimental Inspector Client plugin', () => {
       scriptKey = script?.scriptKey
     })
     socket.receive({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'client-sources/request',
       sourceId: open.source.sourceId,
       generation: open.source.generation,
@@ -460,3 +590,18 @@ describe('experimental Inspector Client plugin', () => {
     await fiber.dispose()
   })
 })
+
+function sentFrames(socket: FakeWebSocket, type: string): Array<Record<string, unknown>> {
+  return socket.sent
+    .map(value => JSON.parse(value) as Record<string, unknown>)
+    .filter(frame => frame.t === type)
+}
+
+function restoreProperty(
+  target: object,
+  key: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+): void {
+  if (descriptor === undefined) Reflect.deleteProperty(target, key)
+  else Object.defineProperty(target, key, descriptor)
+}

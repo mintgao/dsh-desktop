@@ -5,7 +5,7 @@
  */
 
 import { accessSync, constants, statSync } from 'node:fs'
-import type { ShellRunResult } from '@deepseek-ai/dsh-shell'
+import type { ShellProcessStatus, ShellRunResult } from '@deepseek-ai/dsh-shell'
 import type { RunnerFailureRule } from '@deepseek-ai/dsh-sandbox'
 
 /** Node-local spawn codes proven to identify executable resolution or permission failure. */
@@ -100,6 +100,32 @@ export function classifyRunnerFailure(
     }
   }
   return undefined
+}
+
+/**
+ * Classify one settled background process after the executor has stamped its
+ * lifecycle status. A killed handle is an interruption even when a shell
+ * converts the tree signal into a numeric 128-plus-signal exit code.
+ * @param status - authoritative background-process lifecycle status.
+ * @param exitCode - process exit code reported by the subprocess provider.
+ * @param stderr - collected stderr text, left unchanged.
+ * @param denialSignatures - denial substrings from the active wrap.
+ * @param runnerFailureRules - structured runner-failure rules from the active wrap.
+ * @returns mutually exclusive runner-failure and policy-denial facts.
+ */
+export function classifyBackgroundProcess(
+  status: ShellProcessStatus,
+  exitCode: number | null,
+  stderr: string,
+  denialSignatures: readonly string[],
+  runnerFailureRules: readonly RunnerFailureRule[],
+): { runnerFailed: boolean; denied: boolean } {
+  if (status === 'killed') return { runnerFailed: false, denied: false }
+  const runnerFailed = classifyRunnerFailure(exitCode, stderr, runnerFailureRules) !== undefined
+  return {
+    runnerFailed,
+    denied: !runnerFailed && matchesSignature(exitCode, stderr, denialSignatures),
+  }
 }
 
 /**

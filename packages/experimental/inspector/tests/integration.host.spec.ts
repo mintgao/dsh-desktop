@@ -15,16 +15,33 @@ interface CdpMessage {
   readonly error?: { message: string }
 }
 
+interface CdpEventWaiter {
+  readonly label: string
+  receive(message: CdpMessage): void
+  reject(error: Error): void
+}
+
 class TestCdpClient {
   private nextId = 0
   private readonly pending = new Map<number, (message: CdpMessage) => void>()
+  private readonly eventWaiters = new Set<CdpEventWaiter>()
+  private closed = false
   readonly events: CdpMessage[] = []
 
   private constructor(private readonly socket: WebSocket) {
     socket.on('message', (data) => {
       const message = JSON.parse(rawText(data)) as CdpMessage
       if (message.id !== undefined) this.pending.get(message.id)?.(message)
-      else this.events.push(message)
+      else {
+        this.events.push(message)
+        for (const waiter of [...this.eventWaiters]) waiter.receive(message)
+      }
+    })
+    socket.once('close', () => {
+      this.closed = true
+      for (const waiter of [...this.eventWaiters]) {
+        waiter.reject(new Error(`CDP socket closed while awaiting ${waiter.label}`))
+      }
     })
   }
 
@@ -51,6 +68,54 @@ class TestCdpClient {
       })
       this.socket.send(JSON.stringify({ id, method, params }))
     })
+  }
+
+  waitForEvent(
+    label: string,
+    method: string,
+    predicate: (message: CdpMessage) => boolean,
+  ): Promise<CdpMessage> {
+    try {
+      const retained = this.events.find(event => event.method === method && predicate(event))
+      if (retained !== undefined) return Promise.resolve(retained)
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error), { cause: error }))
+    }
+    if (this.closed || this.socket.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error(`CDP socket is not open while awaiting ${label}`))
+    }
+
+    const result = Promise.withResolvers<CdpMessage>()
+    let settled = false
+    const settle = (complete: () => void): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      this.eventWaiters.delete(waiter)
+      complete()
+    }
+    const waiter: CdpEventWaiter = {
+      label,
+      receive: (message) => {
+        if (message.method !== method) return
+        try {
+          if (predicate(message)) settle(() => { result.resolve(message) })
+        } catch (error) {
+          settle(() => {
+            result.reject(error instanceof Error ? error : new Error(String(error), { cause: error }))
+          })
+        }
+      },
+      reject: (error) => { settle(() => { result.reject(error) }) },
+    }
+    const timer = setTimeout(() => {
+      waiter.reject(new Error(
+        `CDP event timed out while awaiting ${label}; `
+        + `observed ${JSON.stringify(this.events.slice(-10).map(event => event.method ?? '<unknown>'))}`,
+      ))
+    }, 30_000)
+    this.eventWaiters.add(waiter)
+    return result.promise
   }
 
   async close(): Promise<void> {
@@ -362,7 +427,7 @@ describe('experimental Inspector real Worker', () => {
     })).error?.message).toContain('Client realm has no native CDP transport')
   })
 
-  it('forwards Client Console objects through isolated realm sessions', async () => {
+  it('forwards Client Console objects through isolated realm sessions', { timeout: 90_000 }, async () => {
     inspector = await startInspector({ port: 0, captureFetch: false })
     client = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Console Client' })
     cdp = await TestCdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
@@ -372,17 +437,20 @@ describe('experimental Inspector real Worker', () => {
     const secondContext = await clientContext(secondCdp)
     const value = { owner: 'client-console' }
     const marker = 'client-console-event'
-    await client.log(value, marker)
-    let firstEvent: CdpMessage | undefined
-    let secondEvent: CdpMessage | undefined
-    await vi.waitFor(() => {
-      firstEvent = consoleEvent(cdp!, firstContext, marker)
-      secondEvent = consoleEvent(secondCdp!, secondContext, marker)
-      expect(firstEvent).toBeDefined()
-      expect(secondEvent).toBeDefined()
-    })
-    const firstObjectId = asRecord(recordArray(firstEvent!.params?.args)[0]).objectId
-    const secondObjectId = asRecord(recordArray(secondEvent!.params?.args)[0]).objectId
+    const [firstEvent, secondEvent] = await Promise.all([
+      cdp.waitForEvent('first DevTools Client Console event', 'Runtime.consoleAPICalled', event =>
+        isConsoleEvent(event, firstContext, marker)),
+      secondCdp.waitForEvent('second DevTools Client Console event', 'Runtime.consoleAPICalled', event =>
+        isConsoleEvent(event, secondContext, marker)),
+      client.log(value, marker),
+    ])
+    await expect(cdp.waitForEvent(
+      'retained first DevTools Client Console event',
+      'Runtime.consoleAPICalled',
+      event => isConsoleEvent(event, firstContext, marker),
+    )).resolves.toBe(firstEvent)
+    const firstObjectId = asRecord(recordArray(firstEvent.params?.args)[0]).objectId
+    const secondObjectId = asRecord(recordArray(secondEvent.params?.args)[0]).objectId
     expect(firstObjectId).toBeTypeOf('string')
     expect(secondObjectId).toBeTypeOf('string')
     expect(firstObjectId).not.toBe(secondObjectId)
@@ -398,6 +466,16 @@ describe('experimental Inspector real Worker', () => {
     expect((await cdp.call('Runtime.discardConsoleEntries')).error).toBeUndefined()
     expect((await cdp.call('Runtime.getProperties', { objectId: firstObjectId })).error).toBeDefined()
     expect((await secondCdp.call('Runtime.getProperties', { objectId: secondObjectId })).error).toBeUndefined()
+
+    const pendingAtClose = secondCdp.waitForEvent(
+      'second DevTools socket-close cleanup',
+      'Runtime.consoleAPICalled',
+      event => isConsoleEvent(event, secondContext, 'never-emitted'),
+    )
+    await Promise.all([
+      expect(pendingAtClose).rejects.toThrow('CDP socket closed while awaiting second DevTools socket-close cleanup'),
+      secondCdp.close(),
+    ])
   })
 
   it('projects a chunked Client bundle as read-only Debugger source', async () => {
@@ -638,12 +716,10 @@ function runtimeContexts(client: TestCdpClient): Readonly<Record<string, unknown
     .map(event => asRecord(event.params?.context))
 }
 
-function consoleEvent(client: TestCdpClient, contextId: number, marker: string): CdpMessage | undefined {
-  return client.events.find((event) => {
-    if (event.method !== 'Runtime.consoleAPICalled' || event.params?.executionContextId !== contextId) return false
-    const args = event.params.args
-    return Array.isArray(args) && args.some(argument => asRecord(argument).value === marker)
-  })
+function isConsoleEvent(event: CdpMessage, contextId: number, marker: string): boolean {
+  if (event.method !== 'Runtime.consoleAPICalled' || event.params?.executionContextId !== contextId) return false
+  const args = event.params.args
+  return Array.isArray(args) && args.some(argument => asRecord(argument).value === marker)
 }
 
 function recordArray(value: unknown): Readonly<Record<string, unknown>>[] {

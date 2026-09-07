@@ -25,6 +25,7 @@ const COMMIT_HASH = '0123456789abcdef0123456789abcdef01234567'
 const PROBE_KEY = `process.env.${PROBE_NAME}`
 const originalProbe = process.env[PROBE_NAME]
 const roots: string[] = []
+const GIT_CHILD_TIMEOUT_MS = 60_000
 const dshBuildWorkflows = [
   'build-exe-for-python-sdk.yml',
   'ci.yml',
@@ -57,11 +58,29 @@ function buildFixture(environment: Record<string, string>): string {
 }
 
 function git(root: string, args: readonly string[]): string {
-  return execFileSync('git', [...args], {
-    cwd: root,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  }).trim()
+  try {
+    return execFileSync('git', [...args], {
+      cwd: root,
+      encoding: 'utf8',
+      killSignal: 'SIGKILL',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: GIT_CHILD_TIMEOUT_MS,
+    }).trim()
+  } catch (error) {
+    const failure = error as Error & {
+      code?: string
+      signal?: NodeJS.Signals
+      status?: number
+      stderr?: Buffer | string
+      stdout?: Buffer | string
+    }
+    throw new Error([
+      `git ${args.join(' ')} failed in ${root}`,
+      `code=${String(failure.code)} status=${String(failure.status)} signal=${String(failure.signal)}`,
+      `stdout=${String(failure.stdout ?? '')}`,
+      `stderr=${String(failure.stderr ?? '')}`,
+    ].join('\n'), { cause: error })
+  }
 }
 
 function repositoryFixture(version = '1.2.3-rc.4'): string {
@@ -140,7 +159,7 @@ describe('client build environment', () => {
     expect(repositoryCommitHash('/unused', { DSH_CLIENT_COMMIT_HASH: COMMIT_HASH })).toBe(COMMIT_HASH.slice(0, 7))
   })
 
-  it('owns repository version, commit, and dirty metadata for complete builds', () => {
+  it('owns repository version, commit, and dirty metadata for complete builds', { timeout: 90_000 }, () => {
     const fixtureRoot = repositoryFixture()
     const commit = git(fixtureRoot, ['rev-parse', '--short=7', 'HEAD'])
 

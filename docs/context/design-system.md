@@ -21,7 +21,7 @@ English | [中文](design-system.zh.md)
 ## Layout and responsive behavior
 
 - The main `AppFrame` is a three-column grid: a 264–420px sidebar (280px default, 56px collapsed rail), a conversation column with a 640px minimum, and a 300–520px detail column (360px default).
-- When space contracts, the sidebar collapses below 1024px, the detail column concedes width and then closes, and the conversation column shrinks last. Drag boundaries adjust desktop widths; details is optional and currently has no shipped product occupant.
+- When space contracts, the sidebar collapses below 1024px, the detail column concedes width and then closes, and the conversation column shrinks last. Drag boundaries adjust desktop widths; details is optional, and the shipped conversation details shell has no entry point and remains unreachable.
 - Conversation content is centered on a 748px measure. The composer is a raised 22px-radius dock wider than the message measure; user bubbles cap at `min(525px, 82%)`.
 - Settings use a centered, viewport-bounded modal with left navigation and an approximately 800px content frame. Feature surfaces add narrower breakpoints near 560–760px rather than relying on one global mobile layout.
 

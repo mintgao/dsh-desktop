@@ -1,0 +1,1096 @@
+{
+  "schema_version": 3,
+  "protocol_version": 3,
+  "kit_version": "0.8.0",
+  "adapter": {
+    "name": "codex",
+    "protocol": 6,
+    "capabilities": {
+      "same_task_reload": {
+        "status": "conditional",
+        "current_claim": false,
+        "required_receipt": "host-reload"
+      },
+      "automatic_successor_handoff": {
+        "status": "conditional",
+        "current_claim": false,
+        "required_receipt": "host-successor-start"
+      },
+      "manual_new_task": {
+        "status": "supported",
+        "required_receipt": "manual-task-start"
+      }
+    }
+  },
+  "maintenance_bridge": {
+    "schema_version": 2,
+    "supported_installed_manifest_schemas": [
+      1
+    ],
+    "supported_installed_agent_protocols": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "minimum_installed_kit_version": "0.2.0",
+    "maximum_installed_kit_version_exclusive": "0.8.0",
+    "target_agent_install_schema": 3,
+    "target_agent_install_protocol": 3,
+    "target_cli_result_schema": 2,
+    "predecessor_migrations": {
+      "schema_version": 2,
+      "registry_sha256": "ef53ba7a30cb20d1d5eba6c77428e7dbb5b59b4201feb822ef5db9453b931978",
+      "authority": "target-cli-compiled",
+      "modes": [
+        "create-pending-onboarding-if-absent",
+        "replace-and-adopt-complete-set"
+      ]
+    },
+    "operations": [
+      "plan-upgrade",
+      "upgrade",
+      "recover-upgrade",
+      "doctor"
+    ]
+  },
+  "canonical_source": {
+    "repository": "https://github.com/mintgao/vibe-kit",
+    "bare_repository_policy": "latest-stable-only",
+    "no_stable_policy": "request-one-prerelease-decision",
+    "moving_ref_policy": "blocked"
+  },
+  "release_channels": {
+    "allowed_statuses": [
+      "release-candidate-unpublished",
+      "prerelease",
+      "stable"
+    ],
+    "exact_prerelease_link_is_explicit_selection": true
+  },
+  "source_identity": {
+    "source_types": [
+      "github-release",
+      "plugin-bundled",
+      "offline-bundle",
+      "local-payload"
+    ],
+    "payload_tree_algorithm": "sha256-path-nul-file-sha256-newline-v1",
+    "github_release_requires": [
+      "exact-canonical-release-ref",
+      "artifact-sha256",
+      "nested-release-validation",
+      "payload-tree-sha256"
+    ],
+    "offline_bundle_requires": [
+      "caller-selected-local-artifact",
+      "artifact-sha256",
+      "nested-release-validation",
+      "payload-tree-sha256"
+    ],
+    "plugin_bundled_requires": [
+      "version-match",
+      "plugin-declared-payload-tree-sha256",
+      "runtime-payload-tree-match"
+    ],
+    "local_payload_requires": [
+      "explicit-local-path",
+      "runtime-payload-tree-sha256"
+    ]
+  },
+  "lifecycle": {
+    "stages": [
+      "source-resolved",
+      "planned",
+      "applied",
+      "upgraded",
+      "activated",
+      "adapted",
+      "verified",
+      "re-evaluated",
+      "ready"
+    ],
+    "stage_states": [
+      "not-started",
+      "satisfied",
+      "blocked",
+      "not-applicable"
+    ],
+    "overall_statuses": [
+      "in-progress",
+      "ready",
+      "degraded",
+      "blocked"
+    ],
+    "new_project_operation": "init",
+    "existing_project_operation": "adopt",
+    "existing_installation_policy": "request-version-change-decision",
+    "ready_owner": "host-agent-adapter",
+    "cli_ready_claim": false
+  },
+  "activation": {
+    "activation_paths": [
+      ".agents/skills/vibe-debug-flow/SKILL.md",
+      ".agents/skills/vibe-design-flow/SKILL.md",
+      ".agents/skills/vibe-feature-flow/SKILL.md",
+      ".agents/skills/vibe-feedback-flow/SKILL.md",
+      ".agents/skills/vibe-feedback-flow/agents/openai.yaml",
+      ".agents/skills/vibe-implementation-flow/SKILL.md",
+      ".agents/skills/vibe-project-onboarding/SKILL.md",
+      ".agents/skills/vibe-release/SKILL.md",
+      ".agents/skills/vibe-verification-flow/SKILL.md",
+      ".codex/agents/vibe-investigator.toml",
+      ".codex/agents/vibe-pm.toml",
+      ".codex/agents/vibe-qa.toml",
+      ".codex/agents/vibe-rd.toml",
+      ".codex/agents/vibe-tech-lead.toml",
+      ".codex/agents/vibe-ux.toml",
+      ".vibe/core/feedback.json",
+      ".vibe/core/operating-model.md",
+      ".vibe/core/protocol.json",
+      ".vibe/core/quality-gates.md",
+      ".vibe/core/technical-decision-readiness.md",
+      ".vibe/core/templates/work-item-brief.md",
+      ".vibe/core/templates/work-item-verification.md",
+      ".vibe/core/version",
+      "AGENTS.md#managed-block",
+      "AGENT_INSTALL.md",
+      "agent-install.json",
+      "bin/vibe"
+    ],
+    "activation_set_algorithm": "sha256-canonical-json-fingerprint-and-normalized-path-hashes-v2",
+    "activation_set_sha256": "b247e389c80c0518201bd678dd23223a32d6b422e5ee97e02ffc387c329a6ab9",
+    "runtime_discovery_roots": [
+      "AGENT_INSTALL.md",
+      "agent-install.json",
+      "bin/vibe",
+      ".vibe/core/",
+      ".agents/skills/",
+      ".codex/agents/",
+      "AGENTS.md#managed-block"
+    ],
+    "paths": [
+      "none",
+      "same-task-reload",
+      "automatic-successor-handoff",
+      "manual-new-task"
+    ],
+    "receipt_kinds": [
+      "host-reload",
+      "host-successor-start",
+      "manual-task-start"
+    ],
+    "stale_runtime_diagnostic": "stale-runtime-path-preserved",
+    "stale_nonruntime_diagnostic": "stale-nonruntime-path-preserved",
+    "current_repository_capability": "manual-fallback-only"
+  },
+  "takeover": {
+    "schema_version": 2,
+    "storage": "host-task-state-only",
+    "evidence_kinds": [
+      "source-attestation",
+      "plan-receipt",
+      "apply-receipt",
+      "doctor-receipt",
+      "activation-receipt",
+      "manual-task-start",
+      "handoff-claim",
+      "onboarding-state",
+      "adaptation-review",
+      "verify-receipt",
+      "routing-record"
+    ],
+    "adapted_outcomes": [
+      "unchanged-complete",
+      "refreshed",
+      "blocked"
+    ],
+    "re_evaluated_outcomes": [
+      "routable",
+      "blocked-by-target-rules",
+      "maintenance-only"
+    ],
+    "reason_codes": [
+      "source-untrusted",
+      "source-digest-mismatch",
+      "unsupported-source-channel",
+      "unsupported-predecessor",
+      "unknown-contract",
+      "maintenance-bridge-unsupported",
+      "plan-blocked",
+      "managed-conflict",
+      "apply-failed-no-write",
+      "conflict-evidence-written",
+      "unknown-partial",
+      "apply-failed-rolled-back",
+      "upgrade-recovery-required",
+      "upgrade-recovery-blocked",
+      "upgrade-leaf-atomicity-unsupported",
+      "upgrade-leaf-race-preserved",
+      "doctor-broken",
+      "diagnostic-blocking",
+      "activation-receipt-unavailable",
+      "activation-receipt-invalid",
+      "automatic-handoff-unavailable",
+      "handoff-ambiguous",
+      "handoff-failed",
+      "manual-new-task-required",
+      "onboarding-invalid",
+      "onboarding-contradicted",
+      "adaptation-write-incomplete",
+      "verification-failed",
+      "verification-skipped",
+      "verification-error",
+      "target-rule-blocker",
+      "material-user-decision",
+      "host-permission-required",
+      "internal-error"
+    ],
+    "next_action_codes": [
+      "select-trusted-source",
+      "use-conformant-maintenance-entry",
+      "choose-supported-target",
+      "review-conflict-candidates",
+      "inspect-and-recover-installation",
+      "approve-required-host-permission",
+      "rerun-upgrade-plan",
+      "recover-upgrade",
+      "inspect-upgrade-transaction",
+      "use-supported-upgrade-filesystem",
+      "inspect-existing-handoff",
+      "create-new-project-task",
+      "resolve-project-context",
+      "inspect-adaptation-changes",
+      "fix-configured-check",
+      "resolve-target-rule-blocker",
+      "answer-material-decision",
+      "report-internal-failure"
+    ],
+    "goal_kinds": [
+      "maintenance-only",
+      "unfinished"
+    ],
+    "goal_custody": [
+      "none",
+      "source-owned",
+      "automatic-transfer-pending",
+      "automatic-successor-owned",
+      "manual-transfer-required",
+      "manual-transfer-pending",
+      "manual-successor-owned"
+    ],
+    "goal_continuation": [
+      "not-applicable",
+      "paused",
+      "ready-to-resume",
+      "resumed",
+      "blocked"
+    ],
+    "validator": {
+      "command": "validate-takeover",
+      "input": "stdin-json",
+      "result_schema_version": 2,
+      "statuses": [
+        "valid",
+        "invalid",
+        "error"
+      ],
+      "persistence": "none",
+      "authority": "structural-consistency-only"
+    },
+    "contract_registry": {
+      "result_shape": {
+        "additional_properties": false,
+        "required_top_level": [
+          "takeover_schema_version",
+          "takeover_id",
+          "evidence_origin",
+          "completion_owner_task_id",
+          "project_root",
+          "source",
+          "versions",
+          "target_fingerprint",
+          "overall_status",
+          "last_completed_stage",
+          "write_state",
+          "upgrade_transaction",
+          "activation",
+          "goal",
+          "stages",
+          "next_action"
+        ],
+        "required_source_fields": [
+          "type",
+          "ref",
+          "artifact_sha256",
+          "payload_tree_sha256"
+        ],
+        "required_versions_fields": [
+          "from",
+          "target"
+        ],
+        "required_fingerprint_fields": [
+          "kit_version",
+          "core_protocol",
+          "agent_install_schema",
+          "agent_install_protocol",
+          "adapter_name",
+          "adapter_protocol",
+          "manifest_sha256",
+          "activation_set_sha256"
+        ],
+        "required_stage_keys": [
+          "source-resolved",
+          "planned",
+          "applied",
+          "upgraded",
+          "activated",
+          "adapted",
+          "verified",
+          "re-evaluated",
+          "ready"
+        ],
+        "required_stage_fields": [
+          "state",
+          "outcome",
+          "reason_code",
+          "evidence"
+        ],
+        "required_evidence_fields": [
+          "kind",
+          "ref",
+          "sha256",
+          "task_id",
+          "sequence"
+        ],
+        "required_activation_fields": [
+          "path",
+          "receipt_kind",
+          "receipt_id",
+          "source_task_id",
+          "active_task_id",
+          "handoff_idempotency_key",
+          "observed_manifest_sha256",
+          "observed_activation_set_sha256"
+        ],
+        "required_goal_fields": [
+          "kind",
+          "custody",
+          "continuation",
+          "transfer_id",
+          "owner_task_id",
+          "custody_history"
+        ],
+        "required_custody_history_fields": [
+          "state",
+          "task_id",
+          "sequence"
+        ],
+        "required_next_action_fields": [
+          "code",
+          "detail"
+        ],
+        "required_upgrade_transaction_fields": [
+          "schema_version",
+          "transaction_id",
+          "outcome",
+          "commit_marker",
+          "installation_state",
+          "active_state_present"
+        ]
+      },
+      "scalar_types": {
+        "opaque_id_max_chars": 256,
+        "path_or_ref_max_chars": 4096,
+        "detail_max_chars": 512,
+        "sha256_pattern": "^[0-9a-f]{64}$",
+        "strict_semver_pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+        "sequence_minimum": 0
+      },
+      "array_limits": {
+        "evidence_per_stage": 32,
+        "custody_history": 4
+      },
+      "enums": {
+        "source_types": [
+          "github-release",
+          "plugin-bundled",
+          "offline-bundle",
+          "local-payload"
+        ],
+        "evidence_origins": [
+          "runtime",
+          "controlled-fixture"
+        ],
+        "overall_statuses": [
+          "in-progress",
+          "ready",
+          "degraded",
+          "blocked"
+        ],
+        "write_states": [
+          "none",
+          "project-files-written",
+          "conflict-evidence-written",
+          "rolled-back",
+          "recovery-required",
+          "unknown-partial"
+        ],
+        "upgrade_transaction_outcomes": [
+          "not-started",
+          "not-applied",
+          "committed",
+          "rolled-back",
+          "recovery-required",
+          "unknown-partial"
+        ],
+        "upgrade_commit_markers": [
+          "not-applicable",
+          "absent",
+          "valid",
+          "invalid"
+        ],
+        "upgrade_installation_states": [
+          "predecessor",
+          "target",
+          "recovery-required",
+          "unknown"
+        ],
+        "stage_states": [
+          "not-started",
+          "satisfied",
+          "blocked",
+          "not-applicable"
+        ],
+        "evidence_kinds": [
+          "source-attestation",
+          "plan-receipt",
+          "apply-receipt",
+          "doctor-receipt",
+          "activation-receipt",
+          "manual-task-start",
+          "handoff-claim",
+          "onboarding-state",
+          "adaptation-review",
+          "verify-receipt",
+          "routing-record"
+        ],
+        "activation_paths": [
+          "none",
+          "same-task-reload",
+          "automatic-successor-handoff",
+          "manual-new-task"
+        ],
+        "receipt_kinds": [
+          "host-reload",
+          "host-successor-start",
+          "manual-task-start"
+        ],
+        "goal_kinds": [
+          "maintenance-only",
+          "unfinished"
+        ],
+        "goal_custody": [
+          "none",
+          "source-owned",
+          "automatic-transfer-pending",
+          "automatic-successor-owned",
+          "manual-transfer-required",
+          "manual-transfer-pending",
+          "manual-successor-owned"
+        ],
+        "goal_continuation": [
+          "not-applicable",
+          "paused",
+          "ready-to-resume",
+          "resumed",
+          "blocked"
+        ],
+        "adapted_outcomes": [
+          "unchanged-complete",
+          "refreshed",
+          "blocked"
+        ],
+        "re_evaluated_outcomes": [
+          "routable",
+          "blocked-by-target-rules",
+          "maintenance-only"
+        ],
+        "reason_codes": [
+          "source-untrusted",
+          "source-digest-mismatch",
+          "unsupported-source-channel",
+          "unsupported-predecessor",
+          "unknown-contract",
+          "maintenance-bridge-unsupported",
+          "plan-blocked",
+          "managed-conflict",
+          "apply-failed-no-write",
+          "conflict-evidence-written",
+          "unknown-partial",
+          "apply-failed-rolled-back",
+          "upgrade-recovery-required",
+          "upgrade-recovery-blocked",
+          "upgrade-leaf-atomicity-unsupported",
+          "upgrade-leaf-race-preserved",
+          "doctor-broken",
+          "diagnostic-blocking",
+          "activation-receipt-unavailable",
+          "activation-receipt-invalid",
+          "automatic-handoff-unavailable",
+          "handoff-ambiguous",
+          "handoff-failed",
+          "manual-new-task-required",
+          "onboarding-invalid",
+          "onboarding-contradicted",
+          "adaptation-write-incomplete",
+          "verification-failed",
+          "verification-skipped",
+          "verification-error",
+          "target-rule-blocker",
+          "material-user-decision",
+          "host-permission-required",
+          "internal-error"
+        ],
+        "next_action_codes": [
+          "select-trusted-source",
+          "use-conformant-maintenance-entry",
+          "choose-supported-target",
+          "review-conflict-candidates",
+          "inspect-and-recover-installation",
+          "approve-required-host-permission",
+          "rerun-upgrade-plan",
+          "recover-upgrade",
+          "inspect-upgrade-transaction",
+          "use-supported-upgrade-filesystem",
+          "inspect-existing-handoff",
+          "create-new-project-task",
+          "resolve-project-context",
+          "inspect-adaptation-changes",
+          "fix-configured-check",
+          "resolve-target-rule-blocker",
+          "answer-material-decision",
+          "report-internal-failure"
+        ]
+      },
+      "source_rules": {
+        "github-release": {
+          "artifact_sha256": "required",
+          "ref": "required"
+        },
+        "offline-bundle": {
+          "artifact_sha256": "required",
+          "ref": "required"
+        },
+        "plugin-bundled": {
+          "artifact_sha256": "must-be-null",
+          "ref": "required"
+        },
+        "local-payload": {
+          "artifact_sha256": "must-be-null",
+          "ref": "required"
+        }
+      },
+      "stage_order": [
+        "source-resolved",
+        "planned",
+        "applied",
+        "upgraded",
+        "activated",
+        "adapted",
+        "verified",
+        "re-evaluated",
+        "ready"
+      ],
+      "stage_dependencies": {
+        "source-resolved": [],
+        "planned": [
+          "source-resolved"
+        ],
+        "applied": [
+          "planned"
+        ],
+        "upgraded": [
+          "applied"
+        ],
+        "activated": [
+          "upgraded"
+        ],
+        "adapted": [
+          "activated"
+        ],
+        "verified": [
+          "adapted"
+        ],
+        "re-evaluated": [
+          "verified"
+        ],
+        "ready": [
+          "source-resolved",
+          "planned",
+          "applied",
+          "upgraded",
+          "activated",
+          "adapted",
+          "verified"
+        ]
+      },
+      "not_applicable_rules": [
+        {
+          "stage": "re-evaluated",
+          "required_goal_kind": "maintenance-only",
+          "required_outcome": "maintenance-only"
+        }
+      ],
+      "stage_outcome_rules": {
+        "adapted": {
+          "satisfied": [
+            "unchanged-complete",
+            "refreshed"
+          ],
+          "blocked": [
+            "blocked"
+          ],
+          "not-applicable": []
+        },
+        "re-evaluated": {
+          "satisfied": [
+            "routable"
+          ],
+          "blocked": [
+            "blocked-by-target-rules"
+          ],
+          "not-applicable": [
+            "maintenance-only"
+          ]
+        }
+      },
+      "reason_action_map": {
+        "source-untrusted": "select-trusted-source",
+        "source-digest-mismatch": "select-trusted-source",
+        "unsupported-source-channel": "select-trusted-source",
+        "unknown-contract": "use-conformant-maintenance-entry",
+        "maintenance-bridge-unsupported": "use-conformant-maintenance-entry",
+        "unsupported-predecessor": "choose-supported-target",
+        "plan-blocked": "review-conflict-candidates",
+        "managed-conflict": "review-conflict-candidates",
+        "conflict-evidence-written": "review-conflict-candidates",
+        "unknown-partial": "inspect-and-recover-installation",
+        "apply-failed-rolled-back": "rerun-upgrade-plan",
+        "upgrade-recovery-required": "recover-upgrade",
+        "upgrade-recovery-blocked": "inspect-upgrade-transaction",
+        "upgrade-leaf-atomicity-unsupported": "use-supported-upgrade-filesystem",
+        "upgrade-leaf-race-preserved": "inspect-upgrade-transaction",
+        "doctor-broken": "inspect-and-recover-installation",
+        "diagnostic-blocking": "inspect-and-recover-installation",
+        "host-permission-required": "approve-required-host-permission",
+        "handoff-ambiguous": "inspect-existing-handoff",
+        "activation-receipt-unavailable": "create-new-project-task",
+        "automatic-handoff-unavailable": "create-new-project-task",
+        "manual-new-task-required": "create-new-project-task",
+        "onboarding-invalid": "resolve-project-context",
+        "onboarding-contradicted": "resolve-project-context",
+        "adaptation-write-incomplete": "inspect-adaptation-changes",
+        "verification-failed": "fix-configured-check",
+        "verification-skipped": "fix-configured-check",
+        "verification-error": "fix-configured-check",
+        "target-rule-blocker": "resolve-target-rule-blocker",
+        "material-user-decision": "answer-material-decision",
+        "apply-failed-no-write": "report-internal-failure",
+        "activation-receipt-invalid": "report-internal-failure",
+        "handoff-failed": "report-internal-failure",
+        "internal-error": "report-internal-failure"
+      },
+      "reason_stage_map": {
+        "source-untrusted": "source-resolved",
+        "source-digest-mismatch": "source-resolved",
+        "unsupported-source-channel": "source-resolved",
+        "unsupported-predecessor": "source-resolved",
+        "unknown-contract": "source-resolved",
+        "maintenance-bridge-unsupported": "source-resolved",
+        "plan-blocked": "planned",
+        "managed-conflict": "planned",
+        "host-permission-required": "planned",
+        "apply-failed-no-write": "applied",
+        "conflict-evidence-written": "applied",
+        "unknown-partial": "applied",
+        "apply-failed-rolled-back": "applied",
+        "upgrade-recovery-required": "applied",
+        "upgrade-recovery-blocked": "applied",
+        "upgrade-leaf-atomicity-unsupported": "applied",
+        "upgrade-leaf-race-preserved": "applied",
+        "doctor-broken": "upgraded",
+        "diagnostic-blocking": "upgraded",
+        "activation-receipt-unavailable": "activated",
+        "activation-receipt-invalid": "activated",
+        "automatic-handoff-unavailable": "activated",
+        "handoff-ambiguous": "activated",
+        "handoff-failed": "activated",
+        "manual-new-task-required": "activated",
+        "onboarding-invalid": "adapted",
+        "onboarding-contradicted": "adapted",
+        "adaptation-write-incomplete": "adapted",
+        "verification-failed": "verified",
+        "verification-skipped": "verified",
+        "verification-error": "verified",
+        "target-rule-blocker": "re-evaluated",
+        "material-user-decision": "re-evaluated",
+        "internal-error": "ready"
+      },
+      "evidence_rules": {
+        "source-resolved": [
+          "source-attestation"
+        ],
+        "planned": [
+          "plan-receipt"
+        ],
+        "applied": [
+          "apply-receipt"
+        ],
+        "upgraded": [
+          "doctor-receipt"
+        ],
+        "activated": [],
+        "adapted": [
+          "onboarding-state",
+          "adaptation-review"
+        ],
+        "verified": [
+          "doctor-receipt",
+          "verify-receipt"
+        ],
+        "re-evaluated": [
+          "routing-record"
+        ],
+        "ready": []
+      },
+      "evidence_placement": {
+        "source-attestation": [
+          "source-resolved"
+        ],
+        "plan-receipt": [
+          "planned"
+        ],
+        "apply-receipt": [
+          "applied"
+        ],
+        "doctor-receipt": [
+          "upgraded",
+          "verified"
+        ],
+        "activation-receipt": [
+          "activated"
+        ],
+        "manual-task-start": [
+          "activated"
+        ],
+        "handoff-claim": [
+          "activated"
+        ],
+        "onboarding-state": [
+          "adapted"
+        ],
+        "adaptation-review": [
+          "adapted"
+        ],
+        "verify-receipt": [
+          "verified"
+        ],
+        "routing-record": [
+          "re-evaluated"
+        ]
+      },
+      "activation_receipt_bindings": {
+        "host-reload": {
+          "path": "same-task-reload",
+          "active_task_relation": "equals-source-task",
+          "handoff_idempotency_key": "must-be-null",
+          "required_evidence": [
+            "activation-receipt"
+          ],
+          "required_custody_at_ready": "source-owned"
+        },
+        "host-successor-start": {
+          "path": "automatic-successor-handoff",
+          "active_task_relation": "differs-from-source-task",
+          "handoff_idempotency_key": "required",
+          "required_evidence": [
+            "activation-receipt",
+            "handoff-claim"
+          ],
+          "required_custody_at_ready": "automatic-successor-owned"
+        },
+        "manual-task-start": {
+          "path": "manual-new-task",
+          "active_task_relation": "differs-from-source-task",
+          "handoff_idempotency_key": "must-be-null",
+          "required_evidence": [
+            "manual-task-start"
+          ],
+          "required_custody_at_ready": "manual-successor-owned"
+        }
+      },
+      "custody_transitions": {
+        "none": [],
+        "source-owned": [
+          "automatic-transfer-pending",
+          "manual-transfer-required"
+        ],
+        "automatic-transfer-pending": [
+          "automatic-successor-owned"
+        ],
+        "automatic-successor-owned": [],
+        "manual-transfer-required": [
+          "manual-transfer-pending"
+        ],
+        "manual-transfer-pending": [
+          "manual-successor-owned"
+        ],
+        "manual-successor-owned": []
+      },
+      "ready_invariants": [
+        "exact-result-shape",
+        "stage-dependencies-satisfied",
+        "only-maintenance-re-evaluation-not-applicable",
+        "stage-outcomes-consistent",
+        "last-completed-is-last-satisfied-stage",
+        "write-state-project-files-written",
+        "upgrade-transaction-outcome-committed",
+        "upgrade-commit-marker-valid",
+        "no-active-upgrade-transaction",
+        "reason-action-consistent",
+        "activation-receipt-bound",
+        "activation-after-apply",
+        "activation-identities-match-target",
+        "default-verification-passed",
+        "no-blocking-diagnostic",
+        "custody-history-valid",
+        "single-active-custodian",
+        "completion-owner-is-active-task",
+        "unfinished-goal-owner-is-completion-owner",
+        "ready-has-no-reason-or-next-action",
+        "overall-ready-iff-ready-stage-satisfied",
+        "custody-sequences-globally-unique",
+        "custody-history-strictly-increasing",
+        "custody-first-state-valid",
+        "custody-transitions-direct",
+        "custody-final-equals-current",
+        "custody-owner-derived",
+        "successor-custody-terminal"
+      ]
+    },
+    "contract_registry_sha256": "4ecfb5e8932122654c13dce8ea2e78c17b5beced35c6b2dfd669f68b5d708d7b",
+    "unknown_or_inconsistent_state": "fail-closed"
+  },
+  "cli": {
+    "result_schema_version": 2,
+    "format_argument": "--format json",
+    "command_statuses": {
+      "plan": [
+        "safe",
+        "blocked",
+        "error"
+      ],
+      "init": [
+        "success",
+        "error"
+      ],
+      "adopt": [
+        "success",
+        "error"
+      ],
+      "upgrade": [
+        "success",
+        "blocked",
+        "error"
+      ],
+      "recover-upgrade": [
+        "success",
+        "blocked",
+        "error"
+      ],
+      "doctor": [
+        "healthy",
+        "warning",
+        "broken",
+        "error"
+      ],
+      "verify": [
+        "passed",
+        "failed",
+        "blocked",
+        "error"
+      ],
+      "validate-takeover": [
+        "valid",
+        "invalid",
+        "error"
+      ],
+      "validate-release": [
+        "valid",
+        "invalid",
+        "error"
+      ],
+      "publication-plan": [
+        "safe",
+        "blocked",
+        "error"
+      ],
+      "validate-publication": [
+        "valid",
+        "invalid",
+        "error"
+      ]
+    },
+    "write_states": [
+      "none",
+      "transaction-control-written",
+      "project-files-written",
+      "conflict-evidence-written",
+      "rolled-back",
+      "recovery-required",
+      "unknown-partial"
+    ],
+    "writes_performed_rule": "false-only-for-none",
+    "provenance_arguments": [
+      "--source-type",
+      "--source-ref",
+      "--artifact-sha256"
+    ],
+    "doctor": {
+      "diagnostic_shape": [
+        "code",
+        "level",
+        "readiness_effect",
+        "path",
+        "detail"
+      ],
+      "warning_registry": {
+        "managed-file-hash-mismatch": "blocking",
+        "agents-block-hash-mismatch": "blocking",
+        "onboarding-state-missing": "blocking",
+        "stale-runtime-path-preserved": "blocking",
+        "stale-nonruntime-path-preserved": "non-blocking"
+      },
+      "error_codes": [
+        "version-integrity-failed",
+        "manifest-missing-or-invalid",
+        "managed-file-missing",
+        "agents-file-missing",
+        "agents-block-missing",
+        "required-project-file-missing",
+        "project-config-invalid",
+        "onboarding-state-invalid",
+        "upgrade-transaction-active",
+        "upgrade-transaction-state-invalid",
+        "skill-contract-invalid",
+        "agent-contract-invalid",
+        "agent-install-guide-invalid",
+        "agent-install-contract-invalid",
+        "diagnostic-internal-error"
+      ],
+      "non_blocking_warning_allowlist": [
+        "stale-nonruntime-path-preserved"
+      ]
+    },
+    "verify": {
+      "statuses": [
+        "passed",
+        "failed",
+        "blocked",
+        "error"
+      ],
+      "default_order": [
+        "lint",
+        "typecheck",
+        "test",
+        "build"
+      ],
+      "outcomes": [
+        "passed",
+        "failed",
+        "unconfigured",
+        "skipped"
+      ],
+      "skipped_reasons": [
+        "host-permission-denied",
+        "host-capability-unavailable",
+        "side-effect-not-authorized",
+        "execution-interrupted",
+        "process-start-failed"
+      ],
+      "takeover_required_selection": {
+        "mode": "default",
+        "coverage": "all-configured"
+      },
+      "output_tail_bytes": 16384,
+      "network_attestation": "not-provided"
+    }
+  },
+  "onboarding": {
+    "schema_version": 1,
+    "persisted_statuses": [
+      "pending",
+      "complete",
+      "refresh-needed"
+    ],
+    "derived_statuses": [
+      "review-required",
+      "invalid"
+    ],
+    "complete_requirements": {
+      "updated_at": "iso-8601",
+      "evidence": "non-empty-string-list"
+    },
+    "preserve_project_owned_state": true,
+    "adaptation_requires_activation": true,
+    "contradiction_policy": "block-without-uncertain-overwrite"
+  },
+  "privacy": {
+    "takeover_repository_persistence": false,
+    "goal_text_in_cli_receipts": false,
+    "goal_text_in_release_artifacts": false,
+    "transfer_scope": "minimal-active-objective-and-durable-evidence-references"
+  },
+  "evolution": {
+    "unknown_schema_or_protocol": "fail-closed",
+    "unknown_enum": "fail-closed",
+    "schema_2_optional_field_rule": "none-unless-explicitly-versioned",
+    "breaking_change_rule": "bump-result-schema-and-or-agent-install-protocol"
+  },
+  "trust": {
+    "canonical_repository_only_by_default": true,
+    "require_release_artifact_sha256": true,
+    "network_resolver_in_cli": false,
+    "follow_main": false,
+    "exact_selection_is_platform_immutability": false,
+    "platform_immutability_observation": "live-host-metadata-only"
+  },
+  "transactions": {
+    "journal_schema": 1,
+    "commit_marker_schema": 1,
+    "active_path": ".vibe/local/upgrade-transactions/active",
+    "evidence_trust": "integrity-checked-but-untrusted",
+    "same_os_principal_malicious_tamper": "out-of-threat-model",
+    "recovery_command": "recover-upgrade",
+    "ordinary_upgrade_auto_recovers": false
+  },
+  "publication": {
+    "intent_schema": 2,
+    "receipt_schema": 2,
+    "issue_closeout_intent_schema": 1,
+    "commands": [
+      "publication-plan",
+      "validate-publication"
+    ],
+    "public_asset_roles": [
+      "checksum",
+      "manifest",
+      "direct",
+      "distribution",
+      "plugin"
+    ],
+    "network_credentials_owner": "agent-host",
+    "cli_network_authority": false
+  }
+}

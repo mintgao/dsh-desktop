@@ -1,12 +1,40 @@
 {
   "schema_version": 1,
   "manifest_schema": 1,
-  "core_protocol": 1,
+  "core_protocol": 6,
+  "feedback_protocol": 2,
+  "agent_install_protocol": 3,
+  "takeover_contract_registry_sha256": "4ecfb5e8932122654c13dce8ea2e78c17b5beced35c6b2dfd669f68b5d708d7b",
+  "predecessor_migrations": {
+    "schema_version": 2,
+    "registry_sha256": "ef53ba7a30cb20d1d5eba6c77428e7dbb5b59b4201feb822ef5db9453b931978",
+    "authority": "target-cli-compiled",
+    "modes": [
+      "create-pending-onboarding-if-absent",
+      "replace-and-adopt-complete-set"
+    ]
+  },
   "adapters": {
     "codex": {
-      "version": 1,
-      "core_protocol": 1,
-      "capability_level": "native-subagents"
+      "version": 6,
+      "core_protocol": 6,
+      "capability_level": "native-subagents-manual-upgrade-activation",
+      "upgrade_activation": {
+        "same_task_reload": "conditional-unclaimed",
+        "automatic_successor_handoff": "conditional-unclaimed",
+        "manual_new_task": "supported"
+      }
     }
-  }
+  },
+  "cli_result_schema": 2,
+  "agent_install_schema": 3,
+  "takeover_schema": 2,
+  "maintenance_bridge_schema": 2,
+  "compatibility_migration_registry_schema": 2,
+  "release_manifest_schema": 2,
+  "transaction_journal_schema": 1,
+  "transaction_commit_schema": 1,
+  "publication_intent_schema": 2,
+  "publication_receipt_schema": 2,
+  "issue_closeout_intent_schema": 1
 }

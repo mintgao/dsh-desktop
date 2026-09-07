@@ -36,7 +36,7 @@ Host 插件启动 Worker 并连接专用 `MessagePort`。Client 插件读取注�
 
 Host 与 Client producer 发送内部观测记录，不发送 CDP 消息。记录包含 source generation、sequence、source 时钟时间、topic 和 JSON payload。Worker 验证每个进程或网络帧，独占 source 状态与保留历史，并把已识别 topic 转换成标准 CDP domain。
 
-Client source 声明类型化 Runtime、Console 和只读 Sources 能力。`Runtime.enable` 发布真实 Host execution context，并为每个已连接的 Client source 发布一个 synthetic context。选择 Client context 后，求值、属性读取、函数调用、Promise await 和对象释放都会路由到该浏览器 realm。Client Console argument 使用同一份 session-local object table；`Debugger.enable` 发布构建后的 `lib/client.js` catalog，`Debugger.getScriptSource` 读取有界 content chunk。Client script 断点、step 和 call frame 仍不支持；target-wide pause 与 resume 只控制 Host debugger。
+Client source 声明类型化 Runtime、Console 和只读 Sources 能力。`Runtime.enable` 发布真实 Host execution context，并在 Console 观测就绪后为每个已连接的 Client source 发布一个 synthetic context。Worker 在发送 enable 帧前拥有 version-1 Console subscription id、listener、timeout 和 provisional handle；Client 安装 Console 与全局错误 hook 后，才确认精确的 source generation、Runtime session 与 subscription。并发 enable 会加入同一个初始 realm snapshot。acknowledgement 失败、timeout、断联、disable 或 DevTools 关闭会 dispose provisional 状态并拒绝该 enable；后续加入的 Client realm 若自身 readiness 失败，则只在该 DevTools 连接中暂不发布并关闭。选择已就绪的 Client context 后，求值、属性读取、函数调用、Promise await 和对象释放都会路由到该浏览器 realm。Client Console argument 使用同一份 session-local object table；`Debugger.enable` 发布构建后的 `lib/client.js` catalog，`Debugger.getScriptSource` 读取有界 content chunk。Client script 断点、step 和 call frame 仍不支持；target-wide pause 与 resume 只控制 Host debugger。
 
 两个插件面运行同一份浏览器安全 Cordis collector。它把可达 Context 与 Fiber 对象转换成有版本的 `CordisTreeSnapshot`；Worker 存储这份与 CDP 无关的表示，并把每个 Host 或 Client source 投影到 Elements 面板。
 
@@ -64,7 +64,7 @@ Host 插件注入 `webServer`，接受以下字段：
 | `stopTimeoutMs` | 5 秒 | 强制终止前的 Worker 优雅关闭期限 |
 | `clientReconnectBaseMs` | 250 ms | Client 首次重连退避上限 |
 | `clientReconnectMaxMs` | 5 秒 | Client 最大重连退避上限 |
-| `clientRuntimeTimeoutMs` | 30 秒 | 一次 Worker 到 Client Runtime 或 Sources 命令的截止时间 |
+| `clientRuntimeTimeoutMs` | 30 秒 | 一次 Worker 到 Client Runtime 或 Sources 命令，或 Console enable acknowledgement 的截止时间 |
 | `queryTimeoutMs` | 10 秒 | 一次非 CDP 语义查询的截止时间 |
 | `maxClientRuntimeObjects` | `10000` | 每条 DevTools 连接保留的 Client 实时对象 handle 数 |
 | `maxClientRuntimeProperties` | `2000` | 单次 Client 对象检查返回的属性描述符数 |
@@ -139,6 +139,7 @@ CDP target 通过 `Runtime.evaluate` 提供 Host 和已连接 Client realm 中�
 - **Client Sources 只暴露 Inspector bundle**——本包不收录页面中的其他 script。
 - **Client 求值使用页面 JavaScript**——页面 Content Security Policy 可能阻止动态求值；synthetic context 不提供 DevTools command-line helper 或原生 REPL 声明语义。
 - **Client 身份仲裁依赖 Web Locks**——缺少该 API 的浏览器仍会通过 `sessionStorage` 保持重连与刷新身份，但无法区分从同一存储状态复制出的两个同时存活 tab。
+- **Inspector 产物必须匹配**——protocol version 1 不提供 version-0 协商或 shim。更新 Host、Worker 或浏览器 Client bundle 后，需要 reload 或 restart 已运行的 Client 页面；只重启 Inspector 不会替换页面已经加载的代码。
 - **fetch 拦截范围是 `globalThis.fetch`**——直接调用 Undici API，以及激活前保存的 fetch 引用不会被观察。
 - **body clone 有运行成本**——完整采集会 tee 请求与响应 stream，直至达到配置上限，可能增加内存与 I/O 压力。保留 body 的上限不包含 stream tee 内部的缓冲，包括来源提供的超大 chunk，或为读取较慢的应用分支排队的数据。
 - **不自动重启 Worker**——Worker 意外退出会使当前 Inspector 实例失败；生命周期恢复留待后续改动。

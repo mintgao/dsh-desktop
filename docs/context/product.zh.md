@@ -16,7 +16,7 @@ DeepSeek Harness（`dsh`）是一个开源、处于开发者预览阶段的 codi
 
 ## 产品界面
 
-- **Web UI：**`dsh web` 启动本地浏览器应用。用户可以配置模型、选择工作区、创建持久会话、提交任务、查看 agent 活动，并回答审批或澄清请求。
+- **Web UI：**`dsh web` 启动本地浏览器应用。用户可以配置模型，在新会话开始前选择工作区和 agent preset，提交任务、查看 agent 活动，并回答审批或澄清请求。
 - **CLI 与 Profile：**`dsh` 启动器会启动具名插件组合、管理 Profile 本地插件、输出最终生效的配置，并提供单次 headless 模式。
 - **编程接口：**SDK 与 ACP 界面把同一个 agent 运行时提供给其他进程；二者的交互模型都比 Web UI 更窄。
 - **DSH Desktop Mint：**当前检出包含由 Mint 维护的非官方 macOS Electron 外壳。它管理 `desktop-mint` Profile 并嵌入同一个 Web 应用；它既不是另一套 agent 实现，也不是 DeepSeek 官方发行版。参见[桌面端参考](../../apps/desktop/README.zh.md)。
@@ -24,7 +24,8 @@ DeepSeek Harness（`dsh`）是一个开源、处于开发者预览阶段的 codi
 ## 当前能力
 
 - 支持模型目录中的提供方和自定义模型；凭证与设置分开保存，模型变更从下一次请求起生效。参见[模型配置](../user/guide/providers.zh.md)。
-- 标准 coding-agent preset 提供工作区文件编辑、shell 与 terminal 执行、文件与 Web 搜索、skill、计划、目标、后台任务、工作流和进程内 subagent。
+- 标准 coding-agent preset 提供工作区文件编辑、shell 执行、文件与 Web 搜索、skill、计划、目标、后台任务、工作流和进程内 subagent。
+- 同一 Web 进程可以让不同会话使用系统或用户自定义的 agent preset。会话开始后，所选 preset 会固定该会话的工具与 prompt 组合。
 - 提供由用户控制的权限 preset 和单次审批，而不是无条件开放宿主访问。
 - Web 组合提供仅追加会话日志、默认 JSONL 持久化、附件、由回放推导的 UI 状态和会话导出。
 - 支持安装外部插件及按序应用 Profile／Bundle 补丁，因此部署方无需 fork Agent Loop 即可替换提供方或增加消费方。

@@ -31,5 +31,5 @@ Windows vitest 覆盖率刻意不属本次改动：仓库的 Windows CI 通道�
 
 - bash 执行器 seam 有了第二个、Windows 原生的实现，请求/规范约定一致，因此 `tool-pwsh` 之外的面向模型消费方（钩子桥、进程内插件）无需方言垫片即可运行 PowerShell。
 - `tool-pwsh` 是模型可见的 Windows 优先 shell 工具：在前台、后台与沙箱化工作上与 bash 工具行为可互换——包括经 `ctx.approval` 的同轮次 `sandbox_permissions` 升级——提示词指导精确陈述 marker 约定、沙箱拒绝/升级词汇，以及 ConstrainedLanguage 与命名管道边界。
-- Windows 语义在平台差异处不同：强制终止报告退出码 1 且无信号（因此 `signal`/`killed` 状态信息仅限 POSIX），PowerShell 输出 CRLF，测试做归一化。
+- Windows 语义在平台差异处不同：强制终止报告退出码 1 且无信号，而由 `kill()` 发起的后台句柄仍会在结算前写入权威的 `killed` 生命周期状态；沙箱分类遵守该状态，不把数值退出诊断当作拒绝或 runner 失败。PowerShell 输出 CRLF，测试做归一化。
 - CLI 增加两个 workspace 依赖与两个 tsconfig 工程，但不挂载任一插件——组合决策留给 Windows 默认提案。

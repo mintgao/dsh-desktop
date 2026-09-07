@@ -7,6 +7,7 @@ import { INSPECTOR_PROTOCOL_VERSION } from '../version.ts'
 import {
   parseClientConsoleCapability,
   parseClientConsoleControlFrame,
+  parseClientConsoleEnableResultFrame,
   parseClientConsoleEventFrame,
   parseClientRuntimeCapability,
   parseClientRuntimeCancelFrame,
@@ -17,6 +18,7 @@ import {
   type ClientConsoleCapability,
   type ClientConsoleDisableFrame,
   type ClientConsoleEnableFrame,
+  type ClientConsoleEnableResultFrame,
   type ClientConsoleEventFrame,
   type ClientRuntimeCapability,
   type ClientRuntimeCancelFrame,
@@ -106,6 +108,7 @@ export type SourceToWorkerFrame =
   | SourceReplaceFrame
   | SourceAppendFrame
   | SourceCloseFrame
+  | ClientConsoleEnableResultFrame
   | ClientConsoleEventFrame
   | ClientRuntimeResponseFrame
   | ClientSourceResponseFrame
@@ -251,6 +254,8 @@ export function parseSourceFrame(value: unknown, maxRecords: number): SourceToWo
       }
     case 'client-runtime/response':
       return parseClientRuntimeResponseFrame(value)
+    case 'client-console/enable-result':
+      return parseClientConsoleEnableResultFrame(value)
     case 'client-console/event':
       return parseClientConsoleEventFrame(value)
     case 'client-sources/response':

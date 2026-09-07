@@ -14,7 +14,8 @@ Status: implemented
 - **每项事实只归属一处的层级分类。**文档标准为每种 Markdown 层级分配单一职责，禁止在事实归属层级之外重复陈述，并包含编写或评审任何文档时使用的赘余检查清单。
 - **单一产品入门路径。**根 README 负责推荐的包运行路径、从源码运行的备选路径和简要的 `dsh plugin --profile` 用法。已发布的用户指南从运行中的 Web UI 内部任务开始，再链接到其他界面的独立教程或插件开发与进阶配置的参考文档归属处，而不会重复介绍 Web 启动步骤。
 - **范围窄且严格的预算门禁。**[scripts/verify-doc-budgets.ts](../../../../scripts/verify-doc-budgets.ts) 接入 `doc-sync`：[scripts/doc-budgets.manifest.json](../../../../scripts/doc-budgets.manifest.json) 列出的每份文档都必须低于其词数上限（采用 `wc -w` 语义，统计整个文件）；预算内文件缺失也会使门禁失败，使重命名无法悄然遗落其预算。范围刻意只涵盖容易膨胀的常设文档——根目录和子树中的 `AGENTS.md` 文件、`architecture.md`、`packages/README.md`，以及它们将内容移入的常设策略文档（`docs/testing.md`、`docs/defensive-patterns.md`）。参考文档、Agent Note 和包 README 不设预算：只要每一行都是事实，长度在这些位置就是合理的；评审和赘余检查清单负责约束它们。
-- **上限是只进不退的执行红线。** 达到或低于目标的文档在上限逐步下调时保留至少 5% 的余量；高于目标的文档则维持冻结的上限，在达到目标之前不得增长（根 `AGENTS.md` ≤ 1,600 词；`architecture.md` ≤ 1,800；子树 `AGENTS.md` ≤ 600，但 `packages/AGENTS.md` ≤ 650、`docs/AGENTS.md` ≤ 1,250；`packages/README.md` ≤ 600）。门禁变红时，迁移或压缩内容；只有在 PR（Pull Request）描述中给出明确理由时才提高上限。
+- **经过认证的托管指令。**[verify-md-wrap](../../../../scripts/verify-md-wrap.ts) 仅会掩码根 [`AGENTS.md`](../../../../AGENTS.md) 中的精确 Vibe 托管区域，前提是严格 UTF-8 解码、manifest（元数据清单）所有权、两个相等的小写 SHA-256 值，以及已安装字节经通用换行规范化后的摘要全部通过认证。manifest、标记、摘要或所有权的任一条件失败都会拒绝该文件；其他文件和区域均无豁免。Vibe Kit 拥有该区域与哈希，仓库拥有检查器和显式预算。恢复时通过受支持的 Vibe Kit 路径还原已安装文件，并用 `./bin/vibe doctor . --format json` 确认；不得在本地编辑托管字节或哈希。
+- **上限是只进不退的执行红线。**达到或低于[目标](../../../../docs/AGENTS.md#wordcount-budgets)的文档在上限逐步下调时保留至少 5% 的余量；高于目标的文档则维持冻结的上限，在达到目标之前不得增长。根 `AGENTS.md` 的上限明确冻结为整个文件 2,858 词且不留余量：其中包含 909 个托管词和 1,949 个项目自有词。托管区域缩小时执行常规递减；区域增大时门禁保持失败，直至确认 Vibe Kit 安装健康并由经过评审的决策确立新的显式整文件上限。门禁变红时，迁移或压缩内容；只有在 PR（Pull Request）描述中给出明确理由时才提高上限。
 - **精简的工作流 skill（技能），约定归文档。**[.agents/skills/dsh-doc](../../../skills/dsh-doc/SKILL.md) 承载文档放置、审计、预算与站点发布工作流，并以文档标准为真源，与 [dsh-translate-docs](../../../skills/dsh-translate-docs/SKILL.md) 和 i18n 约定之间的分工相同。
 
 ## 曾考虑的替代方案

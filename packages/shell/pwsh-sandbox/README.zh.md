@@ -61,7 +61,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-如果没有 runner 能强制执行受限模式，前台调用以 `SANDBOX_UNAVAILABLE` 失败，后台进程则记录 runner 失败事实——绝不会静默无隔离运行。可归因于 runner 的 spawn 失败以原始 spawn 错误作为详情；其他 spawn 拒绝保持本地执行器普通的命令启动语义。
+如果没有 runner 能强制执行受限模式，前台调用以 `SANDBOX_UNAVAILABLE` 失败，后台进程则记录 runner 失败事实——绝不会静默无隔离运行。可归因于 runner 的 spawn 失败以原始 spawn 错误作为详情；其他 spawn 拒绝保持本地执行器普通的命令启动语义。已经标记为 `killed` 的后台句柄属于中断，不属于拒绝或 runner 失败，包括 Windows 以退出码 1 且无信号结算的情况。
 
 -----
 

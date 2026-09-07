@@ -16,6 +16,7 @@ import { InspectorQueryConnection } from '../src/shared/bridge/rpc.ts'
 import { parseInspectorQueryRequestFrame, parseInspectorQueryResponseFrame } from '../src/shared/bridge/messages/query/codec.ts'
 import type { InspectorQueryRequestFrame, InspectorQueryResponseFrame } from '../src/shared/bridge/messages/query/frames.ts'
 import type { InspectorSourceDescriptor } from '../src/shared/bridge/messages/observation.ts'
+import { INSPECTOR_PROTOCOL_VERSION } from '../src/shared/bridge/version.ts'
 import { createInspectorService } from '../src/shared/service.ts'
 import { CordisTreeStore } from '../src/worker/inspection/cordis-store.ts'
 import { InspectorQueryRouter } from '../src/worker/inspection/query-router.ts'
@@ -97,7 +98,7 @@ describe('Inspector query protocol', () => {
     const hiddenTree = runtimeTree()
     if (hiddenTree.host === null) throw new Error('test tree requires a Host realm')
     expect(parseInspectorQueryRequestFrame({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'query/request',
       sourceId: 'host-1',
       generation: 'generation-1',
@@ -105,7 +106,7 @@ describe('Inspector query protocol', () => {
       query: { op: 'cordis-tree/get' },
     })).toMatchObject({ query: { op: 'cordis-tree/get' } })
     expect(() => parseInspectorQueryRequestFrame({
-      v: 0,
+      v: INSPECTOR_PROTOCOL_VERSION,
       t: 'query/request',
       sourceId: 'host-1',
       generation: 'generation-1',
@@ -311,7 +312,7 @@ function runtimeTree(root: CordisRuntimeContext = { kind: 'context', children: [
 
 function requestFrame(requestId: string, sourceGeneration = 'generation-1'): InspectorQueryRequestFrame {
   return {
-    v: 0,
+    v: INSPECTOR_PROTOCOL_VERSION,
     t: 'query/request',
     sourceId: sourceId('host-1'),
     generation: generation(sourceGeneration),
@@ -322,7 +323,7 @@ function requestFrame(requestId: string, sourceGeneration = 'generation-1'): Ins
 
 function successResponse(requestId: string, tree: CordisRuntimeTree): InspectorQueryResponseFrame {
   return {
-    v: 0,
+    v: INSPECTOR_PROTOCOL_VERSION,
     t: 'query/response',
     sourceId: sourceId('host-1'),
     generation: generation('generation-1'),

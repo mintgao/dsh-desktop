@@ -704,10 +704,9 @@ describe('Cordis tree inspection', () => {
       const removed = events.findIndex(event => event.method === 'DOM.childNodeRemoved')
       const inserted = events.findIndex(event => event.method === 'DOM.childNodeInserted')
       expect(destroyed).toBeGreaterThanOrEqual(0)
-      expect(created).toBeGreaterThan(destroyed)
-      expect(removed).toBeGreaterThan(created)
+      expect(removed).toBeGreaterThan(destroyed)
       expect(inserted).toBeGreaterThan(removed)
-      expect(events.slice(0, created).some(event => event.method?.startsWith('DOM.'))).toBe(false)
+      expect(created).toBeGreaterThan(inserted)
       expect(events.some(event => event.method === 'DOM.documentUpdated')).toBe(false)
     })
 

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -83,30 +83,99 @@ describe('HMR exact config paths', () => {
     }
   })
 
-  it('observes add, change, and unlink outside its module roots', { timeout: 20_000 }, async () => {
+  it('observes add, change, and unlink outside its module roots', { timeout: 90_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-'))
     const filename = join(dir, 'plugins.yml')
-    const ctx = await bootHmr(dir)
+    // Polling keeps topology-sensitive native watcher queue loss out of this
+    // backend-neutral config lifecycle assertion.
+    const ctx = await bootHmr(dir, [], true)
     const observed: string[] = []
+    const waiters: Array<{ resolve(value: string): void }> = []
+    const unexpected: string[] = []
+    const sequenceDeadline = Promise.withResolvers<never>()
+    let waitingFor = 'creation'
+    let disposeConfig: (() => Promise<void>) | undefined
+    let configDisposal: Promise<void> | undefined
+    let configDisposed = false
+    let contextDisposed = false
+    let fixtureRemoved = false
+
+    const nextUpdate = (label: string, trigger: () => void): Promise<string> => {
+      waitingFor = label
+      const waiter = Promise.withResolvers<string>()
+      const entry = {
+        resolve(value: string) {
+          waiter.resolve(value)
+        },
+      }
+      waiters.push(entry)
+      try {
+        trigger()
+      } catch (error) {
+        const index = waiters.indexOf(entry)
+        if (index >= 0) waiters.splice(index, 1)
+        throw error
+      }
+      return Promise.race([waiter.promise, sequenceDeadline.promise])
+    }
     try {
-      await ctx.hmr.registerConfig(filename, () => {
+      disposeConfig = await ctx.hmr.registerConfig(filename, () => {
+        let value: string
         try {
-          observed.push(readFileSync(filename, 'utf8'))
+          value = readFileSync(filename, 'utf8')
         } catch (error) {
           if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-          observed.push('missing')
+          value = 'missing'
         }
+        observed.push(value)
+        const waiter = waiters.shift()
+        if (waiter === undefined) unexpected.push(value)
+        else waiter.resolve(value)
       })
 
-      writeFileSync(filename, 'one', { flag: 'wx' })
-      await eventually(() => observed.includes('one'), 'HMR did not observe config creation')
-      writeFileSync(filename, 'two')
-      await eventually(() => observed.includes('two'), 'HMR did not observe config change')
-      unlinkSync(filename)
-      await eventually(() => observed.includes('missing'), 'HMR did not observe config removal')
+      const sequenceTimer = setTimeout(() => {
+        sequenceDeadline.reject(new Error(
+          `HMR config event sequence timed out while awaiting ${waitingFor}; `
+          + `observed ${JSON.stringify(observed)}, unexpected ${JSON.stringify(unexpected)}`,
+        ))
+      }, 75_000)
+      try {
+        await expect(nextUpdate('creation', () => {
+          writeFileSync(filename, 'one', { flag: 'wx' })
+        })).resolves.toBe('one')
+        await expect(nextUpdate('change', () => { writeFileSync(filename, 'two') })).resolves.toBe('two')
+        await expect(nextUpdate('removal', () => { unlinkSync(filename) })).resolves.toBe('missing')
+      } finally {
+        clearTimeout(sequenceTimer)
+      }
+
+      configDisposal = disposeConfig()
+      await configDisposal
+      configDisposed = true
     } finally {
-      await ctx.fiber.dispose()
+      try {
+        if (disposeConfig !== undefined) {
+          configDisposal ??= disposeConfig()
+          await configDisposal
+          configDisposed = true
+        }
+      } finally {
+        try {
+          await ctx.fiber.dispose()
+          contextDisposed = true
+        } finally {
+          rmSync(dir, { recursive: true, force: true })
+          fixtureRemoved = !existsSync(dir)
+        }
+      }
     }
+
+    expect(observed).toEqual(['one', 'two', 'missing'])
+    expect(waiters).toHaveLength(0)
+    expect(unexpected).toEqual([])
+    expect(configDisposed).toBe(true)
+    expect(contextDisposed).toBe(true)
+    expect(fixtureRemoved).toBe(true)
   })
 
   it('observes creation when the config parent did not exist at registration', { timeout: 20_000 }, async () => {

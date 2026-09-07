@@ -47,7 +47,7 @@ describe('Inspector source protocol', () => {
     }
     const registry = new InspectorSourceRegistry([consumer], 16_384, 4)
     registry.receive(connection, {
-      v: 0,
+      v: 1,
       t: 'source/open',
       source: {
         sourceId: 'host-1',
@@ -60,7 +60,7 @@ describe('Inspector source protocol', () => {
       topics: ['probe'],
     })
     registry.receive(connection, {
-      v: 0,
+      v: 1,
       t: 'source/append',
       sourceId: 'host-1',
       generation: 'g-1',
@@ -73,7 +73,7 @@ describe('Inspector source protocol', () => {
     expect(registry.describe()[0]).toMatchObject({ expectedSequence: 3, dropped: 1, topics: { probe: 1 } })
 
     registry.receive(connection, {
-      v: 0,
+      v: 1,
       t: 'source/append',
       sourceId: 'host-1',
       generation: 'g-1',
@@ -101,7 +101,7 @@ describe('Inspector source protocol', () => {
 
   it('decodes Runtime commands and rejects undeclared fields', () => {
     const request = parseWorkerSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-runtime/request',
       sourceId: 'client-1',
       generation: 'g-1',
@@ -126,7 +126,7 @@ describe('Inspector source protocol', () => {
     })).toThrow('unknown field')
 
     expect(parseWorkerSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-runtime/response-acknowledged',
       sourceId: 'client-1',
       generation: 'g-1',
@@ -137,7 +137,7 @@ describe('Inspector source protocol', () => {
 
   it('rejects invalid RemoteObject representations', () => {
     expect(() => parseSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-runtime/response',
       sourceId: 'client-1',
       generation: 'g-1',
@@ -160,19 +160,64 @@ describe('Inspector source protocol', () => {
 
   it('decodes exact Client Console lifecycle and event frames', () => {
     expect(parseWorkerSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-console/enable',
       sourceId: 'client-1',
       generation: 'g-1',
       sessionId: 'session-1',
-    })).toMatchObject({ t: 'client-console/enable', sessionId: 'session-1' })
+      subscriptionId: 'subscription-1',
+    })).toMatchObject({ t: 'client-console/enable', sessionId: 'session-1', subscriptionId: 'subscription-1' })
+    expect(parseWorkerSourceFrame({
+      v: 1,
+      t: 'client-console/disable',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
+    })).toMatchObject({ t: 'client-console/disable', subscriptionId: 'subscription-1' })
+
+    expect(parseSourceFrame({
+      v: 1,
+      t: 'client-console/enable-result',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
+      outcome: { ok: true },
+    }, 4)).toMatchObject({ t: 'client-console/enable-result', outcome: { ok: true } })
+
+    expect(parseSourceFrame({
+      v: 1,
+      t: 'client-console/enable-result',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-2',
+      outcome: {
+        ok: false,
+        error: { code: 'installation-failed', message: 'observer unavailable' },
+      },
+    }, 4)).toMatchObject({
+      t: 'client-console/enable-result',
+      outcome: { ok: false, error: { code: 'installation-failed' } },
+    })
+    expect(parseSourceFrame({
+      v: 1,
+      t: 'client-console/enable-result',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-3',
+      outcome: { ok: false, error: { code: 'session-conflict', message: 'already active' } },
+    }, 4)).toMatchObject({ outcome: { ok: false, error: { code: 'session-conflict' } } })
 
     const frame = parseSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-console/event',
       sourceId: 'client-1',
       generation: 'g-1',
       sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
       event: {
         type: 'console-api',
         event: {
@@ -188,6 +233,7 @@ describe('Inspector source protocol', () => {
     expect(frame).toMatchObject({
       t: 'client-console/event',
       sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
       event: {
         type: 'console-api',
         event: { type: 'log', arguments: [{ object: { handle: 'object-1' } }] },
@@ -195,18 +241,63 @@ describe('Inspector source protocol', () => {
     })
 
     expect(() => parseWorkerSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-console/disable',
       sourceId: 'client-1',
       generation: 'g-1',
       sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
       extra: true,
     })).toThrow('unknown field')
+
+    expect(() => parseSourceFrame({
+      v: 1,
+      t: 'client-console/enable-result',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
+      outcome: { ok: false, error: { code: 'installation-failed', message: 'x'.repeat(2_049) } },
+    }, 4)).toThrow('invalid Client Console enable error')
+    expect(() => parseSourceFrame({
+      v: 1,
+      t: 'client-console/enable-result',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
+      outcome: { ok: false, error: { code: 'unknown', message: 'not declared' } },
+    }, 4)).toThrow('invalid Client Console enable error')
+    expect(() => parseSourceFrame({
+      v: 1,
+      t: 'client-console/enable-result',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      outcome: { ok: true },
+    }, 4)).toThrow('subscriptionId must be a string')
+    expect(() => parseSourceFrame({
+      v: 0,
+      t: 'client-console/event',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
+      event: { type: 'console-api', event: { type: 'log', arguments: [], timestamp: 1 } },
+    }, 4)).toThrow('unsupported version')
+    expect(() => parseWorkerSourceFrame({
+      v: 0,
+      t: 'client-console/enable',
+      sourceId: 'client-1',
+      generation: 'g-1',
+      sessionId: 'session-1',
+      subscriptionId: 'subscription-1',
+    })).toThrow('invalid Worker source frame')
   })
 
   it('decodes bounded Client source commands and responses', () => {
     expect(parseWorkerSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-sources/request',
       sourceId: 'client-1',
       generation: 'g-1',
@@ -225,7 +316,7 @@ describe('Inspector source protocol', () => {
     })
 
     expect(parseSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-sources/response',
       sourceId: 'client-1',
       generation: 'g-1',
@@ -250,7 +341,7 @@ describe('Inspector source protocol', () => {
     })
 
     expect(() => parseSourceFrame({
-      v: 0,
+      v: 1,
       t: 'client-sources/response',
       sourceId: 'client-1',
       generation: 'g-1',

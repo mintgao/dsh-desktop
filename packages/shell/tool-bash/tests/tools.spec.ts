@@ -270,16 +270,13 @@ describe('bash tool', () => {
     expect(text(result)).toBe('(no output)\n[timed out after 100ms]\n[killed by signal: SIGTERM]')
   })
 
-  it('reports a timeout even when the command traps the signal and exits 0', async () => {
-    // The signal-independent timeout marker: a trapped SIGTERM that exits 0
-    // after our timer fired must NOT look like a clean success. (bash may
-    // print "Terminated" to stderr for the killed sleep — environment
-    // dependent — so assert the marker, not the exact body.)
+  it('reports a timeout independently of a TERM-trapped command final status', async () => {
+    // Process-tree termination may settle the shell as exit 0, a signal, or
+    // 128 + signal; the timeout marker remains the portable first-cause fact.
     const ctx = await setup()
     const result = await call(ctx, 'bash', { command: 'trap "exit 0" TERM; sleep 60', description: 'test command', timeoutMs: 100 })
     expect(result.isError).toBe(false)
     expect(text(result)).toContain('[timed out after 100ms]')
-    expect(text(result)).not.toContain('[exit code:')
   })
 
   it('reports truncation with the spill path', async () => {

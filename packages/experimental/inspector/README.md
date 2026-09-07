@@ -36,7 +36,7 @@ The source tree follows those execution environments: `client/` and `host/` prov
 
 Host and Client producers send internal observation records rather than CDP messages. Records contain a source generation, sequence, source-clock timestamp, topic, and JSON payload. The Worker validates every process or network frame, owns source state and retention, and translates recognized topics to standard CDP domains.
 
-Client sources declare typed Runtime, Console, and read-only Sources capabilities. `Runtime.enable` publishes the real Host execution context and one synthetic context for every connected Client source. Selecting a Client context routes evaluation, property access, function calls, promise awaiting, and object release to that browser realm. Client Console arguments use the same session-local object table, while `Debugger.enable` publishes the built `lib/client.js` catalog and `Debugger.getScriptSource` reads bounded content chunks. Client-script breakpoints, step, and call frames remain unsupported; target-wide pause and resume control the Host debugger only.
+Client sources declare typed Runtime, Console, and read-only Sources capabilities. `Runtime.enable` publishes the real Host execution context and, after Console observation is ready, one synthetic context for every connected Client source. The Worker owns a version-1 Console subscription id, listener, timeout, and provisional handle before it sends the enable frame; the Client installs its Console and global-error hooks before acknowledging the exact source generation, Runtime session, and subscription. Concurrent enables join one initial realm snapshot. A failed acknowledgement, timeout, disconnect, disable, or DevTools close disposes provisional state and rejects that enable, while a Client realm added later is withheld and closed only for that DevTools connection if its own readiness fails. Selecting a ready Client context routes evaluation, property access, function calls, promise awaiting, and object release to that browser realm. Client Console arguments use the same session-local object table, while `Debugger.enable` publishes the built `lib/client.js` catalog and `Debugger.getScriptSource` reads bounded content chunks. Client-script breakpoints, step, and call frames remain unsupported; target-wide pause and resume control the Host debugger only.
 
 Both plugin faces run the same browser-safe Cordis collector. It converts reachable Context and Fiber objects into a versioned `CordisTreeSnapshot`; the Worker stores that CDP-independent representation and projects each Host or Client source into the Elements panel.
 
@@ -64,7 +64,7 @@ The Host plugin injects `webServer` and accepts these fields:
 | `stopTimeoutMs` | 5 seconds | Graceful Worker shutdown deadline before termination |
 | `clientReconnectBaseMs` | 250 ms | First Client reconnect backoff cap |
 | `clientReconnectMaxMs` | 5 seconds | Maximum Client reconnect backoff cap |
-| `clientRuntimeTimeoutMs` | 30 seconds | Deadline for one Worker-to-Client Runtime or Sources command |
+| `clientRuntimeTimeoutMs` | 30 seconds | Deadline for one Worker-to-Client Runtime or Sources command, or a Console enable acknowledgement |
 | `queryTimeoutMs` | 10 seconds | Deadline for one non-CDP semantic query |
 | `maxClientRuntimeObjects` | `10000` | Live Client object handles retained per DevTools connection |
 | `maxClientRuntimeProperties` | `2000` | Property descriptors returned by one Client object inspection |
@@ -139,6 +139,7 @@ None; this package neither assembles nor sends a provider request.
 - **Client Sources expose the Inspector bundle only** — other page scripts are not cataloged by this package.
 - **Client evaluation uses page JavaScript** — page Content Security Policy can block dynamic evaluation, and the synthetic context does not provide DevTools command-line helpers or native REPL declaration semantics.
 - **Client identity arbitration requires Web Locks** — browsers without that API retain reconnect and refresh identity through `sessionStorage`, but cannot distinguish two simultaneously live tabs copied from the same storage state.
+- **Inspector artifacts must match** — protocol version 1 has no version-0 negotiation or shim. Reload or restart an already-running Client page after updating the Host, Worker, or browser Client bundle; restarting only the Inspector does not replace code already loaded by the page.
 - **Fetch interception covers `globalThis.fetch`** — direct Undici APIs and fetch references retained before activation are not observed.
 - **Body cloning has cost** — full capture tees request and response streams up to the configured limits and can increase memory and I/O pressure. The retained-body limit does not include buffering inside the stream tee, including an oversized source chunk or data queued for a slower application reader.
 - **No automatic Worker restart** — an unexpected Worker exit fails the current Inspector instance; lifecycle recovery belongs to a later change.

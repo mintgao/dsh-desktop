@@ -40,7 +40,7 @@ Client Runtime 子集包括 `Runtime.evaluate`、`Runtime.getProperties`、`Runt
 
 JavaScript exception 是携带 `exceptionDetails` 的成功 Runtime response；transport failure 使用独立的 error 联合。Worker deadline 会向 Client 发送 request-scoped cancellation。response 分配的 handle 在 Worker 确认该 response 前保持 provisional，因此 cancellation 和 late response 不会留下无法访问的对象。有限的命令 deadline、对象数、属性数、source 字节数与帧字节数约束保留或返回的状态。
 
-Client Console observer 保持原始页面调用行为，并为每个已启用的 DevTools session 异步发出一份 event。每个 session 把 argument 序列化到自己的 `console` object group，因此断联、Runtime disable 或 `Runtime.discardConsoleEntries` 可以释放一条连接而不使其他连接失效。Context 与 Fiber argument 使用和求值结果相同的语义引用及 DOM 反向映射。
+Client Console enable 使用 version-1 关联 handshake。Worker 分配带品牌的 subscription id，并在发送 enable 帧前拥有 provisional listener、timeout 与可同步 dispose 的 handle。Client 保留精确的 Runtime session 与 subscription tuple，在报告成功前安装 Console 和全局错误 hook；重复 enable 不会再次安装，而是返回已保留的 outcome。`Runtime.enable` 加入单个初始 enable epoch，只在 snapshot 中的 Runtime backend 与 Console subscription 全部就绪后返回；该 epoch 期间打开的 realm 进入后续 dynamic path。安装失败、timeout、send failure、断联、disable、realm removal、DevTools 关闭和 router dispose 共用幂等 cleanup。dynamic realm 失败时暂不发布其 context，并只关闭该 connection-local realm session。active event 必须匹配精确的 source generation、Runtime session 与 subscription id。每个 session 把 argument 序列化到自己的 `console` object group，因此 cleanup 或 `Runtime.discardConsoleEntries` 可以释放一条连接而不使其他连接失效。Context 与 Fiber argument 使用和求值结果相同的语义引用及 DOM 反向映射。
 
 Client 从组装后的 web boot graph 发现本包 `lib/client.js` 的 URL。`Debugger.enable` 通过类型化 source operation 读取 metadata，`Debugger.getScriptSource` 重组有界 base64 chunk；source map 保持在公布的 URL 上可用。Client script breakpoint、step 与 call-frame 操作明确不受支持，因为页面 JavaScript 无法暂停自身 realm 后继续处理控制消息。target-wide pause 与 resume 继续控制 Host debugger。
 
@@ -81,6 +81,7 @@ wrapper 把标准化 Request 交给原 fetch，通过独立采集任务读取 re
 - Console 在 Host context 求值并接收 Host console event。
 - Console 列出 Host 与 Client context；Client 求值、属性、函数调用、Promise await 与释放操作维持 RemoteObject 身份，且不在 realm 或 DevTools 连接之间共享对象。
 - Host 与 Client Console event 使用相同 projector；Client argument 按 DevTools 连接隔离，Cordis argument 可以解析到 Elements node。
+- 被 hold 的 Client Console acknowledgement 会让 `Runtime.enable` 保持 pending；精确 success 后才允许投递 event，failure、timeout、陈旧 correlation、disable、断联或 dispose 都会移除 provisional 状态，且不发布 context。
 - Sources 接收 Host script 与构建后的 Client bundle；Client source 读取采用分块传输，active debugging 明确失败，而 Host 仍可被断点暂停、求值 call frame 并 resume。
 - Host paused scope 与 call-frame result 使用和 Runtime 求值相同的 connection-local RemoteObject table。
 - Network 回放 `Network.enable` 前的请求，并无遗漏、无重复地推送后续请求。
@@ -98,3 +99,5 @@ clone request/response stream 会增加 CPU、内存与 I/O 压力。有限预�
 page 类型 synthetic target 依赖 Node 原生 inspector domain 之外的一组 Chrome DevTools 兼容响应。每个 no-op 都必须明确命名并有测试；统一吞掉未知方法会掩盖协议漂移。
 
 Client Runtime 执行使用页面 JavaScript 求值，因此页面 Content Security Policy 可能拒绝它，也不承诺原生 DevTools command-line 或 REPL 语义。只读 Client Sources 不代表 active Client debugging；增加该能力需要一个在被检查页面 realm 暂停时仍能响应的执行 agent。
+
+Protocol version 1 拒绝 version-0 peer，不提供协商或 shim。Host、Worker 与浏览器 Client 产物必须匹配；只重启 Inspector 不会更新已运行页面中加载的 Client bundle。

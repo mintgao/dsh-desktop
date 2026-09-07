@@ -18,7 +18,7 @@ import { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import { SandboxBashExecutor } from '@deepseek-ai/dsh-bash-sandbox'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import type { SubprocessHandle, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
-import { classifyDenial, classifyRunnerFailure, isRunnerSpawnFailure } from '../src/helpers.ts'
+import { classifyBackgroundProcess, classifyDenial, classifyRunnerFailure, isRunnerSpawnFailure } from '../src/helpers.ts'
 import type { Config } from '@deepseek-ai/dsh-bash-sandbox'
 
 const spillDir = mkdtempSync(join(tmpdir(), 'dsh-bash-sandbox-spec-'))
@@ -388,6 +388,22 @@ describe('classifyDenial', () => {
   })
 })
 
+describe('classifyBackgroundProcess', () => {
+  it('treats killed lifecycle state as authoritative over numeric shell settlement', () => {
+    expect(classifyBackgroundProcess('killed', 143, 'Permission denied', UNIX_SIGNATURES, RUNNER_FAILURE))
+      .toEqual({ runnerFailed: false, denied: false })
+    expect(classifyBackgroundProcess('killed', 125, 'fake-runner: Permission denied', UNIX_SIGNATURES, RUNNER_FAILURE))
+      .toEqual({ runnerFailed: false, denied: false })
+  })
+
+  it('keeps completed-process runner failure ahead of denial', () => {
+    expect(classifyBackgroundProcess('completed', 1, 'Permission denied', UNIX_SIGNATURES, RUNNER_FAILURE))
+      .toEqual({ runnerFailed: false, denied: true })
+    expect(classifyBackgroundProcess('completed', 125, 'fake-runner: Permission denied', UNIX_SIGNATURES, RUNNER_FAILURE))
+      .toEqual({ runnerFailed: true, denied: false })
+  })
+})
+
 describe('isRunnerSpawnFailure', () => {
   it.each(['EACCES', 'ENOENT'])(
     'attributes executable-class spawn code %s to argv[0] once cwd ambiguity is eliminated',
@@ -640,14 +656,15 @@ describe('background sandbox facts', () => {
     expect(quick.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
   })
 
-  it('a signal-killed task is never a denial (null exit code)', async () => {
+  it('a caller-killed task is never a denial', async () => {
     const { bash } = await setup()
     const task = bash.start(bash.resolve({ command: 'echo "Permission denied" >&2; sleep 30' }))
-    // Let the stderr land before the kill so the classifier sees the
-    // signature and must still refuse it on the null exit code alone.
+    // Let the stderr land before the kill so the classifier sees the signature
+    // and must still defer to the authoritative killed lifecycle state.
     await vi.waitFor(() => { expect(task.readOutput().delta).toContain('Permission denied') })
     task.kill()
     await task.done
+    expect(task.status).toBe('killed')
     expect(task.sandbox).toEqual({ mode: 'read-only', denied: false, enforcement: 'full' })
   })
 

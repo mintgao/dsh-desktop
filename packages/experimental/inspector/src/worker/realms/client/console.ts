@@ -4,13 +4,13 @@ import type { ClientRuntimeSessionId } from '../../../shared/bridge/ids.ts'
 import type { RuntimeBackendObjectHandle } from '../../../shared/cdp/ids.ts'
 import type { RuntimeConsoleBackendEvent } from '../../../shared/cdp/index.ts'
 import type { ClientRuntimeRouter, ClientRuntimeTarget } from '../../bridge/runtime-rpc.ts'
-import type { ConsoleBackend } from '../../../shared/cdp/realm.ts'
+import type { ConsoleBackend, ConsoleSubscriptionHandle } from '../../../shared/cdp/realm.ts'
 import { clientConsoleEvent } from './values.ts'
 import type { ClientScriptIdentity } from './scripts.ts'
 
 /** Adapts session-local Client Console events to common Runtime values. */
 export class ClientConsoleBackend implements ConsoleBackend {
-  private readonly disposers = new Set<() => void>()
+  private readonly subscriptions = new Set<ConsoleSubscriptionHandle>()
 
   constructor(
     private readonly target: ClientRuntimeTarget,
@@ -19,14 +19,19 @@ export class ClientConsoleBackend implements ConsoleBackend {
     private readonly scriptIds: ClientScriptIdentity,
   ) {}
 
-  subscribe(listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void): () => void {
-    const dispose = this.router.subscribeConsole(this.target, this.sessionId, (event) => {
+  subscribe(
+    listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void,
+  ): ConsoleSubscriptionHandle {
+    const subscription = this.router.subscribeConsole(this.target, this.sessionId, (event) => {
       listener(clientConsoleEvent(event, scriptKey => this.scriptIds.toRuntime(scriptKey)))
     })
-    this.disposers.add(dispose)
-    return () => {
-      if (!this.disposers.delete(dispose)) return
-      dispose()
+    this.subscriptions.add(subscription)
+    return {
+      ready: subscription.ready,
+      dispose: () => {
+        if (!this.subscriptions.delete(subscription)) return
+        subscription.dispose()
+      },
     }
   }
 
@@ -34,7 +39,7 @@ export class ClientConsoleBackend implements ConsoleBackend {
 
   /** Disable every active Console subscription for this connection. */
   close(): void {
-    for (const dispose of this.disposers) dispose()
-    this.disposers.clear()
+    for (const subscription of this.subscriptions) subscription.dispose()
+    this.subscriptions.clear()
   }
 }

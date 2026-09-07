@@ -78,6 +78,15 @@ export class InspectorRealmSessionSet {
   }
 
   /**
+   * Check whether this set still owns the exact realm-session instance.
+   * @param session - Realm session whose current ownership is queried.
+   * @returns Whether the set owns the same instance.
+   */
+  has(session: InspectorRealmSession): boolean {
+    return this.sessions.get(session.descriptor.realmId) === session
+  }
+
+  /**
    * Subscribe to connection-local realm session lifecycle.
    * @param listener - Session observer.
    * @returns A disposer removing the observer.
@@ -85,6 +94,17 @@ export class InspectorRealmSessionSet {
   subscribe(listener: (event: InspectorRealmSessionEvent) => void): () => void {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
+  }
+
+  /**
+   * Close one connection-local realm session after its dynamic readiness fails.
+   * @param session - Session opened by this set.
+   */
+  closeSession(session: InspectorRealmSession): void {
+    if (this.sessions.get(session.descriptor.realmId) !== session) return
+    this.sessions.delete(session.descriptor.realmId)
+    session.close()
+    this.emit({ type: 'closed', session })
   }
 
   /** Close all realm sessions and stop tracking the registry. */
@@ -105,9 +125,7 @@ export class InspectorRealmSessionSet {
     }
     const session = this.sessions.get(event.realm.descriptor.realmId)
     if (session === undefined) return
-    this.sessions.delete(event.realm.descriptor.realmId)
-    session.close()
-    this.emit({ type: 'closed', session })
+    this.closeSession(session)
   }
 
   private open(realm: InspectorRealm): InspectorRealmSession {

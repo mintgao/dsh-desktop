@@ -16,7 +16,7 @@ The repository does not rank these audiences or name one primary product scenari
 
 ## Product surfaces
 
-- **Web UI:** `dsh web` starts the local browser application. A user configures a model, selects a workspace, creates durable sessions, submits tasks, reviews agent activity, and answers approval or clarification requests.
+- **Web UI:** `dsh web` starts the local browser application. A user configures a model, selects a workspace and Agent preset before a new session starts, submits tasks, reviews agent activity, and answers approval or clarification requests.
 - **CLI and Profiles:** the `dsh` launcher boots named plugin compositions, manages Profile-local plugins, dumps effective configuration, and supplies a one-shot headless mode.
 - **Programmatic APIs:** the SDK and ACP surfaces expose the same agent runtime to another process; each has a narrower interaction model than the Web UI.
 - **DSH Desktop Mint:** this checkout includes an unofficial macOS Electron shell maintained by Mint. It supervises the `desktop-mint` Profile and embeds the same Web application; it is not a separate Agent implementation or an official DeepSeek distribution. See [the desktop reference](../../apps/desktop/README.md).
@@ -24,7 +24,8 @@ The repository does not rank these audiences or name one primary product scenari
 ## Current capabilities
 
 - Catalog and custom model providers, with credentials stored separately from settings and model changes applied on the next request; see [model configuration](../user/guide/providers.md).
-- Workspace file editing, shell and terminal execution, file and Web search, Skills, plans, goals, background jobs, workflows, and in-process subagents in the standard coding-agent preset.
+- Workspace file editing, shell execution, file and Web search, Skills, plans, goals, background jobs, workflows, and in-process subagents in the standard coding-agent preset.
+- One Web process can compose sessions from different system or user-authored Agent presets. The selected preset fixes that session's tools and prompt composition once it starts.
 - User-controlled permission presets and one-shot approvals rather than unconditional host access.
 - Append-only session logs, default JSONL persistence, attachments, replay-derived UI state, and session export in the Web composition.
 - External plugin installation and ordered Profile/Bundle patches, allowing deployments to replace providers or add consumers without forking the Agent Loop.

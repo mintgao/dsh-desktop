@@ -27,7 +27,7 @@ import type {
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { PwshLocalExecutor } from '@deepseek-ai/dsh-pwsh-local'
 import type { Config as LocalConfig } from '@deepseek-ai/dsh-pwsh-local'
-import { classifyDenial, classifyRunnerFailure, isRunnerSpawnFailure, matchesSignature } from './helpers.ts'
+import { classifyBackgroundProcess, classifyDenial, classifyRunnerFailure, isRunnerSpawnFailure } from './helpers.ts'
 
 /**
  * Plugin config: the local executor's knobs, verbatim. The sandbox policy —
@@ -150,23 +150,25 @@ export class SandboxPwshExecutor extends PwshLocalExecutor {
   }
 
   /**
-   * Stamp per-process sandbox facts before `done` settles. Full-access
-   * processes have no facts; signal deaths are not denials.
+   * Stamp per-process sandbox facts before `done` settles. Full-access processes
+   * have no facts. The handle's killed status outranks numeric PowerShell
+   * settlement, so an interrupted process cannot become a denial or runner failure.
    */
   protected override onProcessDone(proc: ShellProcess, stderr: string, spawnFailed: boolean, spawnError?: unknown): void {
     const facts = this.processFacts.get(proc)
     if (facts !== undefined) {
       this.processFacts.delete(proc)
-      // A rejected spawn never started the confined launch. Otherwise runner
-      // failure outranks denial because its diagnostics may contain denial terms.
-      const runnerFailed = spawnFailed
-        ? isRunnerSpawnFailure(spawnError, facts.runnerProgram, facts.workdir)
-        : classifyRunnerFailure(proc.exitCode, stderr, facts.runnerFailureRules) !== undefined
+      // A rejected spawn never started the confined launch. For a settled
+      // process, lifecycle interruption outranks stderr classification; an
+      // ordinary runner failure still outranks denial.
+      const classified = spawnFailed
+        ? { runnerFailed: isRunnerSpawnFailure(spawnError, facts.runnerProgram, facts.workdir), denied: false }
+        : classifyBackgroundProcess(proc.status, proc.exitCode, stderr, facts.denialSignatures, facts.runnerFailureRules)
       proc.sandbox = {
         mode: facts.mode,
-        denied: !runnerFailed && matchesSignature(proc.exitCode, stderr, facts.denialSignatures),
+        denied: classified.denied,
         enforcement: facts.enforcement,
-        ...(runnerFailed ? { runnerFailed } : {}),
+        ...(classified.runnerFailed ? { runnerFailed: true } : {}),
       }
     }
     super.onProcessDone(proc, stderr, spawnFailed, spawnError)

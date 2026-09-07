@@ -82,14 +82,24 @@ export interface RuntimeBackend {
   releaseObjectGroup(group: string): Promise<void>
 }
 
+/** Synchronously owned Console subscription with explicit readiness. */
+export interface ConsoleSubscriptionHandle {
+  /** Settles after the realm has installed observation or rejects when readiness fails. */
+  readonly ready: Promise<void>
+  /** Stop observation and release every resource owned by this subscription. */
+  dispose(): void
+}
+
 /** Realm Console event source. */
 export interface ConsoleBackend {
   /**
    * Subscribe to Console and uncaught-exception events.
    * @param listener - Connection-local event consumer.
-   * @returns A disposer for the subscription.
+   * @returns A synchronously owned handle whose readiness may be asynchronous.
    */
-  subscribe(listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void): () => void
+  subscribe(
+    listener: (event: RuntimeConsoleBackendEvent<RuntimeBackendObjectHandle>) => void,
+  ): ConsoleSubscriptionHandle
   /** Clear backend-owned Console history when supported. */
   clear(): Promise<void>
 }

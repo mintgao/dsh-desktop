@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 const oxlintCli = fileURLToPath(new URL('../node_modules/oxlint/bin/oxlint', import.meta.url))
 const tsxCli = fileURLToPath(new URL('../node_modules/tsx/dist/cli.mjs', import.meta.url))
+const OXLINT_PROBE_CHILD_TIMEOUT_MS = 75_000
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -27,16 +28,27 @@ function runRepositoryOxlint(args: readonly string[], env: NodeJS.ProcessEnv = {
   })
 }
 
-function runOxlint(args: readonly string[], env: NodeJS.ProcessEnv = {}) {
+function runOxlint(args: readonly string[], env: NodeJS.ProcessEnv = {}, timeout?: number) {
   return spawnSync(process.execPath, [oxlintCli, ...args], {
     cwd: repositoryRoot,
     encoding: 'utf8',
     env: { ...process.env, NO_COLOR: '1', ...env },
+    killSignal: 'SIGKILL',
+    ...timeout === undefined ? {} : { timeout },
   })
 }
 
 function normalizedOutput(result: ReturnType<typeof runOxlint>): string {
   return `${result.stdout}${result.stderr}`.replaceAll('\\', '/')
+}
+
+function childDiagnostic(result: ReturnType<typeof runOxlint>): string {
+  return [
+    `error=${result.error?.message ?? 'none'}`,
+    `status=${String(result.status)}`,
+    `signal=${String(result.signal)}`,
+    `output=${normalizedOutput(result)}`,
+  ].join('\n')
 }
 
 async function writeContractConfig(suffix: string): Promise<string> {
@@ -80,13 +92,16 @@ probePromise()
         relative(repositoryRoot, configPath),
         '--format',
         'unix',
+        '--threads=1',
         ...paths.map(([, path]) => path),
         clientScript,
-      ], { OXC_LOG: 'debug' })
+      ], { GOMAXPROCS: '1', OXC_LOG: 'debug' }, OXLINT_PROBE_CHILD_TIMEOUT_MS)
       const output = normalizedOutput(result)
+      const diagnostic = childDiagnostic(result)
 
-      expect(result.error).toBeUndefined()
-      expect(result.status, output).toBe(1)
+      expect(result.error, diagnostic).toBeUndefined()
+      expect(result.signal, diagnostic).toBeNull()
+      expect(result.status, diagnostic).toBe(1)
       for (const [label, path, tsconfig] of paths) {
         expect(output, label).toContain(`${path.replaceAll('\\', '/')}:5:1: Promises must be awaited`)
         expect(output, `${label} project`).toContain(
@@ -347,7 +362,7 @@ export const longProbe = 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 +
     } finally {
       await rm(path, { force: true })
     }
-  })
+  }, 90_000)
 
   it.each(['--fix', '--fix-suggestions', '--fix-dangerously'])(
     'converges overlapping staged stylistic fixes through Oxlint under %s',

@@ -3,15 +3,12 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { realpath } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
-import { promisify } from 'node:util'
 import { Context } from '@deepseek-ai/cordis'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { deadline } from '@deepseek-ai/dsh-timeout'
 import { canonicalizeWorkspace, readHostSource } from '@deepseek-ai/dsh-lsp-stdio'
-
-const execFileAsync = promisify(execFile)
 
 let root: string
 let ws: string
@@ -137,9 +134,25 @@ describe('readHostSource', () => {
   })
 
   // Windows has no filesystem FIFO; the directory case above pins non-regular rejection there.
-  it.skipIf(process.platform === 'win32')('rejects a FIFO with no writer without blocking in open', async () => {
+  it.skipIf(process.platform === 'win32')('rejects a FIFO with no writer without blocking in open', {
+    timeout: 30_000,
+  }, async () => {
     const fifo = join(ws, 'pipe.ts')
-    await execFileAsync('mkfifo', [fifo])
+    const result = spawnSync('mkfifo', [fifo], {
+      encoding: 'utf8',
+      killSignal: 'SIGKILL',
+      timeout: 10_000,
+    })
+    const diagnostic = [
+      `error=${result.error?.message ?? 'none'}`,
+      `status=${String(result.status)}`,
+      `signal=${String(result.signal)}`,
+      `stdout=${result.stdout}`,
+      `stderr=${result.stderr}`,
+    ].join('\n')
+    expect(result.error, diagnostic).toBeUndefined()
+    expect(result.signal, diagnostic).toBeNull()
+    expect(result.status, diagnostic).toBe(0)
     using d = deadline(undefined, 1000, 'FIFO_READ_TIMEOUT')
     await expect(readSource('pipe.ts', BIG, d.signal)).rejects.toThrow(/not a regular file/)
   })

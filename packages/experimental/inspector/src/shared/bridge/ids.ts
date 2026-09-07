@@ -14,6 +14,9 @@ export type InspectorSourceGeneration = InspectorId<'InspectorSourceGeneration'>
 /** Identity of one DevTools connection's Client Runtime state. */
 export type ClientRuntimeSessionId = InspectorId<'ClientRuntimeSessionId'>
 
+/** Identity of one Worker-owned Client Console subscription attempt. */
+export type ClientConsoleSubscriptionId = InspectorId<'ClientConsoleSubscriptionId'>
+
 /** Identity of one in-flight Worker-to-Client Runtime operation. */
 export type ClientRuntimeRequestId = InspectorId<'ClientRuntimeRequestId'>
 

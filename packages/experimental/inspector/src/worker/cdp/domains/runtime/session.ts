@@ -4,7 +4,7 @@ import type { InspectorSourceDescriptor } from '../../../../shared/bridge/messag
 import type { InspectorRealmId, RuntimeBackendObjectHandle } from '../../../../shared/cdp/ids.ts'
 import type { RuntimeCallArgument, RuntimeCompletion, RuntimeRemoteObject } from '../../../../shared/cdp/index.ts'
 import type { RuntimeExecutionContext } from '../../../../shared/cdp/operations.ts'
-import type { RuntimeBackend } from '../../../../shared/cdp/realm.ts'
+import type { ConsoleSubscriptionHandle, RuntimeBackend } from '../../../../shared/cdp/realm.ts'
 import { cdpError, respondToCdpRequest, type CdpRequest, type CdpTransport } from '../../protocol.ts'
 import type { InspectorRealmSession } from '../../../inspection/realm.ts'
 import type { InspectorRealmSessionEvent, InspectorRealmSessionSet } from '../../realm-sessions.ts'
@@ -22,12 +22,32 @@ import {
 import { RuntimeObjectTable, type RuntimeObjectObserver } from './object-table.ts'
 import type { RuntimeObjectRoute } from './object-table.ts'
 
+interface RuntimeEnableEpoch {
+  readonly sessions: readonly InspectorRealmSession[]
+  readonly queued: Set<InspectorRealmSession>
+  readonly subscriptions: Map<InspectorRealmId, ConsoleSubscriptionHandle>
+  readonly backendTasks: Set<Promise<void>>
+  readonly invalidation: PromiseWithResolvers<never>
+  promise?: Promise<object>
+  invalidated: boolean
+}
+
+interface DynamicRealmOperation {
+  readonly session: InspectorRealmSession
+  promise?: Promise<void>
+  subscription?: ConsoleSubscriptionHandle
+  canceled: boolean
+}
+
 /** Runtime router layered over the common per-connection realm sessions. */
 export class RuntimeDomainSession {
   private readonly objects: RuntimeObjectTable
   private readonly announcedContexts = new Set<number>()
-  private readonly consoleDisposers = new Map<InspectorRealmId, () => void>()
+  private readonly consoleSubscriptions = new Map<InspectorRealmId, ConsoleSubscriptionHandle>()
+  private readonly dynamicRealms = new Map<InspectorRealmId, DynamicRealmOperation>()
   private readonly unsubscribeRealms: () => void
+  private enableEpoch: RuntimeEnableEpoch | undefined
+  private disableOperation: Promise<object> | undefined
   private enabled = false
   private closed = false
 
@@ -89,8 +109,12 @@ export class RuntimeDomainSession {
     if (this.closed) return
     this.closed = true
     this.unsubscribeRealms()
-    for (const dispose of this.consoleDisposers.values()) dispose()
-    this.consoleDisposers.clear()
+    const epoch = this.enableEpoch
+    if (epoch !== undefined) this.invalidateEpoch(epoch, new Error('DevTools Runtime session closed'))
+    for (const operation of this.dynamicRealms.values()) this.cancelDynamicRealm(operation)
+    this.dynamicRealms.clear()
+    for (const subscription of this.consoleSubscriptions.values()) subscription.dispose()
+    this.consoleSubscriptions.clear()
     this.objects.clear()
     this.announcedContexts.clear()
   }
@@ -195,35 +219,114 @@ export class RuntimeDomainSession {
   }
 
   private async enable(): Promise<object> {
-    this.enabled = true
-    try {
-      await Promise.all(this.realms.all().map(async (realm) => { await runtimeBackend(realm).enable() }))
-      for (const realm of this.realms.all()) {
-        this.attachConsole(realm)
-        this.announce(realm)
-      }
-      return {}
-    } catch (error) {
-      this.enabled = false
-      for (const dispose of this.consoleDisposers.values()) dispose()
-      this.consoleDisposers.clear()
-      this.announcedContexts.clear()
-      await Promise.allSettled(this.realms.all().map(async (realm) => { await runtimeBackend(realm).disable() }))
-      throw error
+    const disabling = this.disableOperation
+    if (disabling !== undefined) await disabling
+    if (this.closed) throw new Error('DevTools Runtime session is closed')
+    if (this.enabled) return {}
+    const active = this.enableEpoch
+    if (active?.promise !== undefined) return await active.promise
+    const invalidation = Promise.withResolvers<never>()
+    void invalidation.promise.catch(() => {})
+    const epoch: RuntimeEnableEpoch = {
+      sessions: this.realms.all(),
+      queued: new Set(),
+      subscriptions: new Map(),
+      backendTasks: new Set(),
+      invalidation,
+      invalidated: false,
     }
+    this.enableEpoch = epoch
+    epoch.promise = this.runEnableEpoch(epoch)
+    return await epoch.promise
   }
 
-  private async disable(): Promise<object> {
-    for (const dispose of this.consoleDisposers.values()) dispose()
-    this.consoleDisposers.clear()
+  private disable(): Promise<object> {
+    const active = this.disableOperation
+    if (active !== undefined) return active
+    const operation = this.runDisable()
+    this.disableOperation = operation
+    void operation.finally(() => {
+      if (this.disableOperation === operation) this.disableOperation = undefined
+    }).catch(() => {})
+    return operation
+  }
+
+  private async runDisable(): Promise<object> {
+    const epoch = this.enableEpoch
+    if (epoch !== undefined) {
+      this.invalidateEpoch(epoch, new Error('Runtime enable was invalidated by Runtime.disable'))
+      await epoch.promise?.catch(() => {})
+    }
+    this.enabled = false
+    const dynamic = [...this.dynamicRealms.values()]
+    for (const operation of dynamic) this.cancelDynamicRealm(operation)
+    await Promise.allSettled(dynamic.flatMap(operation => operation.promise === undefined ? [] : [operation.promise]))
+    for (const subscription of this.consoleSubscriptions.values()) subscription.dispose()
+    this.consoleSubscriptions.clear()
     try {
       await Promise.all(this.realms.all().map(async (realm) => { await runtimeBackend(realm).disable() }))
     } finally {
-      this.enabled = false
       this.objects.clear()
       this.announcedContexts.clear()
     }
     return {}
+  }
+
+  private async runEnableEpoch(epoch: RuntimeEnableEpoch): Promise<object> {
+    try {
+      await Promise.all(epoch.sessions.map(async (realm) => { await this.prepareEpochRealm(epoch, realm) }))
+      this.assertEpoch(epoch)
+      this.enabled = true
+      for (const [realmId, subscription] of epoch.subscriptions) {
+        this.consoleSubscriptions.set(realmId, subscription)
+      }
+      for (const realm of epoch.sessions) {
+        if (this.realms.has(realm)) this.announce(realm)
+      }
+      const queued = [...epoch.queued]
+      epoch.queued.clear()
+      this.enableEpoch = undefined
+      for (const realm of queued) {
+        if (this.realms.has(realm)) this.startDynamicRealm(realm)
+      }
+      return {}
+    } catch (error) {
+      this.invalidateEpoch(epoch, renderError(error))
+      await Promise.allSettled(epoch.backendTasks)
+      epoch.subscriptions.clear()
+      await Promise.allSettled(epoch.sessions.map(async (realm) => { await runtimeBackend(realm).disable() }))
+      this.enabled = false
+      this.objects.clear()
+      this.announcedContexts.clear()
+      if (this.enableEpoch === epoch) this.enableEpoch = undefined
+      throw error
+    }
+  }
+
+  private async prepareEpochRealm(epoch: RuntimeEnableEpoch, realm: InspectorRealmSession): Promise<void> {
+    const backendTask = runtimeBackend(realm).enable()
+    epoch.backendTasks.add(backendTask)
+    await Promise.race([backendTask, epoch.invalidation.promise])
+    this.assertEpoch(epoch)
+    const subscription = this.subscribeConsole(realm)
+    if (subscription === undefined) return
+    epoch.subscriptions.set(realm.descriptor.realmId, subscription)
+    await Promise.race([subscription.ready, epoch.invalidation.promise])
+    this.assertEpoch(epoch)
+  }
+
+  private invalidateEpoch(epoch: RuntimeEnableEpoch, error: Error): void {
+    if (epoch.invalidated) return
+    epoch.invalidated = true
+    epoch.queued.clear()
+    epoch.invalidation.reject(error)
+    for (const subscription of epoch.subscriptions.values()) subscription.dispose()
+  }
+
+  private assertEpoch(epoch: RuntimeEnableEpoch): void {
+    if (this.closed || epoch.invalidated || this.enableEpoch !== epoch) {
+      throw new Error('Runtime enable epoch is no longer active')
+    }
   }
 
   private async evaluate(params: Readonly<Record<string, unknown>>): Promise<object> {
@@ -406,29 +509,78 @@ export class RuntimeDomainSession {
 
   private receiveRealm(event: InspectorRealmSessionEvent): void {
     if (event.type === 'opened') {
-      if (this.enabled) {
-        void runtimeBackend(event.session).enable().then(
-          () => {
-            this.attachConsole(event.session)
-            this.announce(event.session)
-          },
-          () => { event.session.close() },
-        )
-      }
+      if (this.enableEpoch !== undefined) this.enableEpoch.queued.add(event.session)
+      else if (this.enabled) this.startDynamicRealm(event.session)
       return
     }
-    this.consoleDisposers.get(event.session.descriptor.realmId)?.()
-    this.consoleDisposers.delete(event.session.descriptor.realmId)
+    this.enableEpoch?.queued.delete(event.session)
+    const dynamic = this.dynamicRealms.get(event.session.descriptor.realmId)
+    if (dynamic !== undefined) this.cancelDynamicRealm(dynamic)
+    this.consoleSubscriptions.get(event.session.descriptor.realmId)?.dispose()
+    this.consoleSubscriptions.delete(event.session.descriptor.realmId)
     this.objects.releaseRealm(event.session)
     this.destroy(event.session)
   }
 
-  private attachConsole(realm: InspectorRealmSession): void {
-    if (realm.console.state === 'unsupported' || this.consoleDisposers.has(realm.descriptor.realmId)) return
-    this.consoleDisposers.set(realm.descriptor.realmId, realm.console.backend.subscribe((event) => {
+  private subscribeConsole(realm: InspectorRealmSession): ConsoleSubscriptionHandle | undefined {
+    if (realm.console.state === 'unsupported') return undefined
+    return realm.console.backend.subscribe((event) => {
       if (!this.enabled) return
       this.transport.send(this.objects.consoleEvent(realm, event))
-    }))
+    })
+  }
+
+  private startDynamicRealm(realm: InspectorRealmSession): void {
+    if (this.closed
+      || !this.enabled
+      || !this.realms.has(realm)
+      || this.dynamicRealms.has(realm.descriptor.realmId)
+      || this.consoleSubscriptions.has(realm.descriptor.realmId)) return
+    const operation: DynamicRealmOperation = { session: realm, canceled: false }
+    this.dynamicRealms.set(realm.descriptor.realmId, operation)
+    operation.promise = this.prepareDynamicRealm(operation)
+  }
+
+  private async prepareDynamicRealm(operation: DynamicRealmOperation): Promise<void> {
+    const realm = operation.session
+    try {
+      await runtimeBackend(realm).enable()
+      if (!this.dynamicRealmIsCurrent(operation)) {
+        await runtimeBackend(realm).disable().catch(() => {})
+        return
+      }
+      const subscription = this.subscribeConsole(realm)
+      if (subscription !== undefined) operation.subscription = subscription
+      if (subscription !== undefined) await subscription.ready
+      if (!this.dynamicRealmIsCurrent(operation)) {
+        subscription?.dispose()
+        await runtimeBackend(realm).disable().catch(() => {})
+        return
+      }
+      if (subscription !== undefined) this.consoleSubscriptions.set(realm.descriptor.realmId, subscription)
+      this.announce(realm)
+    } catch {
+      operation.subscription?.dispose()
+      await runtimeBackend(realm).disable().catch(() => {})
+      if (!operation.canceled && this.enabled && this.realms.has(realm)) this.realms.closeSession(realm)
+    } finally {
+      if (this.dynamicRealms.get(realm.descriptor.realmId) === operation) {
+        this.dynamicRealms.delete(realm.descriptor.realmId)
+      }
+    }
+  }
+
+  private dynamicRealmIsCurrent(operation: DynamicRealmOperation): boolean {
+    return !this.closed
+      && !operation.canceled
+      && this.enabled
+      && this.dynamicRealms.get(operation.session.descriptor.realmId) === operation
+      && this.realms.has(operation.session)
+  }
+
+  private cancelDynamicRealm(operation: DynamicRealmOperation): void {
+    operation.canceled = true
+    operation.subscription?.dispose()
   }
 
   private announce(realm: InspectorRealmSession): void {
@@ -471,4 +623,8 @@ export class RuntimeDomainSession {
 function runtimeBackend(realm: InspectorRealmSession): RuntimeBackend {
   if (realm.runtime.state === 'unsupported') throw new Error(realm.runtime.reason)
   return realm.runtime.backend
+}
+
+function renderError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }

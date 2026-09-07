@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "updated_at": "2026-08-28",
+  "evidence": [
+    "README.md",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "docs/architecture.md",
+    "docs/context/product.md",
+    "docs/context/architecture.md",
+    "docs/context/design-system.md",
+    "apps/cli/config/agent-presets/standard/agent.cordis.yml",
+    "packages/client/ui-agent-preset/README.md",
+    "packages/client/ui-conversation/src/client/apply.ts",
+    "packages/bundle/web-app/cordis.patch.yml"
+  ]
+}

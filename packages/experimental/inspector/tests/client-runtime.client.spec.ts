@@ -10,6 +10,7 @@ import type {
 import {
   inspectorId,
 } from '../src/shared/bridge/ids.ts'
+import { INSPECTOR_PROTOCOL_VERSION } from '../src/shared/bridge/version.ts'
 
 const sourceId = inspectorId<'InspectorSourceId'>('client-test', 'sourceId')
 const generation = inspectorId<'InspectorSourceGeneration'>('generation-test', 'generation')
@@ -276,7 +277,7 @@ function frame(
   owner: ClientRuntimeRequestFrame['sessionId'] = sessionId,
 ): ClientRuntimeRequestFrame {
   return {
-    v: 0,
+    v: INSPECTOR_PROTOCOL_VERSION,
     t: 'client-runtime/request',
     sourceId,
     generation,

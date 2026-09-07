@@ -1,6 +1,12 @@
 /** Typed transport for Client Console sessions and events. */
 
-import type { ClientRemoteObjectHandle, ClientRuntimeSessionId, InspectorSourceGeneration, InspectorSourceId } from '../../ids.ts'
+import type {
+  ClientConsoleSubscriptionId,
+  ClientRemoteObjectHandle,
+  ClientRuntimeSessionId,
+  InspectorSourceGeneration,
+  InspectorSourceId,
+} from '../../ids.ts'
 import { isPlainObject } from '../../../json.ts'
 import type { RuntimeConsoleBackendEvent, RuntimeConsoleType } from '../../../cdp/index.ts'
 import { exactKeys, exactObject, wireId } from '../../../validation.ts'
@@ -23,6 +29,26 @@ export interface ClientConsoleEnableFrame {
   readonly sourceId: InspectorSourceId
   readonly generation: InspectorSourceGeneration
   readonly sessionId: ClientRuntimeSessionId
+  readonly subscriptionId: ClientConsoleSubscriptionId
+}
+
+/** Client acknowledgement after Console observer installation settles. */
+export interface ClientConsoleEnableResultFrame {
+  readonly v: typeof INSPECTOR_PROTOCOL_VERSION
+  readonly t: 'client-console/enable-result'
+  readonly sourceId: InspectorSourceId
+  readonly generation: InspectorSourceGeneration
+  readonly sessionId: ClientRuntimeSessionId
+  readonly subscriptionId: ClientConsoleSubscriptionId
+  readonly outcome:
+    | { readonly ok: true }
+    | {
+      readonly ok: false
+      readonly error: {
+        readonly code: 'installation-failed' | 'session-conflict'
+        readonly message: string
+      }
+    }
 }
 
 /** Worker request to stop Console observation for one DevTools session. */
@@ -32,6 +58,7 @@ export interface ClientConsoleDisableFrame {
   readonly sourceId: InspectorSourceId
   readonly generation: InspectorSourceGeneration
   readonly sessionId: ClientRuntimeSessionId
+  readonly subscriptionId: ClientConsoleSubscriptionId
 }
 
 /** Client Console event carrying objects retained for one DevTools session. */
@@ -41,6 +68,7 @@ export interface ClientConsoleEventFrame {
   readonly sourceId: InspectorSourceId
   readonly generation: InspectorSourceGeneration
   readonly sessionId: ClientRuntimeSessionId
+  readonly subscriptionId: ClientConsoleSubscriptionId
   readonly event: RuntimeConsoleBackendEvent<ClientRemoteObjectHandle>
 }
 
@@ -63,7 +91,7 @@ export function parseClientConsoleCapability(value: unknown): ClientConsoleCapab
 export function parseClientConsoleControlFrame(
   value: Record<string, unknown>,
 ): ClientConsoleEnableFrame | ClientConsoleDisableFrame {
-  exactKeys(value, ['v', 't', 'sourceId', 'generation', 'sessionId'], 'Client Console control frame')
+  exactKeys(value, ['v', 't', 'sourceId', 'generation', 'sessionId', 'subscriptionId'], 'Client Console control frame')
   if (value.v !== INSPECTOR_PROTOCOL_VERSION
     || (value.t !== 'client-console/enable' && value.t !== 'client-console/disable')) {
     throw new Error('inspector protocol: invalid Client Console control frame')
@@ -74,6 +102,34 @@ export function parseClientConsoleControlFrame(
     sourceId: wireId<'InspectorSourceId'>(value.sourceId, 'sourceId'),
     generation: wireId<'InspectorSourceGeneration'>(value.generation, 'generation'),
     sessionId: wireId<'ClientRuntimeSessionId'>(value.sessionId, 'sessionId'),
+    subscriptionId: wireId<'ClientConsoleSubscriptionId'>(value.subscriptionId, 'subscriptionId'),
+  }
+}
+
+/**
+ * Parse one Client Console installation result.
+ * @param value - Untrusted decoded frame.
+ * @returns The validated correlated result.
+ */
+export function parseClientConsoleEnableResultFrame(
+  value: Record<string, unknown>,
+): ClientConsoleEnableResultFrame {
+  exactKeys(
+    value,
+    ['v', 't', 'sourceId', 'generation', 'sessionId', 'subscriptionId', 'outcome'],
+    'Client Console enable result',
+  )
+  if (value.v !== INSPECTOR_PROTOCOL_VERSION || value.t !== 'client-console/enable-result') {
+    throw new Error('inspector protocol: invalid Client Console enable result envelope')
+  }
+  return {
+    v: INSPECTOR_PROTOCOL_VERSION,
+    t: 'client-console/enable-result',
+    sourceId: wireId<'InspectorSourceId'>(value.sourceId, 'sourceId'),
+    generation: wireId<'InspectorSourceGeneration'>(value.generation, 'generation'),
+    sessionId: wireId<'ClientRuntimeSessionId'>(value.sessionId, 'sessionId'),
+    subscriptionId: wireId<'ClientConsoleSubscriptionId'>(value.subscriptionId, 'subscriptionId'),
+    outcome: parseEnableOutcome(value.outcome),
   }
 }
 
@@ -83,7 +139,11 @@ export function parseClientConsoleControlFrame(
  * @returns A validated Console event frame.
  */
 export function parseClientConsoleEventFrame(value: Record<string, unknown>): ClientConsoleEventFrame {
-  exactKeys(value, ['v', 't', 'sourceId', 'generation', 'sessionId', 'event'], 'Client Console event frame')
+  exactKeys(
+    value,
+    ['v', 't', 'sourceId', 'generation', 'sessionId', 'subscriptionId', 'event'],
+    'Client Console event frame',
+  )
   if (value.v !== INSPECTOR_PROTOCOL_VERSION || value.t !== 'client-console/event') {
     throw new Error('inspector protocol: invalid Client Console event envelope')
   }
@@ -93,8 +153,27 @@ export function parseClientConsoleEventFrame(value: Record<string, unknown>): Cl
     sourceId: wireId<'InspectorSourceId'>(value.sourceId, 'sourceId'),
     generation: wireId<'InspectorSourceGeneration'>(value.generation, 'generation'),
     sessionId: wireId<'ClientRuntimeSessionId'>(value.sessionId, 'sessionId'),
+    subscriptionId: wireId<'ClientConsoleSubscriptionId'>(value.subscriptionId, 'subscriptionId'),
     event: parseEvent(value.event),
   }
+}
+
+function parseEnableOutcome(value: unknown): ClientConsoleEnableResultFrame['outcome'] {
+  if (!isPlainObject(value) || typeof value.ok !== 'boolean') {
+    throw new Error('inspector protocol: invalid Client Console enable outcome')
+  }
+  if (value.ok) {
+    exactKeys(value, ['ok'], 'successful Client Console enable outcome')
+    return { ok: true }
+  }
+  exactKeys(value, ['ok', 'error'], 'failed Client Console enable outcome')
+  const error = exactObject(value.error, ['code', 'message'], 'Client Console enable error')
+  if ((error.code !== 'installation-failed' && error.code !== 'session-conflict')
+    || typeof error.message !== 'string'
+    || error.message.length > 2_048) {
+    throw new Error('inspector protocol: invalid Client Console enable error')
+  }
+  return { ok: false, error: { code: error.code, message: error.message } }
 }
 
 function parseEvent(value: unknown): RuntimeConsoleBackendEvent<ClientRemoteObjectHandle> {
