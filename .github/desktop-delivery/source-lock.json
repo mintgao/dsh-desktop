@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "release": {
     "id": 379884041,
@@ -51,5 +51,9 @@
       "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
       "publishedAt": "2026-08-31T16:03:39Z"
     }
-  ]
+  ],
+  "adoptionSeed": {
+    "commit": "c5598f89aeecce3ec329d37d7ce7ca40fe3c3cdc",
+    "tree": "062d6738b168fa0714412cc03bd6d47ec5b19139"
+  }
 }
