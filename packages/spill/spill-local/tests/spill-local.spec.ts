@@ -271,7 +271,8 @@ describe('startup cleanup sweep', () => {
     const boundary = join(dir, 'boundary.txt')
     writeFileSync(boundary, 'x')
     utimesSync(boundary, cutoffMs / 1000, cutoffMs / 1000)
-    await sweepSpillRoots({ roots: [active(root)], cutoffMs, warn: () => {} })
+    // Filesystem timestamp precision can round the seconds passed to utimesSync.
+    await sweepSpillRoots({ roots: [active(root)], cutoffMs: statSync(boundary).mtimeMs, warn: () => {} })
     expect(existsSync(boundary)).toBe(true)
   })
 
