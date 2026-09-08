@@ -58,7 +58,7 @@ interface ConfigRefresh {
 }
 
 interface ConfigRegistration {
-  watcher: FSWatcher
+  close(): Promise<void>
 }
 
 async function findWatchRoot(filename: string): Promise<{ filename: string; root: string; depth: number }> {
@@ -83,6 +83,17 @@ async function findWatchRoot(filename: string): Promise<{ filename: string; root
   }
 }
 
+function exactConfigOptions(config: Hmr.Config): { usePolling: boolean; interval: number } {
+  const environment = process.env.CHOKIDAR_USEPOLLING?.toLowerCase()
+  if (environment !== undefined && !['true', 'false', '1', '0'].includes(environment)) throw new Error('CHOKIDAR_USEPOLLING must be true, false, 1 or 0')
+  const usePolling = environment === undefined ? config.usePolling ?? true : environment === 'true' || environment === '1'
+  const value = process.env.CHOKIDAR_INTERVAL
+  if (value !== undefined && !/^[1-9]\d*$/u.test(value)) throw new Error('CHOKIDAR_INTERVAL must be a positive integer')
+  const interval = value === undefined ? config.interval ?? 100 : Number(value)
+  if (!Number.isSafeInteger(interval) || interval < 1 || interval > 2_147_483_647) throw new Error('Config polling interval must be a positive 32-bit timer integer')
+  return { usePolling, interval }
+}
+
 class Hmr extends Service {
   static inject = ['loader', 'timer']
 
@@ -90,6 +101,9 @@ class Hmr extends Service {
 
   private internal: ModuleLoader
   private watcher!: FSWatcher
+  private stopped = false
+  private readonly ownedConfigs = new Set<ConfigRegistration>()
+  private readonly configReports = new Set<Promise<void>>()
   private readonly configs = new Map<string, ConfigRegistration>()
   private readonly configRefreshes = new WeakMap<object, ConfigRefresh>()
   private readonly refreshTasks = new Set<Promise<void>>()
@@ -126,27 +140,40 @@ class Hmr extends Service {
 
   /**
    * Watch one exact config path outside the configured module roots.
+   * Default sampling records initial target state before returning and performs no directory polling.
+   * Explicit native mode retains OS startup limits. The initial ancestor must retain its identity.
    * @param filename - Config path, resolved against the HMR base directory.
    * @param refresh - Refresh callback run serially on add, change, or unlink.
    * @returns an asynchronous disposer once the exact watch is ready.
    * @throws when HMR is inactive, the path is already registered, or watcher startup fails.
    */
   async registerConfig(filename: string, refresh: () => Promise<void> | void): Promise<() => Promise<void>> {
-    if (!this.watcher) throw new Error('HMR is not active')
+    if (!this.watcher || this.stopped) throw new Error('HMR is not active')
     filename = resolve(this.baseDir, filename)
+    const options = exactConfigOptions(this.config)
+    if (options.usePolling) return this.registerSampledConfig(filename, refresh, options.interval)
     const target = await findWatchRoot(filename)
     const watchFilename = target.filename
     if (this.configs.has(watchFilename)) throw new Error(`config path already registered: ${filename}`)
 
     const { root, depth } = target
+    const requiredPaths = new Set([watchFilename])
+    for (let path = dirname(watchFilename);; path = dirname(path)) {
+      requiredPaths.add(path)
+      if (path === root) break
+    }
     const watcher = watch(root, {
       ...this.config,
+      usePolling: false,
       cwd: undefined,
       depth,
-      ignored: undefined,
+      ignored: path => !requiredPaths.has(resolve(path)),
       ignoreInitial: false,
     })
-    const registration = { watcher }
+    const registration = { close: async () => {
+      await watcher.close()
+      await this.configRefreshes.get(registration)?.running
+    } }
     this.configs.set(watchFilename, registration)
     const onChange = (path: string) => {
       const observed = resolve(path)
@@ -186,6 +213,95 @@ class Hmr extends Service {
     }
   }
 
+  private async registerSampledConfig(filename: string, refresh: () => Promise<void> | void, interval: number): Promise<() => Promise<void>> {
+    let stopped = false
+    let raw: Promise<unknown> | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let closing: Promise<void> | undefined
+    let identity: string | undefined
+    let previous: string | null = null
+    let failure: string | undefined
+    const registration: ConfigRegistration = { close: () => {
+      if (closing) return closing
+      stopped = true
+      clearTimeout(timer)
+      closing = (async () => {
+        try { await raw } catch { /* Setup or the cycle owns the raw I/O error. */ }
+        if (identity !== undefined && this.configs.get(identity) === registration) this.configs.delete(identity)
+        await this.configRefreshes.get(registration)?.running
+        this.ownedConfigs.delete(registration)
+      })()
+      return closing
+    } }
+    this.ownedConfigs.add(registration)
+    const dispose = this.ctx.effect(() => registration.close, 'hmr.registerConfig()')
+    const sample = async (): Promise<string | null> => {
+      const operation = stat(identity!, { bigint: true })
+      raw = operation
+      try {
+        const value = await operation
+        return [value.dev, value.ino, value.mode, value.size, value.mtimeNs, value.ctimeNs].join(':')
+      } catch (error) {
+        if (['ENOENT', 'ENOTDIR'].includes(String((error as NodeJS.ErrnoException).code))) return null
+        throw error
+      } finally { if (raw === operation) raw = undefined }
+    }
+    const schedule = () => {
+      if (!stopped) timer = setTimeout(() => { void cycle() }, interval)
+    }
+    const cycle = async () => {
+      let observation: string | null
+      try { observation = await sample() }
+      catch (reason) {
+        if (stopped) return
+        const error = reason instanceof Error ? reason : new Error(String(reason), { cause: reason })
+        const key = `${error.name}:${String((error as NodeJS.ErrnoException).code)}:${error.message}`
+        if (failure !== key) {
+          failure = key
+          this.reportConfigSamplingFailure(filename, error)
+        }
+        schedule()
+        return
+      }
+      if (stopped) return
+      failure = undefined
+      if (previous !== observation) {
+        previous = observation
+        this.refreshConfig(registration, filename, refresh)
+      }
+      schedule()
+    }
+    try {
+      const resolution = findWatchRoot(filename)
+      raw = resolution
+      let target: Awaited<typeof resolution>
+      try { target = await resolution } finally { if (raw === resolution) raw = undefined }
+      if (stopped) throw new Error('Config registration closed during setup')
+      identity = target.filename
+      if (this.configs.has(identity)) throw new Error(`config path already registered: ${filename}`)
+      this.configs.set(identity, registration)
+      previous = await sample()
+      if (stopped) throw new Error('Config registration closed during setup')
+      schedule()
+      if (previous !== null) this.refreshConfig(registration, filename, refresh)
+      return () => {
+        const completion = registration.close()
+        dispose()
+        return completion
+      }
+    } catch (error) { await registration.close(); throw error }
+  }
+
+  private reportConfigSamplingFailure(filename: string, error: Error): void {
+    this.ctx.logger.warn('config sampling at %C failed', filename)
+    this.ctx.logger.warn(error)
+    // Listeners may await disposal; cleanup never awaits this notification.
+    const report = this.ctx.parallel('hmr/config-update-failed', filename, error).catch((rejection: unknown) => {
+      this.ctx.logger.warn(rejection)
+    }).finally(() => { this.configReports.delete(report) })
+    this.configReports.add(report)
+  }
+
   /**
    * Resolve a module specifier to a URL, compatible with Node 22-24.
    */
@@ -198,8 +314,10 @@ class Hmr extends Service {
 
   async* [Service.init]() {
     yield async () => {
+      this.stopped = true
+      const closing = [...new Set([...this.ownedConfigs, ...this.configs.values()])].map(registration => registration.close())
       await this.watcher?.close()
-      await Promise.allSettled([...this.configs.values()].map(registration => registration.watcher.close()))
+      await Promise.allSettled(closing)
       this.configs.clear()
       await Promise.allSettled([...this.refreshTasks])
     }
@@ -567,6 +685,9 @@ namespace Hmr {
       'data',
     ]),
     debounce: z.natural().role('ms').default(100),
+    usePolling: z.boolean(),
+    interval: z.natural().min(1).max(2_147_483_647).role('ms'),
+    binaryInterval: z.natural().min(1).role('ms'),
   })
   // [deepseek-harness] vendored modification: removed `.i18n({ 'en-US': enUS, 'zh-CN': zhCN })`
   // and the corresponding `./locales/*.yml` imports, to avoid a runtime YAML import hook

@@ -38,8 +38,7 @@ describe('HMR exact config paths', () => {
     const aliasFilename = join(alias, 'module.ts')
     symlinkSync(target, alias, process.platform === 'win32' ? 'junction' : 'dir')
     writeFileSync(aliasFilename, 'export const generation = 0\n')
-    // This acceptance owns alias-to-cache identity. Other cases below exercise
-    // native events; polling keeps Windows fs.watch queue pressure out of it.
+    // Polling isolates alias-to-cache identity from Windows fs.watch queue pressure.
     const ctx = await bootHmr(alias, ['.'], true)
     const filename = join(await realpath(target), 'module.ts')
     const expected = pathToFileURL(filename).href
@@ -137,6 +136,7 @@ describe('HMR exact config paths', () => {
     const observed: string[] = []
     let active = 0
     let maxActive = 0
+    let admissionSpy: { mockRestore(): void } | undefined
     try {
       const dispose = await ctx.hmr.registerConfig(filename, async () => {
         active += 1
@@ -149,10 +149,17 @@ describe('HMR exact config paths', () => {
         active -= 1
       })
       await started.promise
+      const admitted = Promise.withResolvers<undefined>()
+      const owner = ctx.hmr as unknown as { refreshConfig(key: object, path: string, refresh: () => Promise<void> | void): void }
+      const admit = owner.refreshConfig.bind(owner)
+      admissionSpy = vi.spyOn(owner, 'refreshConfig').mockImplementation((key, path, refresh) => {
+        admit(key, path, refresh)
+        if (path === filename) admitted.resolve(undefined)
+      })
       writeFileSync(filename, 'two')
-      // Chokidar coalesces atomic writes for 100 ms by default. Wait beyond
-      // that window so this edit is queued before registration disposal.
-      await new Promise(resolve => setTimeout(resolve, 250))
+      await admitted.promise
+      admissionSpy.mockRestore()
+      expect(observed).toEqual(['one'])
 
       let disposed = false
       const disposal = dispose().then(() => { disposed = true })
@@ -164,7 +171,9 @@ describe('HMR exact config paths', () => {
       expect(observed).toEqual(['one', 'two'])
     } finally {
       release.resolve(undefined)
+      admissionSpy?.mockRestore()
       await ctx.fiber.dispose()
+      rmSync(dir, { recursive: true, force: true })
     }
   })
 
