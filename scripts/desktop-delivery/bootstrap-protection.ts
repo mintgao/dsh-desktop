@@ -1,4 +1,5 @@
 /** Seed-owned administrator evidence for the bootstrap ruleset's requester-hidden bypass field. */
+import { rulesetTime } from './ruleset-time.ts'
 import { digest, hex, object, textField } from './evidence.ts'
 import type { DeliveryConfig, GitHub } from './operations.ts'
 
@@ -27,7 +28,7 @@ function projection(config: DeliveryConfig, value: unknown): Record<string, unkn
   const refs = object(conditions.ref_name)
   if (Object.keys(conditions).length !== 1 || canonicalJson(refs.include) !== canonicalJson([`refs/tags/${config.bootstrapTagPrefix}*`]) || canonicalJson(refs.exclude) !== '[]'
     || !Array.isArray(rule.rules) || !['update', 'deletion'].every(type => (rule.rules as unknown[]).some(item => object(item).type === type))) throw new Error('Bootstrap immutable tag scope or rules differ')
-  return Object.fromEntries(keys.map(key => [key, rule[key]]))
+  return Object.fromEntries(keys.map(key => [key, key === 'updated_at' ? rulesetTime(rule[key]) : rule[key]]))
 }
 
 function emptyBypass(rule: Record<string, unknown>): void {

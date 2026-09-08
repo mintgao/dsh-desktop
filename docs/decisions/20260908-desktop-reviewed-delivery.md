@@ -140,6 +140,12 @@ Bootstrap fetches the ruleset successfully and requires complete fresh visible f
 
 This exception applies only to the configured bootstrap ruleset's hidden bypass field. Environment approval, immutable tag resolution and exact run/seed checks remain live requirements. Tests cover omitted and present empty bypass, nonempty/null bypass, changed timestamp/rules/scope, missing fields, wrong repository/ruleset/admin, changed evidence bytes, read failures and attempted reuse for another ruleset or environment.
 
+### Ruleset timestamp representation
+
+Only projection `updated_at` is normalized to UTC before digesting or comparison. Accept a valid RFC 3339 calendar timestamp with an explicit offset or `Z` and zero to three fractional-second digits. Pad to milliseconds without rounding or truncation. Validate calendar and offset components; reject invalid dates, leap seconds, unknown-offset `-00:00`, malformed offsets and greater precision. Canonical output is `YYYY-MM-DDTHH:mm:ss.sssZ`; all other projection fields keep exact comparison.
+
+Raw administrator-response bytes and their evidence digest remain unchanged. Bootstrap and migration administrator/runtime projections use the same normalization. Regenerate and rebind derived projection digests; mismatches never trigger a legacy fallback. Tests cover observed `+08:00`/`Z` equivalence, fractional padding, offset date crossing, one-millisecond changes, invalid inputs and precision, other-field changes and unchanged raw evidence bytes.
+
 ### Initial activation ordering and draft-access probe
 
 Keep the initial bot PR open until its migration evidence is complete. Verify actual bot authorship, last pusher and owner-review eligibility; complete the bounded draft-access probe; preserve and explicitly reconcile the legacy candidate; disable and drain legacy writers; revoke outstanding authority; then capture final administrator preflight and the real publication baseline. Any subsequent protection or legacy-state change requires refreshed evidence.

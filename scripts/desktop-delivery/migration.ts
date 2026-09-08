@@ -1,4 +1,5 @@
 /** Live sole-writer/protection inspection and reviewed import of actual legacy release bytes. */
+import { rulesetTime } from './ruleset-time.ts'
 import { readFileSync, statSync } from 'node:fs'
 import { assetPath, digest, hex, object, readJson, sourceLock, string, textField } from './evidence.ts'
 import { optional, pages, type DeliveryConfig, type GitHub } from './operations.ts'
@@ -231,5 +232,5 @@ export async function requireActivation(config: DeliveryConfig,
 }
 
 function visibleRules(rule: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(['id', 'target', 'enforcement', 'conditions', 'rules', 'updated_at'].map(key => [key, rule[key]]))
+  return Object.fromEntries(['id', 'target', 'enforcement', 'conditions', 'rules', 'updated_at'].map(key => [key, key === 'updated_at' ? rulesetTime(rule[key]) : rule[key]]))
 }

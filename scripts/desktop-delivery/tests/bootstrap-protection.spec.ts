@@ -1,4 +1,5 @@
 /** Hidden bypass fallback is limited to unchanged seed-bound administrator evidence. */
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { bootstrapProtectionPath, bootstrapResponsePath, canonicalJson, checkedBootstrapProtection, prepareBootstrapProtection, seedBootstrapProtection, verifyBootstrapProtection } from '../bootstrap-protection.ts'
@@ -38,4 +39,25 @@ it('requires explicit empty bypass in the successful administrator response', as
       return { id: config.repositoryId, full_name: config.repository, permissions: { admin: true } }
     } })).rejects.toThrow('explicitly empty')
   }
+})
+
+it('compares the actual public and administrator response pair without rewriting retained bytes', async () => {
+  const config = { ...deliveryConfig(resolve('.github/desktop-delivery/mint.json')), bootstrapRulesetId: 22549859 }
+  const raw = readFileSync(new URL('./fixtures/ruleset-time/administrator.json', import.meta.url))
+  const administrator = JSON.parse(raw.toString()) as Record<string, unknown>
+  const fresh = JSON.parse(readFileSync(new URL('./fixtures/ruleset-time/public.json', import.meta.url), 'utf8')) as Record<string, unknown>
+  const prepared = await prepareBootstrapProtection(config, { async request(_method, path) {
+    if (path === '/user') return { id: config.maintainerIds[0] }
+    if (path.includes('/rulesets/')) return administrator
+    return { id: config.repositoryId, full_name: config.repository, permissions: { admin: true } }
+  } })
+  expect(Buffer.from(prepared.response)).toEqual(raw)
+  const observed = checkedBootstrapProtection(config, Buffer.from(JSON.stringify(prepared.attestation)), raw)
+  verifyBootstrapProtection(config, fresh, observed)
+  expect(() => {
+    verifyBootstrapProtection(config, { ...fresh, updated_at: '2026-09-08T13:49:50.403Z' }, observed)
+  }).toThrow('changed')
+  expect(() => {
+    verifyBootstrapProtection(config, { ...fresh, enforcement: 'disabled' }, observed)
+  }).toThrow()
 })

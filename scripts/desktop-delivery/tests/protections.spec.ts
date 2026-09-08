@@ -64,7 +64,7 @@ it('runtime validates pinned attestations without requesting Administration perm
       if (!path.includes('/rulesets/')) return value
       const visible = { ...object(value) }
       delete visible.bypass_actors
-      if (drift) visible.updated_at = '2026-02-01T00:00:00Z'
+      visible.updated_at = drift ? '2026-01-01T08:00:00.001+08:00' : '2026-01-01T08:00:00+08:00'
       return visible
     } }
     await requireActivation(localConfig, activationPath, reportPath, runtime)

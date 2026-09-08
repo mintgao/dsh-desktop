@@ -59,3 +59,11 @@ Independent review approved initial activation ordering and the exact nonpublic 
 ## Bootstrap visibility readiness
 
 Tech Lead `distribution_design` authored the bootstrap ruleset visibility amendment; independent reviewer `distribution_review` approved its persisted text. The orchestrator confirms `implementation-ready` at `2026-09-08T13:55:05.947606+00:00` for that scoped fix and its rejection tests. Remote Actions PR permissions remain a separate authorization blocker.
+
+## Live timestamp correction readiness
+
+Run `34238478819` rejected equivalent administrator and public `updated_at` representations. Read-only comparison confirmed timezone representation as the sole difference. Tech Lead `distribution_design` authored the ruleset timestamp amendment and independent reviewer `distribution_review` approved it. The orchestrator confirms `implementation-ready` at `2026-09-08T14:35:09.137075+00:00` for shared bootstrap/migration timestamp normalization and its tests, with raw evidence unchanged.
+
+## Supporting fixture correction
+
+The sampler candidate passed HMR acceptance but failed RD-6 on a baseline compaction duration assertion and an unhandled table scroll callback. Controlled experiments reproduced both failure mechanisms. The orchestrator classifies their correction as S: test-owned clock progression and completion of the specifically admitted scroll debounce, with production behavior and existing assertions preserved. No shared contract or durable decision changes. One RD writer may edit only the two owning test files; independent QA must verify the changed combined candidate. The failed matrix is retained rather than retried unchanged.

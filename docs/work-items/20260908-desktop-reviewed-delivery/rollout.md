@@ -4,11 +4,11 @@ English | [中文](rollout.zh.md)
 
 ## Status
 
-Remote rollout is not executed. The [verification record](verification.md) contains observed protection and baseline evidence; the [accepted decision](../../decisions/20260908-desktop-reviewed-delivery.md) governs bootstrap and activation. Local verification cannot establish actual GitHub approval, notification receipt or publication.
+Remote preparation is partially executed; activation remains blocked. The [verification record](verification.md) contains observed protection and baseline evidence; the [accepted decision](../../decisions/20260908-desktop-reviewed-delivery.md) governs bootstrap and activation. Local verification cannot establish actual GitHub approval, notification receipt or publication.
 
 ## Authorized preparation results
 
-The owner authorized rollout preparation on 2026-09-08. Repository and PR 64 identities were rechecked without drift. Bootstrap immutability ruleset `22549859` and the secret-free `mint-delivery-bootstrap` environment were created; the environment requires owner approval and permits only `desktop-bootstrap-*` tags. The repository Actions permission remains read-only with `can_approve_pull_request_reviews: false`. Automatic approval review rejected enabling that combined PR-creation/review switch and requires explicit approval for its repository-wide effect.
+The owner authorized rollout preparation on 2026-09-08. Repository and PR 64 identities were rechecked without drift. Bootstrap immutability ruleset `22549859` and the secret-free `mint-delivery-bootstrap` environment were created; the environment requires owner approval and permits only `desktop-bootstrap-*` tags. After separate explicit owner authorization of the combined PR-creation/review capability, the repository setting is `can_approve_pull_request_reviews: true`; default token permissions remain read-only. The initial automatic-review rejection was resolved by that specific authorization.
 
 The outgoing candidate uses an isolated worktree based on `main` commit `089d92d9f6e051472c2522af32aac75ed3e04742`, preserving the actual development checkout and excluding unrelated recovery changes. Legacy workflows, App authority and PR 64 remain unchanged until the required bootstrap evidence succeeds. No public release or installed application has changed.
 
@@ -48,3 +48,19 @@ Keep the initial bot PR open while checking actual bot authorship and owner revi
 After reconciling pending adoption and revoking legacy writers, capture final administrator preflight and baseline evidence. Refresh the same initial PR with matching evidence and active configuration, then review its final head. The first merge introduces the ordinary workflows and verified activation together; an inactive intermediate merge would retire bootstrap before normal adoption could run.
 
 Both native architectures and a newly approved manifest precede any specific public preview. The ARM64 diagnostic smoke does not substitute for that release qualification. This rollout does not itself authorize a public release or replacement of an installed application.
+
+## Initial live bootstrap
+
+The reviewed seed `4944752aa6927b23ae73b18c631a4340b2584ef8` and protected tag `desktop-bootstrap-reviewed-20260908-4944752aa6` were pushed. Owner-approved run `34238478819` reached bootstrap execution but rejected the ruleset timestamp projection before PR creation. Administrator `2026-09-08T21:49:50.402+08:00` and public `2026-09-08T13:49:50.402Z` represent the same instant; all other compared fields matched. The reviewed timestamp correction requires a new seed and plan. No legacy cutover or publication occurred.
+
+## Timestamp candidate verification
+
+The shared timestamp correction passed focused tests, independent review and all 32 documentation gates; the retained administrator response bytes are unchanged. Complete verification passed lint, typecheck and build, with 17,296 tests passing and 116 skipped, but failed the unchanged HMR missing-parent creation test. The same case passes alone on the host; the full-run native watcher timeout remains unresolved. This candidate has not been committed or dispatched as a new bootstrap seed. Owner reauthentication succeeded; the live Controller installation page confirms access is limited to repository `1344813014`. Legacy authority remains unchanged until bootstrap verification succeeds.
+
+## Supporting readiness correction
+
+The [configuration readiness work item](../20260908-config-watch-readiness/brief.md) records the approved and independently verified target sampler. All HMR acceptance cases pass. The combined matrix remains blocked by a baseline compaction timing assertion and a table scroll callback after UI teardown; their local fixture corrections preserve production behavior and require independent verification before a new bootstrap seed is dispatched.
+
+## Corrected candidate acceptance
+
+Independent QA passed the complete configured lint, typecheck, test and build matrix after the two local fixture corrections: 17,306 tests passed and 116 skipped, with no unhandled errors. All 37 candidate file hashes and the committed base remained unchanged during the run. The HMR sampler and timestamp correction are accepted locally; live bootstrap, bot review eligibility, draft access and legacy cutover remain pending.
