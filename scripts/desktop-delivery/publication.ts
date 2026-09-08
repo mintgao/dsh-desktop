@@ -9,6 +9,7 @@ import { deliveryPredecessor, requireNewVersion } from './lineage.ts'
 import { sourceLock } from './evidence.ts'
 import { checkedManifest, type ReleaseFile } from './manifest.ts'
 import { operationPlan, pages, validatePlan, type DeliveryConfig, type GitHub } from './operations.ts'
+import { patchRelease, readRelease } from './release-patch.ts'
 import { tagCommit } from './migration.ts'
 
 function withdrawalManifest(config: DeliveryConfig, path: string): ReturnType<typeof checkedManifest> {
@@ -297,14 +298,16 @@ export async function mutateRelease(config: DeliveryConfig,
   if (await tagCommit(config, string(plan.tag), api) !== plan.candidate) throw new Error('Publisher cannot create or substitute the approved tag')
   let remote = await findRelease(config, string(plan.tag), api)
   if (remote === undefined || (plan.operation === 'withdraw' ? !textField(remote.body).includes(`Manifest SHA-256: ${checked.digest}`) : remote.body !== releaseBody(directory, checked.digest)) || remote.prerelease !== true) throw new Error('Existing matching draft or release is required')
+  const identity = { id: Number(remote.id), tag: string(plan.tag), commit: hex(plan.candidate, 40),
+    body: textField(remote.body), previousBody: textField(remote.body) }
+  remote = await readRelease(config, api, identity)
   const files = payload(manifestPath, checked.files)
   if (plan.operation === 'withdraw') {
     let assetBlocker: string | null = null
     try { await verifyAssets(config, remote, files, api, false) }
     catch (error) { assetBlocker = error instanceof Error ? error.message : 'Asset verification unavailable' }
     if (remote.draft !== true) {
-      try { await api.request('PATCH', `/repos/${config.repository}/releases/${String(remote.id)}`, { draft: true }) }
-      catch (error) { if ((await findRelease(config, string(plan.tag), api))?.draft !== true) throw error }
+      await patchRelease(config, api, { ...identity, draft: true })
     }
     return operationPlan(config, 'withdraw', { state: 'withdrawn', assetBlocker, tag: plan.tag, manifestDigest: checked.digest, nextAction: 'Retained assets may be restored only after exact-byte verification.' })
   }
@@ -319,15 +322,12 @@ export async function mutateRelease(config: DeliveryConfig,
   }
   await verifyAssets(config, remote, files, api, false)
   if (remote.draft === true) {
-    try { await api.request('PATCH', `/repos/${config.repository}/releases/${String(remote.id)}`, { draft: false, prerelease: true, make_latest: 'false' }) }
-    catch (error) { if ((await findRelease(config, string(plan.tag), api))?.draft !== false) throw error }
+    await patchRelease(config, api, { ...identity, draft: false })
   }
-  remote = await findRelease(config, string(plan.tag), api)
-  if (remote === undefined || remote.draft !== false) throw new Error('Publication could not be verified')
+  remote = await readRelease(config, api, { ...identity, draft: false })
   try { await verifyAssets(config, remote, files, api, false) }
   catch (error) {
-    try { await api.request('PATCH', `/repos/${config.repository}/releases/${String(remote.id)}`, { draft: true }) }
-    catch (withdrawError) { if ((await findRelease(config, string(plan.tag), api))?.draft !== true) throw withdrawError }
+    await patchRelease(config, api, { ...identity, draft: true })
     throw new Error(`Public mismatch caused withdrawal: ${error instanceof Error ? error.message : 'asset verification failed'}`)
   }
   return operationPlan(config, string(plan.operation), { state: 'published-and-verified', tag: plan.tag, manifestDigest: checked.digest, nextAction: 'Users may choose this single unsigned desktop update; no installed application was replaced.' })

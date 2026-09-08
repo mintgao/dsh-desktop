@@ -40,8 +40,10 @@ it('reconciles fixed probe bytes, removes only its asset and restores the exact 
     if (path.endsWith('/releases/10')) {
       if (method === 'PATCH') {
         const edit = object(body)
-        expect(Object.keys(edit).sort()).toEqual(['body', 'draft'])
+        expect(Object.keys(edit).sort()).toEqual(['body', 'draft', 'prerelease', 'tag_name'])
         expect(edit.draft).toBe(true)
+        expect(edit.tag_name).toBe(tag)
+        expect(edit.prerelease).toBe(true)
         Object.assign(draft, edit)
       }
       return draft
@@ -54,6 +56,23 @@ it('reconciles fixed probe bytes, removes only its asset and restores the exact 
   expect(draft.body).toBe('Original\nbody\n')
   expect(draft.draft).toBe(true)
   expect(asset).toBeUndefined()
+  for (const drift of [{ id: 99 }, { tag_name: 'temporary-server-tag' }, { prerelease: false }, { draft: false }, { body: 'Foreign body' }]) {
+    const before = writes.length
+    const drifting: GitHub = { async request(method, path, body) {
+      const result = await api.request(method, path, body)
+      if (method === 'PATCH') Object.assign(draft, drift)
+      return result
+    } }
+    await expect(probeDraft(config, plan, drifting, context)).rejects.toThrow('maintainer recovery')
+    expect(writes.slice(before).map(write => write.method)).toEqual(['POST', 'PATCH'])
+    expect(asset).toBeDefined()
+    // Only explicit owner restoration permits resuming the same reviewed probe.
+    Object.assign(draft, { id: 10, tag_name: tag, prerelease: true, draft: true, body: 'Original\nbody\n' })
+    const resumed = writes.length
+    expect((await probeDraft(config, plan, api, context)).state).toBe('draft-access-verified')
+    expect(writes.slice(resumed).map(write => write.method)).toEqual(['PATCH', 'DELETE', 'PATCH'])
+    expect(asset).toBeUndefined()
+  }
   const count = writes.length
   await expect(probeDraft(config, { ...plan, bootstrapProtectionDigest: '0'.repeat(64) }, api, context)).rejects.toThrow('protection digest differs')
   await expect(probeDraft({ ...config, bootstrapEnvironment: 'foreign' }, plan, { async request(method, path, body) {

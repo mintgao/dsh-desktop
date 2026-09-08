@@ -67,3 +67,9 @@ Tech Lead `distribution_design` 编写引导规则集可见性修订，独立审
 ## 支持性 fixture 修正
 
 采样器候选通过 HMR 验收，但主分支的压缩耗时断言和未处理的表格滚动回调导致 RD-6 失败。受控实验复现了两种失败机制。协调者将修正定为 S 级：由测试控制时钟推进，并完成明确由测试触发的滚动防抖回调，保留产品行为和原有断言。不改变共享约定或持久决策。唯一 RD 写入者仅可修改两个所属测试文件；独立 QA 必须验证变更后的合并候选。失败检查记录予以保留，不对未修改候选进行重试。
+
+## Release PATCH 修正就绪
+
+实际探测在修改说明时改变了草稿标签。Tech Lead `distribution_design` 基于已接受的禁止重新指定标签决策，提出显式 Release PATCH 身份补充。Outcome: `covered-by-accepted-decision`；review mode: `independent-agent`；review result: `approved`；gate: `implementation-ready`。独立批准前，协调者禁止修改受影响源码。所有者恢复已还原精确标签和说明，并删除已验证探测附件；旧权限保持不变。
+
+独立 Tech Lead `distribution_review` 批准已记录的 Release PATCH 身份补充。协调者在 `2026-09-08T16:25:57.440733+00:00` 确认此限定范围的实现就绪状态，没有未解决的决策阻碍。唯一 RD 写入者负责探测与发布协议修正及拒绝测试；独立 QA 负责验证，之后重新执行实际非公开探测。

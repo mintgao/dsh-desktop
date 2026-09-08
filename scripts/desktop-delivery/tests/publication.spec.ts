@@ -130,7 +130,17 @@ function server(data: ReturnType<typeof fixture>) {
       if (loseUpload) { loseUpload = false; throw new Error('Ambiguous upload response') }
       return {}
     }
-    if (relative === '/releases/2' && method === 'PATCH') { Object.assign(release, object(body)); return release }
+    if (relative === '/releases/2') {
+      if (method === 'PATCH') {
+        const patch = object(body)
+        expect(patch.tag_name).toBe(data.manifest.tag)
+        expect(patch.prerelease).toBe(true)
+        expect(patch).not.toHaveProperty('target_commitish')
+        if (patch.draft === false) expect(patch.make_latest).toBe('false')
+        Object.assign(release, patch)
+      }
+      return release
+    }
     throw new Error(`Unhandled publication fixture: ${method} ${relative}`)
   } }
   return { api,
@@ -224,4 +234,43 @@ it('CLI mutation handling reports an approved blocker once and never notifies fo
   await expect(reviewedMutation(data.localConfig, { ...plan, manifestDigest: '0'.repeat(64) }, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)).rejects.toThrow('protected approval')
   expect(remote.writes()).toBe(writes)
   expect(remote.assets.get(999)?.bytes).toEqual(Buffer.from('conflicting bytes'))
+})
+
+it('blocks successful publication identity drift without a recovery PATCH', async () => {
+  for (const drift of [{ id: 99 }, { tag_name: 'temporary-server-tag' }, { prerelease: false }, { draft: true }, { body: 'Foreign body' }]) {
+    const data = fixture(); const remote = server(data)
+    const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
+    remote.setPlan(plan)
+    let patches = 0
+    const api: GitHub = { async request(method, path, body) {
+      const result = await remote.api.request(method, path, body)
+      if (method === 'PATCH') { patches++; Object.assign(remote.release, drift) }
+      return result
+    } }
+    await expect(mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, api)).rejects.toThrow('maintainer recovery')
+    expect(patches).toBe(1)
+  }
+})
+
+it('withdraws a post-publication byte mismatch using the same approved release identity', async () => {
+  const data = fixture(); const remote = server(data)
+  const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
+  remote.setPlan(plan)
+  const patches: unknown[] = []
+  const api: GitHub = { async request(method, path, body) {
+    const result = await remote.api.request(method, path, body)
+    if (method === 'PATCH') {
+      patches.push(body)
+      if (object(body).draft === false) {
+        const asset = [...remote.assets.values()][0]
+        if (asset === undefined) throw new Error('Missing fixture asset')
+        asset.bytes = Buffer.from('Corrupt after publication')
+      }
+    }
+    return result
+  } }
+  await expect(mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, api)).rejects.toThrow('Public mismatch caused withdrawal')
+  expect(patches.map(value => object(value).draft)).toEqual([false, true])
+  for (const patch of patches) expect(patch).toMatchObject({ tag_name: data.manifest.tag, prerelease: true })
+  expect(remote.release.draft).toBe(true)
 })

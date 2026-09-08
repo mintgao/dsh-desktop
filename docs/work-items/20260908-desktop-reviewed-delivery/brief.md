@@ -67,3 +67,9 @@ Run `34238478819` rejected equivalent administrator and public `updated_at` repr
 ## Supporting fixture correction
 
 The sampler candidate passed HMR acceptance but failed RD-6 on a baseline compaction duration assertion and an unhandled table scroll callback. Controlled experiments reproduced both failure mechanisms. The orchestrator classifies their correction as S: test-owned clock progression and completion of the specifically admitted scroll debounce, with production behavior and existing assertions preserved. No shared contract or durable decision changes. One RD writer may edit only the two owning test files; independent QA must verify the changed combined candidate. The failed matrix is retained rather than retried unchanged.
+
+## Release PATCH correction readiness
+
+The live probe changed the draft tag while applying its body edit. Tech Lead `distribution_design` proposed the explicit Release PATCH identity amendment under the Accepted no-retargeting decision. Outcome: `covered-by-accepted-decision`; review mode: `independent-agent`; review result: `approved`; gate: `implementation-ready`. The orchestrator permits no affected source edits before independent approval. Owner recovery restored the exact tag/body and removed the verified probe asset; legacy authority is unchanged.
+
+Independent Tech Lead `distribution_review` approved the persisted Release PATCH identity amendment. The orchestrator confirms the scoped implementation gate at `2026-09-08T16:25:57.440733+00:00` with no open decision blockers. One RD writer owns the probe/publication protocol correction and rejection tests; independent QA owns verification, followed by a new live nonpublic probe.

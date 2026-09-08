@@ -64,3 +64,9 @@ The [configuration readiness work item](../20260908-config-watch-readiness/brief
 ## Corrected candidate acceptance
 
 Independent QA passed the complete configured lint, typecheck, test and build matrix after the two local fixture corrections: 17,306 tests passed and 116 skipped, with no unhandled errors. All 37 candidate file hashes and the committed base remained unchanged during the run. The HMR sampler and timestamp correction are accepted locally; live bootstrap, bot review eligibility, draft access and legacy cutover remain pending.
+
+## Live bot and draft evidence
+
+Run `34249757428` succeeded at seed `c5598f89aeecce3ec329d37d7ce7ca40fe3c3cdc` and created bot-authored PR 67. Its sole-parent finalization changes only the source lock. The owner has an enabled approval option and received a GitHub `review_requested` notification; no review or merge was submitted.
+
+Probe run `34250355594` uploaded the fixed text asset to nonpublic draft `384889197`, then failed when the body PATCH returned a temporary tag. The owner restored the exact reviewed tag/body and removed the probe asset; draft and prerelease status remained true. This failed probe is not activation evidence. The [Release PATCH identity decision](../../decisions/20260908-desktop-reviewed-delivery.md) governs the correction and new probe. Legacy writers, App installations and PR 64 remain unchanged.

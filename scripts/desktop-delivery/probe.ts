@@ -3,6 +3,7 @@ import { seedBootstrapProtection } from './bootstrap-protection.ts'
 import { verifyBootstrapRun } from './bootstrap.ts'
 import { digest, hex, object, string, textField } from './evidence.ts'
 import { operationPlan, pages, validatePlan, type DeliveryConfig, type GitHub } from './operations.ts'
+import { patchRelease } from './release-patch.ts'
 import { tagCommit } from './migration.ts'
 
 const CONTENT = Buffer.from('Desktop delivery draft access probe. No application payload.\n')
@@ -76,13 +77,12 @@ export async function probeDraft(config: DeliveryConfig, plan: Record<string, un
   }
   if (found === undefined) throw new Error('Probe upload could not be verified')
   const edit = async (body: string): Promise<void> => {
-    await read()
-    try { await api.request('PATCH', releasePath, { draft: true, body }) }
-    catch (error) { if ((await read()).body !== body) throw error }
-    if ((await read()).body !== body) throw new Error('Probe body edit could not be verified')
+    const previous = await read()
+    await patchRelease(config, api, { id, tag, commit: context.commit, draft: true, body, previousBody: textField(previous.body) })
   }
   await edit(edited)
   try {
+    await read()
     try { await api.request('DELETE', `${base}/releases/assets/${String(found.id)}`) }
     catch (error) { if (await asset() !== undefined) throw error }
     if (await asset() !== undefined) throw new Error('Probe asset cleanup incomplete')

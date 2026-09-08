@@ -16,6 +16,8 @@ The [operational decision](../../../../docs/decisions/20260908-desktop-reviewed-
 
 The initially inactive replacement preserves the [shadow workflow](2026-09-08-desktop-delivery-shadow.md) and requires verified migration before activating writers. The [legacy adoption record](2026-08-27-automatic-upstream-desktop-releases.md) remains relevant to retained workflows and migration evidence; its automatic-publication policy does not govern the replacement. The [unsigned-preview](2026-08-27-pre-certificate-unsigned-desktop-previews.md) and [signed identity](2026-08-25-signed-public-desktop-releases.md) decisions retain their trust limitations. These are partial overlaps, not complete supersession.
 
+Every Release PATCH retains the approved immutable tag, explicit visibility and prerelease status. Completion requires a same-ID reread of the intended state, including the probe body. Identity drift stops further writes and requires maintainer recovery; retries cannot retarget a conflicting release.
+
 ## Alternatives considered
 
 **Keep separate custom Apps and signed policy receipts.** They separate credentials but add operational dependencies that this maintainer cannot reliably complete. The owner accepts GitHub administrators as the trust root and retains review, artifact verification and explicit release approval.
