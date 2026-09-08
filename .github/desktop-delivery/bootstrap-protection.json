@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "purpose": "desktop-bootstrap-protection",
+  "repository": "mintgao/dsh-desktop",
+  "repositoryId": 1344813014,
+  "rulesetId": 22549859,
+  "observedAt": "2026-09-08T14:00:58.918Z",
+  "administratorId": 154321591,
+  "bypassActors": [],
+  "projection": {
+    "id": 22549859,
+    "source": "mintgao/dsh-desktop",
+    "source_type": "Repository",
+    "target": "tag",
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/tags/desktop-bootstrap-*"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "update"
+      },
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      }
+    ],
+    "updated_at": "2026-09-08T21:49:50.402+08:00"
+  },
+  "projectionDigest": "0a01960b30be25b9f5344058f049dfa29ad7efb5d88deffdc763d52ffda10e9d",
+  "evidence": {
+    "path": ".github/desktop-delivery/bootstrap-protection-response.json",
+    "digest": "f63c4312b58e0a2bb27f6fa43898f76b241f13b0a709e89e3dcaa7d2ed1cbd9d"
+  }
+}

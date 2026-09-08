@@ -4,6 +4,8 @@
 
 ## 产品用途
 
+本二次开发项目交付 DSH Desktop Mint：基于 DeepSeek Harness 的桌面客户端，以及让桌面用户发现、获取和应用 DSH 更新的方式。[二次开发规范](downstream-policy.zh.md) 约束当前与未来的新增能力、插件职责、外部复用及经过测试的兼容性。
+
 DeepSeek Harness（`dsh`）是一个开源、处于开发者预览阶段的 coding agent（编程智能体）运行时，用于组合和运行 coding agent。它在同一个插件化运行时中整合模型访问、工作区工具、权限、持久会话、人机协作和多种交付界面；产品入口见[根 README](../../README.zh.md) 和 [Web UI 指南](../user/guide/index.zh.md)。
 
 ## 主要用户
@@ -12,7 +14,7 @@ DeepSeek Harness（`dsh`）是一个开源、处于开发者预览阶段的 codi
 - 通过 [Python SDK](../user/guide/python-sdk.zh.md)、TypeScript SDK、JSON-RPC 或 ACP，以自动化方式驱动 Harness 运行时的集成方。
 - 通过 Cordis 插件、Bundle、Profile、preset 和用户补丁层组合能力的插件与部署方案作者。
 
-仓库没有为这些用户群排序，也没有指定唯一的主要产品场景。Web 是文档中的首次运行界面，但这不代表自动化和扩展场景处于次要位置。
+桌面用户是本下游产品的目标用户；其他 DSH 开发者是新增能力的复用用户。继承的 Harness 界面仍然可用，但它们的存在不构成额外的下游产品需求。
 
 ## 产品界面
 
@@ -47,9 +49,9 @@ DeepSeek Harness（`dsh`）是一个开源、处于开发者预览阶段的 codi
 
 ## 待确认问题
 
-- 在开发者预览阶段，哪类用户和哪段旅程定义产品成功？
+- 各受支持 Mac 架构上的哪些打包桌面与升级场景构成发布验收基线？
 - 长期模型策略是 DeepSeek 优先、提供方无关，还是有明确分层的二者结合？
 - 根文档允许破坏兼容性的开发者预览声明，与部分包表格把多项 API 标为稳定产品界面之间，应如何统一表述？
-- 上游 Harness 与非官方 DSH Desktop Mint 发行版长期应是什么关系？
+- 独立分发的下游插件已经验证兼容哪些确切的 DSH 版本？
 - 当前禁用或仅供示例的能力中，哪些是有意保留的产品边界，哪些可能进入默认 Profile？
 - 启用会话遥测的部署应采用什么面向用户的遥测与同意策略？

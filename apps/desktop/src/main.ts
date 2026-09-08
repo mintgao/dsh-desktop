@@ -16,7 +16,7 @@ import {
   type MessageBoxOptions,
   type MessageBoxReturnValue,
 } from 'electron'
-import { BackendSupervisor, type BackendExit } from './backend.ts'
+import { BackendSupervisor, redactBackendDiagnostics, type BackendExit } from './backend.ts'
 import { ElectronUpdateDriver } from './electron-updates.ts'
 import { GitHubReleaseDriver } from './github-releases.ts'
 import { FileManualUpdatePreferencesStore } from './manual-update-preferences.ts'
@@ -600,7 +600,7 @@ function reportUnexpectedExit(exit: BackendExit): void {
 
 /** Report an application startup failure and close the partially started backend. */
 function reportStartupFailure(error: unknown): void {
-  const reason = error instanceof Error ? error.message : String(error)
+  const reason = redactBackendDiagnostics(error instanceof Error ? error.message : String(error))
   dialog.showErrorBox(`${APPLICATION_NAME} could not start`, `${reason}${logLocationSuffix()}`)
   app.quit()
 }

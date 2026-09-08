@@ -1,0 +1,116 @@
+name: Reviewed desktop mutation
+on:
+  workflow_dispatch:
+    inputs:
+      qualification_run:
+        description: Qualification run ID for promotion
+        type: string
+        required: true
+      tag:
+        description: Retained desktop tag for withdrawal or restoration
+        type: string
+      manifest_digest:
+        description: Reviewed manifest SHA256
+        type: string
+        required: true
+      operation:
+        description: Explicit release operation
+        type: choice
+        options: [promote, withdraw, restore]
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: desktop-delivery-mutation
+  cancel-in-progress: false
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@v4
+        if: inputs.operation == 'promote'
+        with:
+          name: desktop-release-bundle
+          run-id: ${{ inputs.qualification_run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/bundle
+      - name: Recover retained evidence independently of artifact retention
+        if: inputs.operation != 'promote'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bundle"
+          node --import tsx scripts/desktop-delivery/cli.ts release-bundle --config .github/desktop-delivery/mint.json --tag "$TAG" --operation "$OPERATION" --directory "$RUNNER_TEMP/bundle" --out "$RUNNER_TEMP/recovered.json"
+      - name: Verify the approved manifest and expose an exact run-bound plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST_DIGEST: ${{ inputs.manifest_digest }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          node -e 'const fs=require("fs"),c=require("crypto");if(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex")!==process.env.MANIFEST_DIGEST)process.exit(1)' "$RUNNER_TEMP/bundle/manifest.json"
+          node --import tsx scripts/desktop-delivery/cli.ts promotion-plan --config .github/desktop-delivery/mint.json --manifest "$RUNNER_TEMP/bundle/manifest.json" --directory "$RUNNER_TEMP/bundle" --operation "$OPERATION" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --workflow-commit "$GITHUB_SHA" --out "$RUNNER_TEMP/approved-plan.json" --summary "$RUNNER_TEMP/plan.md"
+          cat "$RUNNER_TEMP/plan.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-approved-plan
+          path: ${{ runner.temp }}/approved-plan.json
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mutation-bundle
+          path: ${{ runner.temp }}/bundle/*
+          retention-days: 30
+  mutate:
+    needs: plan
+    environment: mint-publication
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-mutation-bundle
+          path: ${{ runner.temp }}/bundle
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-approved-plan
+          path: ${{ runner.temp }}
+      - name: Apply only the environment-approved plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          digest=$(sha256sum "$RUNNER_TEMP/approved-plan.json" | cut -d' ' -f1)
+          node --import tsx scripts/desktop-delivery/cli.ts "$OPERATION" --config .github/desktop-delivery/mint.json --plan "$RUNNER_TEMP/approved-plan.json" --digest "$digest" --manifest "$RUNNER_TEMP/bundle/manifest.json" --directory "$RUNNER_TEMP/bundle" --migration-report .github/desktop-delivery/migration-report.json --apply --out "$RUNNER_TEMP/result.json" --summary "$RUNNER_TEMP/result.md"
+      - if: always()
+        run: test ! -f "$RUNNER_TEMP/result.md" || cat "$RUNNER_TEMP/result.md" >> "$GITHUB_STEP_SUMMARY"

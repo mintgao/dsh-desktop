@@ -159,6 +159,7 @@
     "dev:web": "tsx scripts/dev-web.ts --poll",
     "desktop:start": "npm run build && npm run build:desktop && electron apps/desktop/lib/main.js",
     "desktop:prepare": "tsx scripts/prepare-desktop-backend.ts",
+    "desktop:delivery": "tsx scripts/desktop-delivery/cli.ts",
     "desktop:stage": "npm run build:official && npm run build:desktop && npm run desktop:prepare",
     "desktop:app:mac": "npm run desktop:app:mac:arm64",
     "desktop:app:mac:arm64": "npm run desktop:stage && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/desktop/electron-builder.yml --mac dir --arm64",

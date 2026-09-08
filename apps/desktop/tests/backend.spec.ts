@@ -93,3 +93,59 @@ describe('BackendSupervisor', () => {
     expect(onUnexpectedExit).toHaveBeenCalledWith(expect.objectContaining({ code: 19, signal: null }))
   })
 })
+
+describe('authenticated backend readiness', () => {
+  it('preserves only a literal loopback root URL with one optional nonempty token', () => {
+    expect(parseBackendReadyUrl('dsh web: http://127.0.0.1:43123/?token=synthetic-token (LAN: http://10.0.0.1:43123)'))
+      .toBe('http://127.0.0.1:43123/?token=synthetic-token')
+    expect(parseBackendReadyUrl('dsh web: http://127.0.0.1:43123/')).toBe('http://127.0.0.1:43123/')
+    for (const url of [
+      'http://127.0.0.1:0/', 'http://127.0.0.1:65536/', 'http://127.0.0.1:043123/',
+      'http://127.0.0.1/', 'http://localhost:43123/', 'http://127.1:43123/',
+      'http://user@127.0.0.1:43123/', 'https://127.0.0.1:43123/',
+      'http://127.0.0.1:43123/path?token=x', 'http://127.0.0.1:43123/../?token=x',
+      'http://127.0.0.1:43123/?token=', 'http://127.0.0.1:43123/?token=x&token=y',
+      'http://127.0.0.1:43123/?token=x&other=y', 'http://127.0.0.1:43123/?other=x',
+      'http://127.0.0.1:43123/?%74oken=x', 'http://127.0.0.1:43123/?token=%ZZ',
+      'http://127.0.0.1:43123/?token=x#fragment', 'http://127.0.0.1:43123/#fragment',
+    ]) expect(parseBackendReadyUrl(`dsh web: ${url}`), url).toBeUndefined()
+  })
+
+  it('keeps the launch token in memory while redacting process logs and stopping the child', async () => {
+    const logs: string[] = []
+    const supervisor = new BackendSupervisor({
+      executable: process.execPath, cliPath: fixture('authenticated-backend.mjs'), cwd: process.cwd(),
+      electronNodeMode: false, environment: {}, log: text => logs.push(text),
+    })
+    try {
+      await expect(supervisor.start()).resolves.toBe('http://127.0.0.1:43123/?token=synthetic-launch-token')
+    } finally { await supervisor.stop() }
+    expect(logs.join('')).toContain('[redacted]')
+    expect(logs.join('')).not.toMatch(/synthetic-launch-token|synthetic-lan-token/u)
+  })
+
+  it('redacts tokens from early exit, timeout and unexpected exit diagnostics', async () => {
+    for (const mode of ['early', 'timeout', 'unexpected']) {
+      let finishExit: (diagnostics: string) => void = () => undefined
+      const exited = new Promise<string>((resolve) => { finishExit = resolve })
+      const supervisor = new BackendSupervisor({
+        executable: process.execPath, cliPath: fixture('authenticated-backend.mjs'), cwd: process.cwd(),
+        electronNodeMode: false, environment: { DSH_TEST_BACKEND_MODE: mode }, startupTimeoutMs: mode === 'timeout' ? 250 : 2_000,
+        onUnexpectedExit: (exit) => {
+          finishExit(exit.diagnostics)
+        },
+      })
+      try {
+        let diagnostics: string
+        if (mode === 'unexpected') { await supervisor.start(); diagnostics = await exited }
+        else {
+          const error: unknown = await supervisor.start().catch((reason: unknown) => reason)
+          expect(error).toBeInstanceOf(Error)
+          diagnostics = (error as Error).message
+        }
+        expect(diagnostics).toContain('[redacted]')
+        expect(diagnostics).not.toMatch(/synthetic-launch-token|synthetic-lan-token/u)
+      } finally { await supervisor.stop() }
+    }
+  })
+})

@@ -1,0 +1,164 @@
+name: Desktop delivery shadow
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only discovery or unsigned qualification of the dispatched checkout
+        type: choice
+        required: true
+        default: discovery-only
+        options: [discovery-only, unsigned-qualification]
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Discover public upstream releases
+        run: pnpm run desktop:delivery discover --config .github/desktop-delivery/mint.json --lock .github/desktop-delivery/source-lock.json --out "$RUNNER_TEMP/discovery.json" --summary "$RUNNER_TEMP/discovery.md"
+      - name: Report discovery
+        if: always()
+        run: test ! -f "$RUNNER_TEMP/discovery.md" || cat "$RUNNER_TEMP/discovery.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shadow-discovery
+          path: ${{ runner.temp }}/discovery.*
+          retention-days: 14
+
+  candidate:
+    if: inputs.mode == 'unsigned-qualification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate exact source and workspace versions
+        run: pnpm run desktop:delivery candidate --config .github/desktop-delivery/mint.json --lock .github/desktop-delivery/source-lock.json --expected-commit "$GITHUB_SHA" --out "$RUNNER_TEMP/candidate.json" --summary "$RUNNER_TEMP/candidate.md"
+      - name: Require clean source
+        run: node -e 'if (JSON.parse(require("fs").readFileSync(process.argv[1])).qualificationEligible !== true) process.exit(1)' "$RUNNER_TEMP/candidate.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shadow-candidate
+          path: ${{ runner.temp }}/candidate.json
+          retention-days: 14
+      - name: Report candidate
+        if: always()
+        run: test ! -f "$RUNNER_TEMP/candidate.md" || cat "$RUNNER_TEMP/candidate.md" >> "$GITHUB_STEP_SUMMARY"
+
+  qualify:
+    needs: candidate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: shadow-candidate
+          path: ${{ runner.temp }}/shadow
+      - name: Revalidate package checkout
+        run: |
+          pnpm run desktop:delivery candidate --config .github/desktop-delivery/mint.json --lock .github/desktop-delivery/source-lock.json --expected-commit "$GITHUB_SHA" --out "$RUNNER_TEMP/rechecked-candidate.json"
+          cmp "$RUNNER_TEMP/shadow/candidate.json" "$RUNNER_TEMP/rechecked-candidate.json"
+      - run: pnpm run desktop:stage
+      - run: git diff --exit-code
+      - name: Build unsigned DMG without publication
+        run: pnpm exec electron-builder --config apps/desktop/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --mac dmg --${{ matrix.arch }} --publish never
+      - name: Qualify the mounted DMG payload
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(apps/desktop/dist/*.dmg)
+          test "${#dmgs[@]}" -eq 1
+          cp "${dmgs[0]}" "$RUNNER_TEMP/shadow/"
+          dmg="$RUNNER_TEMP/shadow/$(basename "${dmgs[0]}")"
+          pnpm run desktop:delivery smoke --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/shadow/candidate.json" --dmg "$dmg" --arch "$ARCH" --out "$RUNNER_TEMP/shadow/smoke-$ARCH.json"
+          pnpm run desktop:delivery artifact --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/shadow/candidate.json" --dmg "$dmg" --smoke "$RUNNER_TEMP/shadow/smoke-$ARCH.json" --arch "$ARCH" --out "$RUNNER_TEMP/shadow/artifact-$ARCH.json" --summary "$RUNNER_TEMP/shadow/artifact-$ARCH.md"
+      - name: Report architecture
+        if: always()
+        run: test ! -f "$RUNNER_TEMP/shadow/artifact-${{ matrix.arch }}.md" || cat "$RUNNER_TEMP/shadow/artifact-${{ matrix.arch }}.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shadow-${{ matrix.arch }}
+          path: ${{ runner.temp }}/shadow/*
+          retention-days: 14
+
+  combine:
+    needs: [candidate, qualify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shadow-*
+          path: ${{ runner.temp }}/shadow
+          merge-multiple: true
+      - name: Require both architectures and rehash their evidence
+        run: pnpm run desktop:delivery combine --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/shadow/candidate.json" --directory "$RUNNER_TEMP/shadow" --reports artifact-arm64.json,artifact-x64.json --out "$RUNNER_TEMP/combined.json" --summary "$RUNNER_TEMP/combined.md"
+      - name: Report combined outcome
+        if: always()
+        run: test ! -f "$RUNNER_TEMP/combined.md" || cat "$RUNNER_TEMP/combined.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shadow-combined
+          path: ${{ runner.temp }}/combined.*
+          retention-days: 14

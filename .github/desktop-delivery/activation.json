@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "active": false,
+  "repositoryId": 1344813014,
+  "baselineDigest": null,
+  "migrationReportDigest": null,
+  "protectionIds": [
+    21944549,
+    21944575,
+    21944588
+  ],
+  "workflowPaths": [
+    ".github/workflows/desktop-delivery-adopt.yml",
+    ".github/workflows/desktop-delivery-qualify.yml",
+    ".github/workflows/desktop-delivery-mutate.yml",
+    ".github/workflows/desktop-delivery-discover.yml"
+  ],
+  "botId": 41898282,
+  "configDigest": null
+}

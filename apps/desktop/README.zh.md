@@ -38,7 +38,7 @@ ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desk
 
 ## 运行时行为
 
-Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh --profile desktop-mint --no-open --port 0`。这个 Profile 会在用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 Mint 产品 Bundle。壳只接受官方的 `dsh web: http://127.0.0.1:<port>` 就绪行。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
+Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh --profile desktop-mint --no-open --port 0`。这个 Profile 会在用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 Mint 产品 Bundle。壳接受标准回环根就绪 URL，包括单个认证令牌，并为窗口保留该 URL。后端诊断和启动错误会对查询值脱敏。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
 
 后端日志位于 `~/Library/Logs/DSH Desktop/backend.log`。外部 HTTP 与 HTTPS 链接会在系统浏览器中打开。同源应用导航留在 DSH 窗口内；新窗口与其他所有 scheme 均被拒绝。
 
@@ -64,11 +64,21 @@ renderer（渲染进程）启用沙箱、上下文隔离与 Web 安全，不启�
 
 ## GitHub 开发
 
+[交付试运行指南](../../docs/cookbook/desktop-delivery-shadow.zh.md) 说明只读发现与未签名安装包证据，不执行生产发布。
+
 根目录[贡献指南](../../CONTRIBUTING.zh.md)规定 remote、分支、跨设备同步、依赖、密钥、上游更新与 Pull Request 的处理方式。`main` 始终保持可发布，每台设备都独立安装依赖树，不复制与架构有关的产物。
 
 [`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) 会在 Pull Request 与 `main` 上运行桌面测试、桌面构建、仓库类型检查和文档检查。手动打包冒烟测试会分别使用 GitHub 原生的 arm64 与 x64 macOS runner，并在接受任一应用 bundle 前通过发布的可执行文件加载打包后的 Electron 主进程。DeepSeek Harness 官方工作流保留仓库保护条件，不会在这个下游仓库分配其组织专用任务。
 
+## 经审查的桌面交付
+
+[经审查交付决策](../../docs/decisions/20260908-desktop-reviewed-delivery.zh.md) 分离维护者批准、原生资格验证与发布。仅桌面修复和 DSH 采用都向用户交付单一桌面版本。共享工具接受显式发行配置；操作工作流要求受保护的 `main` 和原生 macOS runner。
+
+替代机制初始未启用。[上线前提](../../docs/work-items/20260908-desktop-reviewed-delivery/rollout.zh.md) 标识所需 GitHub 控制及首次合并启用顺序。[验证记录](../../docs/work-items/20260908-desktop-reviewed-delivery/verification.zh.md) 区分已执行本地证据与远程验收。替代机制的签名发布仍未配置。
+
 ## 未签名预览版与签名发布
+
+以下保留发布步骤属于旧工作流，在这些工作流仍启用时适用。经审查交付决策规定替代机制的启用。
 
 仓库初始使用 `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview`。在维护者明确确认 Apple Developer 已准备就绪并把该仓库变量改为 `signed` 前，自动引入会把 `dsh-vX.Y.Z` 映射为 `desktop-vX.Y.Z-unsigned.1`，已有上游预发布后缀则追加 `.unsigned.1`。发布工作流会在不发现签名身份的前提下构建原生 arm64、x64 DMG，验证它们不带 Developer ID Application 身份，再与 SHA-256 校验和一起发布为 GitHub Pre-release。这些产物只供个人与小范围手工安装，不会进入稳定更新源，也不能验证依赖应用身份的原生功能。
 
@@ -104,6 +114,8 @@ git push origin desktop-v0.1.0
 对于稳定标签，[`desktop-release.yml`](../../.github/workflows/desktop-release.yml) 会在已经签名的 DMG 与 SHA-256 校验和之外，额外上传分架构 ZIP、blockmap 和一份合并后的 `latest-mac.yml`。自动上游任务会把 Release 公开为 Latest；手工标签任务会保留草稿，已安装客户端无法看到它。
 
 ## 撤回与恢复 Release
+
+这些命令操作保留的旧撤回工作流。经审查交付决策规定替代机制的恢复。
 
 可以从 GitHub Actions 触发 [`desktop-release-withdraw.yml`](../../.github/workflows/desktop-release-withdraw.yml)，也可以运行：
 

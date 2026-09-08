@@ -1,0 +1,67 @@
+name: Reviewed upstream discovery
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discover:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Discover immediate upstream successor
+        run: |
+          node --import tsx scripts/desktop-delivery/cli.ts discover --config .github/desktop-delivery/mint.json --lock .github/desktop-delivery/source-lock.json --out "$RUNNER_TEMP/discovery.json" --summary "$RUNNER_TEMP/discovery.md" || test -f "$RUNNER_TEMP/discovery.json"
+          node --import tsx scripts/desktop-delivery/cli.ts notification-plan --config .github/desktop-delivery/mint.json --fixture "$RUNNER_TEMP/discovery.json" --lock .github/desktop-delivery/source-lock.json --expected-commit "$GITHUB_SHA" --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --out "$RUNNER_TEMP/notification.json"
+          cat "$RUNNER_TEMP/discovery.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: discovery-notification-plan
+          path: ${{ runner.temp }}/notification.json
+          retention-days: 7
+  notify:
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: desktop-delivery-notification-mint
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: discovery-notification-plan
+          path: ${{ runner.temp }}
+      - name: Notify only after reviewed activation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx scripts/desktop-delivery/cli.ts notification-apply --config .github/desktop-delivery/mint.json --plan "$RUNNER_TEMP/notification.json" --migration-report .github/desktop-delivery/migration-report.json --apply --out "$RUNNER_TEMP/result.json" --summary "$RUNNER_TEMP/result.md"
+      - if: always()
+        run: test ! -f "$RUNNER_TEMP/result.md" || cat "$RUNNER_TEMP/result.md" >> "$GITHUB_STEP_SUMMARY"

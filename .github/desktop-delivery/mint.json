@@ -1,0 +1,51 @@
+{
+  "id": "dsh-desktop-mint",
+  "upstreamRepository": "deepseek-ai/deepseek-harness",
+  "tagPrefix": "dsh-v",
+  "architectures": [
+    "arm64",
+    "x64"
+  ],
+  "application": "DSH Desktop",
+  "repository": "mintgao/dsh-desktop",
+  "repositoryId": 1344813014,
+  "defaultBranch": "main",
+  "releaseEnvironment": "mint-publication",
+  "sourceLockPath": ".github/desktop-delivery/source-lock.json",
+  "activationPath": ".github/desktop-delivery/activation.json",
+  "baselinePath": ".github/desktop-delivery/legacy-baseline.json",
+  "mainRulesetId": 21944549,
+  "tagCreationRulesetId": 21944575,
+  "tagImmutabilityRulesetId": 21944588,
+  "legacyAppIds": [
+    4782984,
+    4783001,
+    4783016
+  ],
+  "legacyWorkflows": [
+    ".github/workflows/desktop-release-withdraw.yml",
+    ".github/workflows/desktop-release.yml",
+    ".github/workflows/upstream-adoption-controller.yml",
+    ".github/workflows/upstream-adoption-finalizer.yml",
+    ".github/workflows/upstream-adoption-observer.yml",
+    ".github/workflows/upstream-adoption-preflight.yml",
+    ".github/workflows/upstream-adoption-validation.yml",
+    ".github/workflows/upstream-sync.yml"
+  ],
+  "maintainerIds": [
+    154321591
+  ],
+  "requiredChecks": [
+    "Desktop source checks"
+  ],
+  "botId": 41898282,
+  "bootstrapTagPrefix": "desktop-bootstrap-",
+  "bootstrapEnvironment": "mint-delivery-bootstrap",
+  "bootstrapRulesetId": 22549859,
+  "assetPrefix": "DSH-Desktop-Mint",
+  "legacyAdoptionEvidence": {
+    "commit": "fd2ad450f6524d7e9047743064e19cfa235373bd",
+    "path": "state/upstream-adoption.json",
+    "digest": "290e509f5ad48ac13233ef7bfdf252770054ed26d48323240efc54de563812aa"
+  }
+}

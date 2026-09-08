@@ -6,7 +6,7 @@ import type { Readable } from 'node:stream'
 const DEFAULT_STARTUP_TIMEOUT_MS = 60_000
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000
 const DIAGNOSTIC_LIMIT = 8_000
-const READY_LINE = /^dsh web: (http:\/\/127\.0\.0\.1:\d+)(?:\s|$)/u
+const READY_LINE = /^dsh web: (http:\/\/127\.0\.0\.1:([1-9]\d*)(?:\/)?(?:\?token=([^\s&#]+))?)(?:\s|$)/u
 
 /** Profile whose Bundle stack defines the DSH Desktop Mint product. */
 export const DESKTOP_PROFILE = 'desktop-mint'
@@ -45,13 +45,31 @@ export interface BackendSupervisorOptions {
   onUnexpectedExit?: (exit: BackendExit) => void
 }
 
-/** Parse the canonical loopback URL from a complete dsh Web readiness line. */
+/**
+ * Parse a loopback root URL while retaining its optional browser launch token in memory.
+ * @param line - complete dsh Web readiness line, optionally followed by a LAN annotation.
+ * @returns Authenticated URL, or undefined for malformed or unsupported readiness output.
+ */
 export function parseBackendReadyUrl(line: string): string | undefined {
-  const candidate = READY_LINE.exec(line)?.[1]
-  if (candidate === undefined) return undefined
-  const url = new URL(candidate)
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port === '') return undefined
-  return url.href
+  const match = READY_LINE.exec(line)
+  const candidate = match?.[1]
+  if (candidate === undefined || Number(match?.[2]) > 65535) return undefined
+  try {
+    if (match?.[3] !== undefined) decodeURIComponent(match[3])
+    return new URL(candidate).href
+  } catch {
+    // Invalid percent escapes and malformed URLs are untrusted process output.
+    return undefined
+  }
+}
+
+/**
+ * Remove query values before backend text reaches persistent logs or error dialogs.
+ * @param text - raw backend output or startup failure text.
+ * @returns Text with query values redacted, including malformed URLs and LAN annotations.
+ */
+export function redactBackendDiagnostics(text: string): string {
+  return text.replace(/([?&][^=\s&#]+)=([^&#\r\n]*)/gu, '$1=[redacted]')
 }
 
 /**
@@ -217,7 +235,7 @@ export class BackendSupervisor {
   }
 
   private record(source: 'stdout' | 'stderr', line: string): void {
-    const entry = `[backend ${source}] ${line}`
+    const entry = `[backend ${source}] ${redactBackendDiagnostics(line)}`
     this.options.log(`${entry}\n`)
     this.diagnostics = `${this.diagnostics}${entry}\n`.slice(-DIAGNOSTIC_LIMIT)
   }

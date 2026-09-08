@@ -1,0 +1,133 @@
+name: Reviewed desktop qualification
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Exact clean candidate commit already merged on protected main
+        type: string
+        required: true
+      version:
+        description: Explicit unsigned desktop version
+        type: string
+        required: true
+      kind:
+        description: Desktop delivery kind
+        type: choice
+        options: [upstream, desktop, replacement]
+        required: true
+      predecessor:
+        description: Exact predecessor JSON committed in the trusted orchestration revision
+        type: string
+        default: .github/desktop-delivery/legacy-baseline.json
+        required: true
+permissions:
+  contents: read
+jobs:
+  native:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      CANDIDATE: ${{ inputs.candidate }}
+      VERSION: ${{ inputs.version }}
+      ARCH: ${{ matrix.arch }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidate }}
+          path: candidate-source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact clean source
+        run: |
+          mkdir -p "$RUNNER_TEMP/bundle"
+          pnpm --dir candidate-source install --frozen-lockfile --ignore-scripts
+          node --import tsx scripts/desktop-delivery/cli.ts candidate --config .github/desktop-delivery/mint.json --root candidate-source --lock candidate-source/.github/desktop-delivery/source-lock.json --expected-commit "$CANDIDATE" --out "$RUNNER_TEMP/bundle/candidate.json"
+          node -e 'if(JSON.parse(require("fs").readFileSync(process.argv[1])).qualificationEligible!==true)process.exit(1)' "$RUNNER_TEMP/bundle/candidate.json"
+          git merge-base --is-ancestor "$CANDIDATE" "$GITHUB_SHA"
+      - name: Build unsigned candidate without write credentials
+        working-directory: candidate-source
+        run: |
+          pnpm run test:desktop
+          pnpm run build:desktop
+          pnpm run typecheck
+          pnpm run doc-sync
+          git diff --exit-code
+          pnpm run desktop:stage
+          git diff --exit-code
+          pnpm exec electron-builder --config apps/desktop/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --config.extraMetadata.version="$VERSION" --mac dmg --"$ARCH" --publish never
+      - name: Verify mounted and copied isolated installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(candidate-source/apps/desktop/dist/*.dmg)
+          test "${#dmgs[@]}" -eq 1
+          cp "${dmgs[0]}" "$RUNNER_TEMP/bundle/"
+          node --import tsx scripts/desktop-delivery/cli.ts smoke --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/bundle/candidate.json" --dmg "$RUNNER_TEMP/bundle/$(basename "${dmgs[0]}")" --arch "$ARCH" --desktop-version "$VERSION" --copy-install --out "$RUNNER_TEMP/bundle/native-$ARCH.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-native-${{ matrix.arch }}
+          path: ${{ runner.temp }}/bundle/*
+          retention-days: 30
+  manifest:
+    needs: native
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CANDIDATE: ${{ inputs.candidate }}
+      VERSION: ${{ inputs.version }}
+      KIND: ${{ inputs.kind }}
+      PREDECESSOR: ${{ inputs.predecessor }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.candidate }}
+          path: candidate-source
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-native-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/bundle
+      - name: Bind final manifest to committed source and all artifact bytes
+        run: |
+          node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json,native-x64.json --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg,DSH-Desktop-Mint-$VERSION-x64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/manifest.json" --summary "$RUNNER_TEMP/manifest.md"
+          cat "$RUNNER_TEMP/manifest.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-bundle
+          path: ${{ runner.temp }}/bundle/*
+          retention-days: 30

@@ -10,6 +10,8 @@ DSH Desktop 是个人和小范围使用的发行版，明确选择跟随 DeepSee
 
 ## 决策
 
+本记录描述保留的旧工作流设计。[经审查交付决策](2026-09-08-reviewed-desktop-release-delivery.zh.md) 约束替代机制；其写入者在迁移验证前保持未启用。
+
 [`upstream-sync.yml`](../../../../.github/workflows/upstream-sync.yml) 每小时两次检查 `deepseek-ai/deepseek-harness` 的公开 Release。[`.github/upstream-sync-state.json`](../../../../.github/upstream-sync-state.json) 记录最近一次引入的上游标签、提交与发布时间，以及对应的下游桌面标签。初始记录指向下游已经包含的上游 Release 及其现有桌面版本，避免重新发布历史版本。工作流按发布时间排列公开且非草稿的 `dsh-v*` Release，每次只处理队首的下一个版本。手工触发可以选择这个队首版本，但不能跳过中间版本。
 
 工作流取得准确的上游标签，并把对应提交直接合入处于可发布状态的 `main`。推送前，它会安装锁定依赖，并运行桌面测试、桌面构建、仓库类型检查、文档检查和生成源码差异检查。配置错误、发生冲突或检查失败时，工作流会在任何远端更新前停止，并创建或更新包含运行链接的 `Blocked: adopt DeepSeek Harness ...` Issue。维护者应在普通分支上解决这个准确版本的引入，通过正常流程合入修复，再重新运行工作流。
