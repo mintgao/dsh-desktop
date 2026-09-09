@@ -73,3 +73,27 @@ The sampler candidate passed HMR acceptance but failed RD-6 on a baseline compac
 The live probe changed the draft tag while applying its body edit. Tech Lead `distribution_design` proposed the explicit Release PATCH identity amendment under the Accepted no-retargeting decision. Outcome: `covered-by-accepted-decision`; review mode: `independent-agent`; review result: `approved`; gate: `implementation-ready`. The orchestrator permits no affected source edits before independent approval. Owner recovery restored the exact tag/body and removed the verified probe asset; legacy authority is unchanged.
 
 Independent Tech Lead `distribution_review` approved the persisted Release PATCH identity amendment. The orchestrator confirms the scoped implementation gate at `2026-09-08T16:25:57.440733+00:00` with no open decision blockers. One RD writer owns the probe/publication protocol correction and rejection tests; independent QA owns verification, followed by a new live nonpublic probe.
+
+## Bootstrap classification readiness
+
+- Outcome: `decision-accepted`
+- Trigger evidence: migration classification, bootstrap identity and final-head evidence freshness
+- Decision owner: Tech Lead `classification_design`
+- Governing decision: [Bootstrap installation classification](../../decisions/20260908-desktop-reviewed-delivery.md#bootstrap-installation-evidence)
+- Review mode: `independent-agent`
+- Review result: `approved`
+- Review evidence: independent Tech Lead `classification_review` approved ADR blobs `d4d74c44de297370bf09f9970015ba9778827598` and `618026ff53649c6c9f38f3e056cfe8d6675f0299`
+- Material product decisions: accepted first merge includes verified activation; no new product choice
+- Open blockers: none
+- Gate: `implementation-ready`
+- Gate owner: Workflow orchestrator
+- Confirmed at: 2026-09-09T15:50:00.240097+00:00
+- Confirmation basis: Accepted amendment, independent approval, BI-1 through BI-6 and existing owner cutover decisions verified
+- Readiness history: temporary uncommitted amendment was lost during interruption; reconstructed from retained decision context and current source
+
+- BI-1: Valid explicit context classifies exactly one installation PR separately; omitted context preserves existing behavior. Another pending adoption blocks activation.
+- BI-2: Reject wrong repository, author, base, branch, head, tag, seed/tree, run/attempt, skipped bootstrap job, installed workflow, present base lock, changed lineage, non-substantive or additional-file finalization, incomplete pagination/tree data and API failures.
+- BI-3: Capture completed finalization A, embed unchanged evidence into successor seed B, finalize B and externally validate without rewriting evidence. Reject altered embedded bytes or stale final-head evidence.
+- BI-4: Reject changed publication assets/source, protections, legacy writer state and pending inventory at final validation; perform no remote mutation.
+- BI-5: Installed ordinary workflows disable new exceptions while historically classified activation remains readable; verify another distribution configuration.
+- BI-6: Independent QA verifies focused failures and the final candidate's configured default checks. Live bot last-pusher, owner-review eligibility and final validation remain rollout requirements.

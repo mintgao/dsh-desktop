@@ -73,3 +73,27 @@ Tech Lead `distribution_design` 编写引导规则集可见性修订，独立审
 实际探测在修改说明时改变了草稿标签。Tech Lead `distribution_design` 基于已接受的禁止重新指定标签决策，提出显式 Release PATCH 身份补充。Outcome: `covered-by-accepted-decision`；review mode: `independent-agent`；review result: `approved`；gate: `implementation-ready`。独立批准前，协调者禁止修改受影响源码。所有者恢复已还原精确标签和说明，并删除已验证探测附件；旧权限保持不变。
 
 独立 Tech Lead `distribution_review` 批准已记录的 Release PATCH 身份补充。协调者在 `2026-09-08T16:25:57.440733+00:00` 确认此限定范围的实现就绪状态，没有未解决的决策阻碍。唯一 RD 写入者负责探测与发布协议修正及拒绝测试；独立 QA 负责验证，之后重新执行实际非公开探测。
+
+## 首次安装分类就绪状态
+
+- 结果：`decision-accepted`
+- 触发证据：迁移分类、首次安装身份和最终头提交证据新鲜度
+- 决策负责人：Tech Lead `classification_design`
+- 治理决策：[首次安装分类](../../decisions/20260908-desktop-reviewed-delivery.zh.md#bootstrap-installation-evidence)
+- 评审模式：`independent-agent`
+- 评审结果：`approved`
+- 评审证据：独立 Tech Lead `classification_review` 批准 ADR 内容对象 `d4d74c44de297370bf09f9970015ba9778827598` 和 `618026ff53649c6c9f38f3e056cfe8d6675f0299`
+- 重大产品决策：已接受首次合并包含验证后的激活；没有新增产品选择
+- 未解决阻碍：无
+- 门禁：`implementation-ready`
+- 门禁负责人：工作流编排者
+- 确认时间：2026-09-09T15:50:00.240097+00:00
+- 确认依据：已核验接受的修订、独立批准、BI-1 至 BI-6 和现有所有者切换决策
+- 就绪历史：临时未提交修订在中断期间丢失；依据保留的决策上下文及当前源码重建
+
+- BI-1：有效显式上下文恰好单独分类一个安装 PR；省略上下文保持现有行为。其他待接纳项阻止激活。
+- BI-2：拒绝错误的仓库、作者、基线、分支、头提交、标签、种子及树、运行及尝试、跳过的首次安装任务、已安装工作流、已存在基线锁、谱系变化、非实质或额外文件定稿、不完整分页及树数据，以及 API 失败。
+- BI-3：采集已完成定稿 A，将未变化证据嵌入后继种子 B，定稿 B 并在不重写证据的情况下外部验证。拒绝嵌入字节变化或过期最终头提交证据。
+- BI-4：最终校验拒绝发布资产及来源、保护规则、旧写入者状态和待接纳清单变化；不进行远程修改。
+- BI-5：已安装常规工作流禁止新的例外，同时历史分类的激活仍可读取；验证另一发行配置。
+- BI-6：独立 QA 验证聚焦失败场景及最终候选的已配置默认检查。实时机器人最后推送者、所有者评审资格和最终校验仍是落地要求。

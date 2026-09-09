@@ -18,6 +18,8 @@ The initially inactive replacement preserves the [shadow workflow](2026-09-08-de
 
 Every Release PATCH retains the approved immutable tag, explicit visibility and prerelease status. Completion requires a same-ID reread of the intended state, including the probe body. Identity drift stops further writes and requires maintainer recovery; retries cannot retarget a conflicting release.
 
+The [initial installation check](../../../../docs/cookbook/bootstrap-installation-check.md) classifies one explicitly verified completed bootstrap PR separately from pending adoption. Historical baseline and migration evidence survive unchanged in a successor seed; an external final-head check verifies fresh controls, publication bytes and the same installation lineage. This avoids recursive evidence digests without exempting branch-name matches or future PRs. Download counters are presentation metadata; release provenance and actual asset hashes remain binding.
+
 ## Alternatives considered
 
 **Keep separate custom Apps and signed policy receipts.** They separate credentials but add operational dependencies that this maintainer cannot reliably complete. The owner accepts GitHub administrators as the trust root and retains review, artifact verification and explicit release approval.

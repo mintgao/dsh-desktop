@@ -1,4 +1,5 @@
 /** Live sole-writer/protection inspection and reviewed import of actual legacy release bytes. */
+import { installationRecord, validateBootstrapInstallation } from './bootstrap-installation.ts'
 import { rulesetTime } from './ruleset-time.ts'
 import { readFileSync, statSync } from 'node:fs'
 import { assetPath, digest, hex, object, readJson, sourceLock, string, textField } from './evidence.ts'
@@ -24,12 +25,15 @@ export async function tagCommit(config: DeliveryConfig, tag: string, api: GitHub
  * @param lockPath - reviewed last-completed upstream identity.
  * @param directory - downloaded legacy files.
  * @param api - live release and tag reads.
+ * @param bootstrap - optional explicit completed installation context.
  * @returns Reviewed-baseline candidate including outstanding adoption blockers.
  */
 export async function legacyBaseline(config: DeliveryConfig,
   lockPath: string,
   directory: string,
-  api: GitHub): Promise<Record<string, unknown>> {
+  api: GitHub,
+  bootstrap?: unknown): Promise<Record<string, unknown>> {
+  const installation = bootstrap === undefined ? undefined : await validateBootstrapInstallation(config, bootstrap, api)
   const lock = sourceLock(readJson(lockPath), config)
   const releases = await pages(api, `/repos/${config.repository}/releases`)
   const latest = releases.filter(item => item.draft === false && String(item.tag_name).startsWith('desktop-v')).sort((a, b) => string(b.published_at).localeCompare(string(a.published_at)))[0]
@@ -61,7 +65,15 @@ export async function legacyBaseline(config: DeliveryConfig,
   })
   for (const arch of config.architectures) if (assets.filter(asset => asset.name.endsWith(`-${arch}.dmg`)).length !== 1) throw new Error('Legacy architecture missing')
   const pending: Record<string, unknown>[] = []
-  for (const pr of await pages(api, `/repos/${config.repository}/pulls?state=open&base=${config.defaultBranch}`)) {
+  const inventory = await pages(api, `/repos/${config.repository}/pulls?state=open&base=${config.defaultBranch}`)
+  const numbers = inventory.map(pr => pr.number)
+  if (numbers.some(number => !Number.isSafeInteger(number) || Number(number) < 1) || new Set(numbers).size !== numbers.length) throw new Error('Incomplete or duplicate pending adoption inventory')
+  if (installation !== undefined && inventory.filter(pr => pr.number === installation.record.context.pullRequest).length !== 1) throw new Error('Bootstrap installation PR is missing from pending inventory')
+  for (const pr of inventory) {
+    if (installation !== undefined && pr.number === installation.record.context.pullRequest) {
+      if (object(pr.head).sha !== installation.record.observedHead) throw new Error('Bootstrap installation head changed during inventory')
+      continue
+    }
     const head = object(pr.head)
     if (object(head.repo).full_name !== config.repository) continue
     const branch = string(head.ref)
@@ -76,7 +88,7 @@ export async function legacyBaseline(config: DeliveryConfig,
     if (relation.status !== 'ahead' && relation.status !== 'identical') throw new Error('Pending adoption branch lacks its upstream ancestry')
     pending.push({ number: pr.number, head: head.sha, branch, upstreamTag, upstreamCommit, url: pr.html_url })
   }
-  return { schemaVersion: 1, purpose: 'desktop-legacy-baseline', repository: config.repository, repositoryId: config.repositoryId, upstream: lock.release, desktopTag: tag, sourceCommit: commit, assets, releaseId: latest.id, releaseMetadataDigest: digest(JSON.stringify(latest)), evidenceReferences: [`https://github.com/${config.repository}/releases/tag/${tag}`], unresolvedAdoption: pending }
+  return { schemaVersion: 1, purpose: 'desktop-legacy-baseline', repository: config.repository, repositoryId: config.repositoryId, upstream: lock.release, desktopTag: tag, sourceCommit: commit, assets, releaseId: latest.id, releaseMetadataDigest: digest(JSON.stringify(latest)), evidenceReferences: [`https://github.com/${config.repository}/releases/tag/${tag}`], unresolvedAdoption: pending, ...(installation === undefined ? {} : { bootstrapInstallation: installation.record, releaseBodyDigest: digest(body), releasePublishedAt: string(latest.published_at) }) }
 }
 
 /** Inspect all required visible controls and require explicit administrator revocation evidence.
@@ -181,21 +193,24 @@ export async function migrationPreflight(config: DeliveryConfig,
  * @param activationPath - reviewed local activation record.
  * @param migrationPath - exact reviewed migration report.
  * @param api - fresh GitHub reads.
+ * @param baselinePath - local retained baseline path, defaulting to configuration.
  * @returns Validated activation fields.
  */
 export async function requireActivation(config: DeliveryConfig,
   activationPath: string,
   migrationPath: string,
-  api: GitHub): Promise<Record<string, unknown>> {
+  api: GitHub,
+  baselinePath = config.baselinePath): Promise<Record<string, unknown>> {
   const activation = object(readJson(activationPath))
   const report = object(readJson(migrationPath))
   if (activation.active !== true || activation.repositoryId !== config.repositoryId || activation.botId !== config.botId) throw new Error('Delivery writers are inactive')
   if (activation.migrationReportDigest !== digest(readFileSync(migrationPath)) || report.state !== 'controls-verified') throw new Error('Activation migration report does not match')
   hex(activation.baselineDigest)
-  if (digest(readFileSync(config.baselinePath)) !== activation.baselineDigest) throw new Error('Activated baseline bytes differ')
-  const baseline = object(readJson(config.baselinePath))
+  if (digest(readFileSync(baselinePath)) !== activation.baselineDigest) throw new Error('Activated baseline bytes differ')
+  const baseline = object(readJson(baselinePath))
   if (baseline.purpose !== 'desktop-legacy-baseline' || baseline.repositoryId !== config.repositoryId || baseline.repository !== config.repository
     || !Array.isArray(baseline.unresolvedAdoption) || baseline.unresolvedAdoption.length !== 0) throw new Error('Activated baseline has unresolved adoption or identity mismatch')
+  if (baseline.bootstrapInstallation !== undefined) installationRecord(baseline.bootstrapInstallation, config)
   if (JSON.stringify(activation.protectionIds) !== JSON.stringify([config.mainRulesetId, config.tagCreationRulesetId, config.tagImmutabilityRulesetId])) throw new Error('Activation protection IDs changed')
   if (activation.configDigest !== digest(JSON.stringify(config)) || report.configDigest !== activation.configDigest) throw new Error('Activation distribution configuration changed')
   const attestations = Array.isArray(report.attestations) ? report.attestations.map(object) : []

@@ -1,4 +1,5 @@
 /** Operational CLI entry points shared with the protected delivery workflows. */
+import { bootstrapInstallationCheck } from './bootstrap-installation-check.ts'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { bootstrapResponsePath, prepareBootstrapProtection } from './bootstrap-protection.ts'
@@ -30,11 +31,13 @@ export async function reviewedCommand(operation: string, values: Record<string, 
     writeFileSync(resolve(root, bootstrapResponsePath), prepared.response)
     return prepared.attestation
   }
+  if (operation === 'bootstrap-installation-check') return bootstrapInstallationCheck(config, root, required('config'), required('migration-report'), required('lock'), required('bundle'), readJson(required('bootstrap-context')), object(readJson(required('admin-evidence'))), api)
   if (operation === 'migration-preflight') {
+    if (values['bootstrap-context'] !== undefined && typeof values.bundle !== 'string') throw new Error('Bootstrap classification requires the legacy asset bundle')
     const admin = typeof values['admin-evidence'] === 'string' ? object(readJson(values['admin-evidence'])) : undefined
     const report = await migrationPreflight(config, api, admin)
     if (typeof values.bundle === 'string') {
-      const baseline = await legacyBaseline(config, required('lock'), values.bundle, api)
+      const baseline = await legacyBaseline(config, required('lock'), values.bundle, api, typeof values['bootstrap-context'] === 'string' ? readJson(values['bootstrap-context']) : undefined)
       report.legacyBaseline = baseline
       if (typeof values['baseline-output'] === 'string') writeFileSync(values['baseline-output'], `${JSON.stringify(baseline, null, 2)}\n`)
       if (Array.isArray(baseline.unresolvedAdoption) && baseline.unresolvedAdoption.length > 0) {

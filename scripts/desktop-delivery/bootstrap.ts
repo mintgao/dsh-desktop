@@ -59,7 +59,12 @@ export async function bootstrapAdoption(config: DeliveryConfig, plan: Record<str
   return applyAdoption(config, plan, api, seedLockDigest)
 }
 
-function verifyLegacy(config: DeliveryConfig, evidence: Record<string, unknown>, lock: ReturnType<typeof sourceLock>): void {
+/** Validate pinned legacy adoption identity shared by preparation and installation inspection.
+ * @param config - expected upstream repository.
+ * @param evidence - pinned legacy JSON.
+ * @param lock - reviewed seed source identity.
+ */
+export function verifyLegacy(config: DeliveryConfig, evidence: Record<string, unknown>, lock: ReturnType<typeof sourceLock>): void {
   const adopted = object(evidence.schemaVersion === 2 ? evidence.lastPublishedRelease : evidence.lastAdoptedRelease)
   if (![1, 2].includes(Number(evidence.schemaVersion)) || evidence.upstreamRepository !== config.upstreamRepository
     || adopted.tag !== lock.release.tag || adopted.commit !== lock.release.commit || adopted.publishedAt !== lock.release.publishedAt) throw new Error('Pinned legacy adoption evidence does not match seed source')
