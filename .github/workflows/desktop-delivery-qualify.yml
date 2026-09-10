@@ -129,7 +129,7 @@ jobs:
           path: candidate-source
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: desktop-native-*
           merge-multiple: true
