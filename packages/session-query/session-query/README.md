@@ -44,6 +44,8 @@ Use `ctx.sessionQuery` from application code when you need to read or search ses
 
 Body-free records expose only `SessionHeader.isSeeded`. Reads that return event bodies (`readSession`, `readSurface`, `readEvent`) and retained `SessionObservation` values also carry the exact `inheritedEventCount`, so callers can distinguish inherited and owned events without inferring a cut from the log.
 
+Exact reads validate complete existing histories, including seeded children with their own continuation, through detached restoration and lossless JSON snapshots. They return the observed raw log without a restoration-added marker and do not attach a Session or write storage. See the [query restoration decision](../../../docs/decisions/20260910-seeded-session-query-restoration.md).
+
 ### Filters
 
 `SessionResultFilter` narrows sessions by id, nullable cwd, created-at range, nullable parent, or source availability; `SessionEventResultFilter` narrows events by seq/time range, event type, surface, or literal text. Filter arrays are ANDed and list values within one clause are ORed; empty list values match nothing, ranges are inclusive, and malformed ranges or unknown closed-union values fail with `SESSION_QUERY_INVALID_FILTER`.

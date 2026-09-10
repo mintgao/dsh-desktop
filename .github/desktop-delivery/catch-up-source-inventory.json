@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "purpose": "desktop-catch-up-source-inventory",
+  "runtimeQualification": false,
+  "rows": [
+    {
+      "release": {
+        "id": 379884041,
+        "tag": "dsh-v0.1.2-alpha.3",
+        "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+        "publishedAt": "2026-08-31T16:03:39Z"
+      },
+      "sourceCommit": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
+          "sha256": "4854d8aef0e406f91dfeab7f1dd9bf0aefc15ca9f9b9aeef4e466c2e1347ba6f",
+          "version": 0
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
+          "sha256": "42f86a223651ae7256e0c9f75ead1f11fc83ee644a7f1306f66a6dfa1737690d",
+          "version": 4
+        }
+      }
+    },
+    {
+      "release": {
+        "tag": "dsh-v0.1.2-alpha.4",
+        "id": 380633709,
+        "publishedAt": "2026-09-01T15:45:07Z",
+        "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5"
+      },
+      "sourceCommit": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+          "sha256": "64184da63463365c64bb2ed9b8a2383c4a269972c101ee9c6c6ce421b1986d94",
+          "version": 0
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+          "sha256": "24fe78044b492a93bb78132941749024eaade2a8708f3092a2c91765fea8e3a6",
+          "version": 5
+        }
+      }
+    },
+    {
+      "release": {
+        "tag": "dsh-v0.1.2-alpha.5",
+        "id": 381145530,
+        "publishedAt": "2026-09-02T10:02:56Z",
+        "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5"
+      },
+      "sourceCommit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5",
+          "sha256": "64184da63463365c64bb2ed9b8a2383c4a269972c101ee9c6c6ce421b1986d94",
+          "version": 0
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5",
+          "sha256": "3276182300fa2735104bc0091d5171c736f049bb8f2fe87f5f3b6c80ecb99757",
+          "version": 5
+        }
+      }
+    },
+    {
+      "release": {
+        "tag": "dsh-v0.1.2-rc.1",
+        "id": 381777538,
+        "publishedAt": "2026-09-03T06:06:07Z",
+        "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d"
+      },
+      "sourceCommit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d",
+          "sha256": "64184da63463365c64bb2ed9b8a2383c4a269972c101ee9c6c6ce421b1986d94",
+          "version": 0
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d",
+          "sha256": "3276182300fa2735104bc0091d5171c736f049bb8f2fe87f5f3b6c80ecb99757",
+          "version": 5
+        }
+      }
+    },
+    {
+      "release": {
+        "tag": "dsh-v0.1.3-alpha.1",
+        "id": 382677748,
+        "publishedAt": "2026-09-04T11:34:32Z",
+        "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215"
+      },
+      "sourceCommit": "d347e703908d0406b7a7ef80e3a0e594d86b2215",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215",
+          "sha256": "1f8b010994d89d65853be484d65c32555f53668151aa827f57650b03c3669ea3",
+          "version": 2
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215",
+          "sha256": "4158071d96e13ec477d7565810e241bbf50707988c6497141dae17393403bce2",
+          "version": 7
+        }
+      }
+    },
+    {
+      "release": {
+        "tag": "dsh-v0.1.3-alpha.2",
+        "id": 384129524,
+        "publishedAt": "2026-09-07T13:59:29Z",
+        "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9"
+      },
+      "sourceCommit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+          "sha256": "439b52f9d1e8c5fd0146e60fcc93f25bba99261dd877b91d160fe839626cac0e",
+          "version": 2
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+          "sha256": "4158071d96e13ec477d7565810e241bbf50707988c6497141dae17393403bce2",
+          "version": 7
+        }
+      }
+    },
+    {
+      "release": {
+        "tag": "dsh-v0.1.5-alpha.1",
+        "id": 384887562,
+        "publishedAt": "2026-09-08T16:16:04Z",
+        "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a"
+      },
+      "sourceCommit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+          "sha256": "2ec8afdaf5f97cc59d43891476fa57c1487fd2bd6dd88b0dfc628a4379bb5345",
+          "version": 3
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+          "sha256": "4158071d96e13ec477d7565810e241bbf50707988c6497141dae17393403bce2",
+          "version": 7
+        }
+      }
+    },
+    {
+      "release": {
+        "tag": "dsh-v0.1.5-alpha.2",
+        "id": 385585674,
+        "publishedAt": "2026-09-09T14:23:10Z",
+        "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901"
+      },
+      "sourceCommit": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+      "formats": {
+        "session": {
+          "path": "packages/core/session/src/types.ts",
+          "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+          "sha256": "e9dfc1d7bc4b146f954520a9ca2eff8539f3b9c082b5ecfac7ddb9c747501e45",
+          "version": 3
+        },
+        "projectionCache": {
+          "path": "packages/session/session-projection-cache/src/spec.ts",
+          "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+          "sha256": "4158071d96e13ec477d7565810e241bbf50707988c6497141dae17393403bce2",
+          "version": 7
+        }
+      }
+    }
+  ],
+  "storeEdges": [
+    {
+      "from": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+      "to": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+      "tag": "dsh-v0.1.2-alpha.4",
+      "changedDefinitionPaths": [
+        "packages/session/session-projection-cache/src/spec.ts"
+      ],
+      "qualification": "unexecuted"
+    },
+    {
+      "from": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+      "to": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5",
+      "tag": "dsh-v0.1.2-alpha.5",
+      "changedDefinitionPaths": [
+        "packages/session/session-projection-cache/src/spec.ts"
+      ],
+      "qualification": "unexecuted"
+    },
+    {
+      "from": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5",
+      "to": "a66e4702047846cdaa10c66c9d3df3951f5ea70d",
+      "tag": "dsh-v0.1.2-rc.1",
+      "changedDefinitionPaths": [],
+      "qualification": "unexecuted"
+    },
+    {
+      "from": "a66e4702047846cdaa10c66c9d3df3951f5ea70d",
+      "to": "d347e703908d0406b7a7ef80e3a0e594d86b2215",
+      "tag": "dsh-v0.1.3-alpha.1",
+      "changedDefinitionPaths": [
+        "packages/attachment/attachment-local/src/file-store.ts",
+        "packages/attachment/attachment-local/src/store.ts",
+        "packages/session/session-projection-cache/src/spec.ts"
+      ],
+      "qualification": "unexecuted"
+    },
+    {
+      "from": "d347e703908d0406b7a7ef80e3a0e594d86b2215",
+      "to": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+      "tag": "dsh-v0.1.3-alpha.2",
+      "changedDefinitionPaths": [],
+      "qualification": "unexecuted"
+    },
+    {
+      "from": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+      "to": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+      "tag": "dsh-v0.1.5-alpha.1",
+      "changedDefinitionPaths": [],
+      "qualification": "unexecuted"
+    },
+    {
+      "from": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+      "to": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+      "tag": "dsh-v0.1.5-alpha.2",
+      "changedDefinitionPaths": [],
+      "qualification": "unexecuted"
+    }
+  ]
+}

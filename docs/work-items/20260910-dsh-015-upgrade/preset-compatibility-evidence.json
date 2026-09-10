@@ -1,0 +1,48 @@
+{
+  "qualification": false,
+  "scope": "synthetic authored preset compatibility defect and baseline recovery; not target qualification",
+  "sourceReceiptSha256": "6a673fb60085eeeddfa81579e3faedf90bb9eb03e13d14e621c4e34b1c7039ce",
+  "stages": {
+    "baseline": {
+      "preset": "migration-authored-standard",
+      "sessionSucceeded": true,
+      "before": {
+        "presetHash": "f04fbc6ec6d38aab78f18690c293ddcb76293107f7e6cd157904b7c0e83094bd",
+        "settingsHash": "3b510aa4e6656308e2df44d418777ceb40cc1edfb9de8316fbd92e0f0957d7c2"
+      },
+      "after": {
+        "presetHash": "f04fbc6ec6d38aab78f18690c293ddcb76293107f7e6cd157904b7c0e83094bd",
+        "settingsHash": "3b510aa4e6656308e2df44d418777ceb40cc1edfb9de8316fbd92e0f0957d7c2"
+      }
+    },
+    "target": {
+      "preset": "migration-authored-standard",
+      "sessionSucceeded": false,
+      "before": {
+        "presetHash": "f04fbc6ec6d38aab78f18690c293ddcb76293107f7e6cd157904b7c0e83094bd",
+        "settingsHash": "3b510aa4e6656308e2df44d418777ceb40cc1edfb9de8316fbd92e0f0957d7c2"
+      },
+      "after": {
+        "presetHash": "f04fbc6ec6d38aab78f18690c293ddcb76293107f7e6cd157904b7c0e83094bd",
+        "settingsHash": "3b510aa4e6656308e2df44d418777ceb40cc1edfb9de8316fbd92e0f0957d7c2"
+      },
+      "sessionError": {
+        "name": "RemoteError",
+        "message": "agent-presets: preset \"migration-authored-standard\" failed to mount: failed to apply loader entry persona (@deepseek-ai/dsh-persona): invalid config:\n  - $.prefix missing required value (at prefix) (/private/tmp/dsh-preset-compat-qc02v6hh/home/.dsh/.agent-presets/migration-authored-standard/agent.cordis.yml)",
+        "stack": "RemoteError: agent-presets: preset \"migration-authored-standard\" failed to mount: failed to apply loader entry persona (@deepseek-ai/dsh-persona): invalid config:\n  - $.prefix missing required value (at prefix) (/private/tmp/dsh-preset-compat-qc02v6hh/home/.dsh/.agent-presets/migration-authored-standard/agent.cordis.yml)\n    at mountPreset (file:///private/tmp/dsh-015-alpha2-catch-up/apps/desktop-mint/dist/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js:933:9)\n    at async file:///private/tmp/dsh-015-alpha2-catch-up/apps/desktop-mint/dist/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js:1789:6\n    at async Proxy.mount (file:///private/tmp/dsh-015-alpha2-catch-up/apps/desktop-mint/dist/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-agent-presets/lib/index.js:1503:21)\n    at async setup (file:///private/tmp/dsh-preset-compat-qc02v6hh/observer.mjs:24:105)\n    at async raceAbort (file:///private/tmp/dsh-015-alpha2-catch-up/apps/desktop-mint/dist/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js:1406:10)\n    at async Proxy.setupAndPublish (file:///private/tmp/dsh-015-alpha2-catch-up/apps/desktop-mint/dist/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js:1856:6)"
+      }
+    },
+    "restore": {
+      "preset": "migration-authored-standard",
+      "sessionSucceeded": true,
+      "before": {
+        "presetHash": "f04fbc6ec6d38aab78f18690c293ddcb76293107f7e6cd157904b7c0e83094bd",
+        "settingsHash": "3b510aa4e6656308e2df44d418777ceb40cc1edfb9de8316fbd92e0f0957d7c2"
+      },
+      "after": {
+        "presetHash": "f04fbc6ec6d38aab78f18690c293ddcb76293107f7e6cd157904b7c0e83094bd",
+        "settingsHash": "3b510aa4e6656308e2df44d418777ceb40cc1edfb9de8316fbd92e0f0957d7c2"
+      }
+    }
+  }
+}

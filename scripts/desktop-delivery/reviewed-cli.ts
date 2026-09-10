@@ -95,6 +95,7 @@ export async function reviewedCommand(operation: string, values: Record<string, 
   }
   if (operation === 'release-manifest') return releaseManifest(config, required('config'), {
     root, directory: required('directory'), candidatePath: required('candidate'), nativeNames: required('native').split(','),
+    ...(typeof values['migration-reports'] === 'string' ? { migrationNames: values['migration-reports'].split(',') } : {}),
     dmgNames: required('reports').split(','), version: required('version'), releaseKind: required('kind'),
     notesPath: required('notes'), compatibilityPath: required('compatibility'), predecessorPath: required('baseline'),
     run: { commit: required('workflow-commit'), id: Number(required('run-id')), attempt: Number(required('run-attempt')) },

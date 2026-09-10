@@ -1,0 +1,12 @@
+{
+  "status": "approved",
+  "scope": "design-only",
+  "author": "/root/preset_compat_decision",
+  "reviewer": "/root/classification_review",
+  "proposalSha256": "d19640306b35e02840e01104a6cacce04a568fa2ec12440810e8a2842d220856",
+  "findings": [],
+  "basis": "Existing-history exact read incorrectly uses fresh-fork validation. Lossless JSON snapshots plus detached restoration preserve validation, and returning original loaded snapshots excludes the temporary marker. Corpus live/cold handling remains unchanged. Source and attempt31 receipt hashes match.",
+  "testsExecuted": false,
+  "implementationReady": false,
+  "remainingGate": "Accepted bilingual persistence, normative affected readiness and root confirmation before affected edit"
+}

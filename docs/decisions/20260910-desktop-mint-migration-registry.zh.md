@@ -16,7 +16,7 @@ Status: Accepted
 
 基线和预期目标均使用 desktop-mint，Bundle 顺序为 `@deepseek-ai/dsh-base`、`@deepseek-ai/dsh-web-app`、`@deepseek-ai/dsh-desktop-mint`；`patchReload` 为 live，`ui-session-notifications.defaultMode` 为 background。目标共享 base/Web 和标准 preset 来自 `b2e3b2a0125854567a4a5fcba75782e42fe84901`。保留下游 profile 声明及 Mint Bundle。固定并计算 `packages/boot/app-boot/src/profile.ts`、`packages/bundle/base/cordis.patch.yml`、`packages/bundle/web-app/cordis.patch.yml`、`packages/bundle/desktop-mint/cordis.patch.yml`、`packages/preset/agent-presets/presets/standard/agent.cordis.yml` 及每个引用内置行的摘要。要求解析后的 Bundle 顺序正确，且 Mint 通知行恰好出现一次。
 
-Mint 原生适配器移至 `apps/desktop-mint`，保留 `io.github.mintgao.dsh-desktop`、品牌、浏览器身份及手动更新。上游 `apps/desktop` 与 `apps/desktop-host` 保持独立。会话使用 `$DSH_HOME/sessions`；JSON 存储使用 `$DSH_HOME/storages`；查询 SQLite 使用 `:memory:`；不选择通用 SQLite。资格认定专用覆盖只选择确定性无密钥提供者和私有路径，不替换持久化、设置、凭据、工作区、附件、投影或原生实现。第三方插件、自定义后端替换和任意覆盖不属于该有限组合。
+Mint 原生适配器移至 `apps/desktop-mint`，保留 `io.github.mintgao.dsh-desktop`、品牌、浏览器身份及手动更新。上游 `apps/desktop` 与 `apps/desktop-host` 保持独立。会话使用 `$DSH_HOME/sessions`；JSON 存储使用 `$DSH_HOME/storages`；查询 SQLite 配置 `:memory:` 和 `openAt: never`，不打开 FTS 索引；不选择通用 SQLite。资格认定专用覆盖只选择确定性无密钥提供者和私有路径，不替换持久化、设置、凭据、工作区、附件、投影或原生实现。第三方插件、自定义后端替换和任意覆盖不属于该有限组合。
 
 下方源码路径指向目标上游版本，保留的下游 Mint Bundle、通知代码，以及明确标识的基线或计划 Mint 原生路径除外。不声称 Mint 专用文件存在于上游目标。相对 `src` 简写已展开至所属包。场景证据必须绑定精确最终解析组合。
 
@@ -33,7 +33,7 @@ Mint 原生适配器移至 `apps/desktop-mint`，保留 `io.github.mintgao.dsh-d
 | `packages/boot/app-boot/src/index.ts` | env-layer-precedence：继承、项目及主目录优先级，文件不变；env-bootstrap-refusal：拒绝项目代理与不允许的引导及 TLS 设置，接纳主目录代理。 |
 | `packages/workspace/workspace/src/spec.ts`, `packages/workspace/workspace/src/index.ts`, `packages/workspace/workspace/src/paths.ts` | workspace-roundtrip：v2 标题、顺序、归档、会话所有权及规范路径；workspace-interrupted-mutation：待处理创建和删除恢复；workspace-path-refusal：拒绝新的相对路径，不修改现有记录。 |
 | `packages/session/session-projection-cache/src/spec.ts`, `packages/session/session-projection-cache/src/index.ts`; `packages/storage/storage-json/src/per-record-unit.ts` | projection-v4-v7-rebuild：允许旧列表提示，但不复用未绑定的折叠状态，并写入当前检查点；projection-invalid-backup：损坏记录逐字节备份，不损害其他会话。 |
-| `packages/session-query/session-query-sqlite/src/index.ts`, `packages/session-query/session-query-sqlite/src/schema.ts`; `packages/storage/storage-sqlite/src/schema.ts` | query-rebuild：从权威恢复日志重建内存查询；storage-selection：选择 JSON，不新增持久 SQLite 后端。 |
+| `packages/session-query/session-query-sqlite/src/index.ts`, `packages/session-query/session-query-sqlite/src/schema.ts`; `packages/storage/storage-sqlite/src/schema.ts` | query-rebuild：从权威恢复日志重建精确读取、列表及筛选结果，重启后仍验证；在 `openAt: never` 下，两个全文搜索 API 均以 `SESSION_QUERY_SEARCH_DISABLED` 拒绝，不声称重建 FTS 索引。storage-selection：选择 JSON，不产生持久查询数据库或新增 SQLite 后端。 |
 | `packages/attachment/attachment-local/src/store.ts`, `packages/attachment/attachment-local/src/file-store.ts`, `packages/attachment/attachment-local/src/index.ts` | attachments-old-images：保留引用的原始字节；attachments-new-files：对象和别名重启后保留；attachments-conflict-interruption：拒绝冲突，中断暂存不能发布虚假引用。 |
 | `packages/llm/llm-deepseek/src/upload-index.ts` | upload-index-preserved：合成 files-v3 记录无需提供者请求即可保留。 |
 | `packages/boot/app-boot/src/profile.ts`; `packages/preset/agent-presets/src/discovery.ts`, `packages/preset/agent-presets/src/authoring.ts` | profile-preserved：desktop-mint 包、补丁及依赖；preset-authored-preserved：保留基线用户编写且使用受支持内置能力的 preset 元数据、字节、发现及新会话行为；不得迁往保留 desktop profile。 |

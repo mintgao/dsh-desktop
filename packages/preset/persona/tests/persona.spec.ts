@@ -163,17 +163,83 @@ describe('the persona row', () => {
     ])
   })
 
-  it('keeps runtime context by default when apply bypasses schema defaults', async () => {
+  it('keeps runtime context when normalized input reaches apply', async () => {
     const ctx = await harness('deployment identity')
     const key: ScopeKey = { agent: 'a1' }
     ctx.systemPrompt.context({ name: 'policy', order: 1, text: 'global policy' })
 
     await ctx.plugin(Object.assign((inner: Context) => {
-      Persona.apply(createScope(inner, key).ctx, { prefix: 'Scoped identity.' })
+      Persona.apply(createScope(inner, key).ctx, Persona.Config({ prefix: 'Scoped identity.' }))
     }, { inject: ['systemPrompt'] }))
 
     expect((await ctx.systemPrompt.assemble({ scope: key })).contexts).toEqual([
       { name: 'policy', text: 'global policy' },
     ])
+  })
+})
+
+
+describe('persona input normalization', () => {
+  it.each([
+    {}, { text: null }, { prefix: null }, { text: 1 }, { prefix: 1 },
+    { text: 'same', prefix: 'same' }, { text: '', suffix: '' },
+    { text: 'old', prefix: undefined }, { prefix: 'new', text: undefined },
+    { prefix: 'new', text: null }, { text: 'old', complete: 'yes' },
+  ])('rejects invalid or mixed input without modifying it: %j', (input) => {
+    const before = structuredClone(input)
+    // @ts-expect-error Deliberately invalid serialized configuration must fail runtime validation.
+    expect(() => Persona.Config(input)).toThrow()
+    expect(input).toEqual(before)
+  })
+
+  it('preserves legacy whitespace and explicit policy while leaving authored input unchanged', () => {
+    const input = { text: '  {{cwd}}\n', complete: true, includeRuntimeContext: false, unrelated: 'retained' }
+    const before = structuredClone(input)
+    expect(Persona.Config(input)).toEqual({ prefix: input.text, suffix: '', complete: true, includeRuntimeContext: false })
+    expect(input).toEqual(before)
+    expect(Persona.Config({ text: '' })).toEqual({ prefix: '', suffix: '', complete: false, includeRuntimeContext: true })
+  })
+
+  it('rejects a mixed row before registration and permits a later valid mount', async () => {
+    const ctx = await harness('Deployment.')
+    try {
+      const key: ScopeKey = { agent: 'rejected-legacy' }
+      const scope = createScope(ctx, key)
+      // @ts-expect-error A mixed authored row must fail before registering a persona.
+      await expect(scope.ctx.plugin(Persona, { text: 'legacy', prefix: 'modern' })).rejects.toThrow(/cannot coexist/)
+      expect(await personaText(ctx, key)).toBe('Deployment.')
+      await scope.ctx.plugin(Persona, { text: 'Accepted.' })
+      expect(await personaText(ctx, key)).toBe('Accepted.')
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('honors legacy complete mode and runtime-context suppression without leaking into sibling scopes', async () => {
+    const ctx = await harness('Deployment.')
+    try {
+      ctx.systemPrompt.context({ name: 'policy', order: 1, text: 'Runtime.' })
+      const key: ScopeKey = { agent: 'legacy-complete' }
+      await createScope(ctx, key).ctx.plugin(Persona, { text: 'Only legacy.', complete: true, includeRuntimeContext: false })
+      const scoped = await ctx.systemPrompt.assemble({ scope: key })
+      expect(renderPrompt(scoped)).toBe('Only legacy.')
+      expect(scoped.contexts).toEqual([])
+      expect((await ctx.systemPrompt.assemble()).contexts).toEqual([{ name: 'policy', text: 'Runtime.' }])
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('renders legacy input in its own scope and restores deployment sections on disposal', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt, { personaPrefix: 'Deployment.', personaSuffix: 'Environment.' })
+      ctx.systemPrompt.variable('cwd', () => '/synthetic')
+      const key: ScopeKey = { agent: 'legacy' }
+      const scope = createScope(ctx, key)
+      const fiber = await scope.ctx.plugin(Persona, { text: 'Legacy {{cwd}}.' })
+      const scoped = renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))
+      expect(scoped).toContain('Legacy /synthetic.')
+      expect(scoped).not.toContain('Environment.')
+      expect(await personaText(ctx)).toBe('Deployment.')
+      await fiber.dispose()
+      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))).toContain('Environment.')
+    } finally { await ctx.fiber.dispose() }
   })
 })

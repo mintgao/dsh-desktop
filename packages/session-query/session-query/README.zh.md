@@ -44,6 +44,8 @@ kind: "package-reference"
 
 不带正文的记录只公开 `SessionHeader.isSeeded`。返回事件正文的读取（`readSession`、`readSurface`、`readEvent`）与保留的 `SessionObservation` 值还携带精确 `inheritedEventCount`，因此调用方无需从日志推断切点即可区分继承事件与自有事件。
 
+精确读取通过分离恢复与无损 JSON 快照验证完整既有历史，包括已有自身续写的种子子会话。返回观测到的原始日志，不增加恢复标记，也不挂接 Session 或写入存储。参见[查询恢复决策](../../../docs/decisions/20260910-seeded-session-query-restoration.zh.md)。
+
 ### 过滤器
 
 `SessionResultFilter` 按 id、可空 cwd、创建时间范围、可空父级或来源可用性缩小会话范围；`SessionEventResultFilter` 按 seq/时间范围、事件类型、表层或字面文本缩小事件范围。过滤器数组使用 AND 连接，同一子句内的列表值使用 OR；空列表值不匹配任何内容，范围包含端点，格式错误的范围或未知的封闭联合值以 `SESSION_QUERY_INVALID_FILTER` 失败。

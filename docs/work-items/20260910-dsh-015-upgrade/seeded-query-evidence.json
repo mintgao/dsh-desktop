@@ -1,0 +1,43 @@
+{
+  "purpose": "seeded-query-synthetic-failure-summary",
+  "qualification": false,
+  "deliveredBaseline": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
+  "targetUpstream": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+  "sourceReceiptSha256": "711698ab289cfccff5bc7d4915eb4e1f2a333097aa8f541aa89a2af994839dde",
+  "observation": {
+    "error": "Error: seeded session constructor seed must equal its inherited prefix",
+    "stack": "Error: seeded session constructor seed must equal its inherited prefix\n    at new Session (file:///private/tmp/dsh-persona-candidate-arm64/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-session/lib/index.js:1084:101)\n    at Session.create (file:///private/tmp/dsh-persona-candidate-arm64/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-session/lib/index.js:1045:10)\n    at Proxy.readSession (file:///private/tmp/dsh-persona-candidate-arm64/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/dsh-session-query/lib/index.js:1075:11)\n    at async richHistory (file:///private/var/folders/h4/w38_wt0905x9qk4w5b4gfw8w0000gn/T/dsh-agent-migration-yna2Zc/observer.mjs:255:27)\n    at async Object.apply [as callback] (file:///private/var/folders/h4/w38_wt0905x9qk4w5b4gfw8w0000gn/T/dsh-agent-migration-yna2Zc/observer.mjs:660:39)\n    at async Fiber._reload (file:///private/tmp/dsh-persona-candidate-arm64/mac-arm64/DSH%20Desktop.app/Contents/Resources/backend/node_modules/@deepseek-ai/cordis/lib/index.js:1355:5)"
+  },
+  "baselineChild": {
+    "id": "session-789eb46c-7122-4949-8690-4f62fa5cd3da",
+    "seedLength": 60,
+    "eventCount": 75
+  },
+  "files": {
+    "baselineBackup": [
+      {
+        "path": ".dsh/sessions/--private-var-folders-h4-w38_wt0905x9qk4w5b4gfw8w0000gn-T-dsh-agent-migration-yna2Zc-workspace--/session-789eb46c-7122-4949-8690-4f62fa5cd3da/session.jsonl.zstd",
+        "sha256": "4fe000e026881c82856780203bf548587528b54d66c8cac3c84fcd1c1b855077",
+        "size": 26932
+      }
+    ],
+    "target": [
+      {
+        "path": ".dsh/sessions/--private-var-folders-h4-w38_wt0905x9qk4w5b4gfw8w0000gn-T-dsh-agent-migration-yna2Zc-workspace--/session-789eb46c-7122-4949-8690-4f62fa5cd3da/session.jsonl.zstd",
+        "sha256": "4fe000e026881c82856780203bf548587528b54d66c8cac3c84fcd1c1b855077",
+        "size": 26932
+      },
+      {
+        "path": ".dsh/sessions/--private-var-folders-h4-w38_wt0905x9qk4w5b4gfw8w0000gn-T-dsh-agent-migration-yna2Zc-workspace--/session-789eb46c-7122-4949-8690-4f62fa5cd3da/session.v3.jsonl.zstd",
+        "sha256": "a2ce05f04124f8762cbd2cc9ec5d8c2aaad046cd2399084312a27688aa5b5313",
+        "size": 27836
+      },
+      {
+        "path": ".dsh/sessions/--private-var-folders-h4-w38_wt0905x9qk4w5b4gfw8w0000gn-T-dsh-agent-migration-yna2Zc-workspace--/session-789eb46c-7122-4949-8690-4f62fa5cd3da/session.lock",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size": 0
+      }
+    ]
+  },
+  "scope": "Actual delivered fork and continuation, successful target migration/resume/turn, followed by public query refusal. No target qualification."
+}

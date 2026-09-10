@@ -1,0 +1,32 @@
+{
+  "reviewer": "classification_review",
+  "author": "preset_compat_decision",
+  "mode": "independent-agent",
+  "result": "approved",
+  "scope": "design only, including schema/catalog addendum",
+  "proposal": "phase-b-preset-compatibility-proposal.md",
+  "sha256": "aa8c9d6f73aae19dfb92de7bd89d46a1ebea82cfb5f03bd43039d2b4d11121e8",
+  "implementationGate": "blocked until bilingual decision and affected readiness persisted and orchestrator confirms",
+  "remainingEvidence": [
+    "parser and refusal cases",
+    "logged persona semantics",
+    "actual delivered authored preset new-session and restart",
+    "compatible non-Mint packed composition",
+    "complete baseline recovery",
+    "catalog and documentation gates"
+  ],
+  "runtimeQualification": false,
+  "testsRunByReviewer": false,
+  "catalogInputSelectionReview": {
+    "author": "preset_compat_decision",
+    "reviewer": "classification_review",
+    "mode": "independent-agent",
+    "result": "approved",
+    "scope": "bounded catalog-selection correction, design only",
+    "proposal": "phase-b-preset-catalog-selection-addendum.md",
+    "sha256": "92f2a980b33b45c5a5bf2c79b83fc08aa6213109a3b39f87a8de1e2d57e89170",
+    "gate": "pending durable correction and root confirmation",
+    "runtimeQualification": false,
+    "testsRun": false
+  }
+}

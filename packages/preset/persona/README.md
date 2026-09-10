@@ -37,12 +37,15 @@ Mount this row inside a preset composition to give that preset's sessions their 
 
 | Field | Default | Meaning |
 |---|---|---|
-| `prefix` | required | Persona prose rendered as the `deployment:persona-prefix` section |
+| `prefix` | required without `text` | Persona prose rendered as the `deployment:persona-prefix` section |
+| `text` | absent | Alternative whole-persona template; excludes `prefix` and `suffix` |
 | `suffix` | `''` | Template for `deployment:persona-suffix`; omitted or empty text shadows the global suffix away |
 | `complete` | `false` | Use only the rendered prefix as the system prompt; ignore the suffix |
 | `includeRuntimeContext` | `true` | Include dynamic runtime-context snapshots for this agent scope; false suppresses every context contribution without disabling its owning services |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-persona) is the exhaustive source for every accepted field and its JSDoc.
+
+The parser accepts either `prefix` with optional `suffix`, or `text` alone. It normalizes `text` verbatim to a prefix and an empty suffix in memory, preserving authored files and settings. Empty text shadows both deployment sections away. Mixed forms reject even when values are equal or empty. `Config` describes accepted input; `ResolvedConfig` describes the normalized values passed to registration. See the [compatibility decision](../../../docs/decisions/20260910-persona-authored-preset-compatibility.md) for the bounded delivered-preset guarantee.
 
 ### Persona behavior
 

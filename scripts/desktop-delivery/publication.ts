@@ -1,4 +1,5 @@
 /** Digest-approved publication and recovery over immutable tags and an existing matching draft. */
+import { migrationEvidence } from './migration-evidence.ts'
 import { verifyLiveCatchUp, verifyRemoteAssessment } from './catch-up.ts'
 import { compareVersions } from 'compare-versions'
 import { execFileSync } from 'node:child_process'
@@ -39,17 +40,22 @@ async function downloaded(api: GitHub, path: string): Promise<Uint8Array> {
   if (!(bytes instanceof Uint8Array)) throw new Error('GitHub download did not return bytes')
   return bytes
 }
-async function archiveFiles(api: GitHub, repository: string, artifactId: number, expected: ReleaseFile[]): Promise<void> {
+async function archiveFiles(
+  api: GitHub, repository: string, artifactId: number, expected: ReleaseFile[],
+): Promise<Map<string, Uint8Array>> {
   const temporary = mkdtempSync(join(tmpdir(), 'dsh-release-archive-'))
   try {
     const path = join(temporary, 'bundle.zip')
     writeFileSync(path, await downloaded(api, `/repos/${repository}/actions/artifacts/${String(artifactId)}/zip`))
     const names = execFileSync('unzip', ['-Z1', path], { encoding: 'utf8' }).trim().split('\n')
     if (names.length !== expected.length || new Set(names).size !== names.length || names.some(name => !expected.some(file => file.name === name))) throw new Error('Qualification archive file set differs')
+    const payload = new Map<string, Uint8Array>()
     for (const file of expected) {
       const bytes = execFileSync('unzip', ['-p', path, file.name], { maxBuffer: file.size + 1024 })
       if (bytes.length !== file.size || digest(bytes) !== file.sha256) throw new Error('Qualification archive bytes differ from approved local payload')
+      payload.set(file.name, bytes)
     }
+    return payload
   } finally { rmSync(temporary, { recursive: true, force: true }) }
 }
 
@@ -58,11 +64,13 @@ async function archiveFiles(api: GitHub, repository: string, artifactId: number,
  * @param manifest - final qualification metadata.
  * @param api - GitHub reads.
  * @param files - exact local payload including manifest, absent when retained release assets are authoritative.
+ * @param withdrawal - only withdrawal may rely on identity without reauthorizing data compatibility.
  */
 export async function verifyQualification(config: DeliveryConfig,
   manifest: Record<string, unknown>,
   api: GitHub,
-  files?: ReleaseFile[]): Promise<void> {
+  files?: ReleaseFile[],
+  withdrawal = false): Promise<void> {
   const identity = object(manifest.workflow)
   const run = object(await api.request('GET', `/repos/${config.repository}/actions/runs/${String(identity.runId)}`))
   if (run.event !== 'workflow_dispatch' || run.head_branch !== config.defaultBranch || run.path !== identity.path || run.head_sha !== identity.commit || run.run_attempt !== identity.attempt || run.status !== 'completed' || run.conclusion !== 'success' || object(run.repository).id !== config.repositoryId) throw new Error('Qualification run identity, attempt or conclusion changed')
@@ -88,20 +96,77 @@ export async function verifyQualification(config: DeliveryConfig,
   if (object(candidateCommit.tree).sha !== object(finalization.tree).sha) throw new Error('Source changed after lock finalization')
   const changes = object(await api.request('GET', `/repos/${config.repository}/compare/${string(seed.commit)}...${string(object(history[0]).sha)}`)).files
   if (!Array.isArray(changes) || changes.length !== 1 || object(changes[0]).filename !== config.sourceLockPath) throw new Error('Finalization changed more than the source lock')
+  let changedFormats = false
   for (const [path, expected] of [['release-notes.md', manifest.releaseNotesDigest], ['data-compatibility.json', manifest.dataCompatibilityDigest]]) {
     const document = object(await api.request('GET', `/repos/${config.repository}/contents/.github/desktop-delivery/${String(path)}?ref=${string(manifest.downstreamCommit)}`))
-    if (digest(Buffer.from(textField(document.content), 'base64')) !== expected) throw new Error('Published assessment differs from candidate source')
+    const content = Buffer.from(textField(document.content), 'base64')
+    if (digest(content) !== expected) throw new Error('Published assessment differs from candidate source')
+    if (path === 'data-compatibility.json') {
+      const compatibility = object(JSON.parse(content.toString()) as unknown)
+      if (typeof compatibility.persistedFormatsChanged !== 'boolean') throw new Error('Missing source format assessment')
+      changedFormats = compatibility.persistedFormatsChanged
+    }
   }
   if (range !== null) {
     const upstream = object(await api.request('GET', `/repos/${config.repository}/compare/${range.to.commit}...${hex(seed.commit, 40)}`))
     if (!['ahead', 'identical'].includes(String(upstream.status))) throw new Error('Catch-up target is absent from qualified seed ancestry')
-    await verifyRemoteAssessment(config, api, hex(seed.commit, 40), range, true)
+    await verifyRemoteAssessment(config, api, hex(seed.commit, 40), range, !changedFormats && !withdrawal)
   }
   if (files !== undefined) {
     const artifacts = (await pages(api, `/repos/${config.repository}/actions/runs/${String(identity.runId)}/artifacts`, 'artifacts')).filter(item => item.name === 'desktop-release-bundle')
     if (artifacts.length !== 1 || artifacts[0]?.expired !== false) throw new Error('Missing or expired qualification artifact bundle')
-    await archiveFiles(api, config.repository, Number(artifacts[0].id), files)
+    const payload = await archiveFiles(api, config.repository, Number(artifacts[0].id), files)
+    if (changedFormats && !withdrawal) migrationEvidence(manifest, (name) => {
+      const bytes = payload.get(name)
+      if (bytes === undefined) throw new Error(`Qualification archive omits migration payload ${name}`)
+      return bytes
+    })
+  } else if (changedFormats && !withdrawal) {
+    const payload = await retainedMigrationPayload(config, manifest, api)
+    migrationEvidence(manifest, (name) => {
+      const bytes = payload.get(name)
+      if (bytes === undefined) throw new Error(`Retained release omits migration payload ${name}`)
+      return bytes
+    })
   }
+}
+
+async function retainedMigrationPayload(
+  config: DeliveryConfig, manifest: Record<string, unknown>, api: GitHub,
+): Promise<Map<string, Uint8Array>> {
+  const remote = await findRelease(config, string(manifest.tag), api)
+  if (remote === undefined) throw new Error('Missing retained migration release')
+  const assets = await pages(api, `/repos/${config.repository}/releases/${String(remote.id)}/assets`)
+  const payload = new Map<string, Uint8Array>()
+  const load = async (name: string): Promise<Uint8Array> => {
+    const prior = payload.get(name)
+    if (prior !== undefined) return prior
+    if (!Array.isArray(manifest.files)) throw new Error('Missing migration file inventory')
+    const descriptors = manifest.files.map(object).filter(file => file.name === name)
+    const matches = assets.filter(asset => asset.name === name)
+    if (descriptors.length !== 1 || matches.length !== 1 || matches[0]?.size !== descriptors[0]?.size) throw new Error('Retained migration asset identity mismatch')
+    const bytes = await downloaded(api, `/repos/${config.repository}/releases/assets/${String(matches[0]?.id)}`)
+    if (bytes.length !== descriptors[0]?.size || digest(bytes) !== descriptors[0].sha256) throw new Error('Retained migration bytes changed')
+    payload.set(name, bytes)
+    return bytes
+  }
+  await load('data-compatibility.json')
+  await load('migration-policy.json')
+  if (!Array.isArray(manifest.native)) throw new Error('Missing migration native evidence')
+  for (const entry of manifest.native.map(object)) await load(string(object(entry.evidence).name))
+  const migration = object(manifest.migration)
+  if (!Array.isArray(migration.reports)) throw new Error('Missing migration reports')
+  for (const entry of migration.reports.map(object)) {
+    const report = object(JSON.parse(Buffer.from(await load(string(object(entry.evidence).name))).toString()) as unknown)
+    if (!Array.isArray(report.scenarios)) throw new Error('Missing retained migration scenarios')
+    const names = [...Object.values(object(report.inputs)), ...report.scenarios.flatMap((value) => {
+      const scenario = object(value)
+      if (!Array.isArray(scenario.evidenceFiles)) throw new Error('Missing retained migration evidence')
+      return scenario.evidenceFiles as unknown[]
+    })].map(value => string(object(value).name))
+    for (const name of names) await load(name)
+  }
+  return payload
 }
 
 async function verifyAssets(config: DeliveryConfig,
@@ -234,7 +299,7 @@ export async function promotionPlan(config: DeliveryConfig,
   api: GitHub): Promise<Record<string, unknown>> {
   if (!['promote', 'withdraw', 'restore'].includes(operation)) throw new Error('Unsupported release mutation')
   const checked = operation === 'withdraw' ? withdrawalManifest(config, manifestPath) : checkedManifest(config, manifestPath, directory)
-  await verifyQualification(config, checked.manifest, api, operation === 'promote' ? payload(manifestPath, checked.files) : undefined)
+  await verifyQualification(config, checked.manifest, api, operation === 'promote' ? payload(manifestPath, checked.files) : undefined, operation === 'withdraw')
   if (operation === 'promote') await verifyDelivery(config, checked.manifest, directory, checked.digest, api)
   return operationPlan(config, operation, { manifestDigest: checked.digest, tag: checked.manifest.tag, candidate: checked.manifest.downstreamCommit, qualification: checked.manifest.workflow, mutationRun, nextAction: 'Review the exact plan; prepare its immutable tag and empty draft while this workflow waits for approval.' })
 }
@@ -313,7 +378,7 @@ export async function mutateRelease(config: DeliveryConfig,
   const checked = plan.operation === 'withdraw' ? withdrawalManifest(config, manifestPath) : checkedManifest(config, manifestPath, directory)
   if (checked.digest !== plan.manifestDigest || checked.manifest.tag !== plan.tag || checked.manifest.downstreamCommit !== plan.candidate) throw new Error('Manifest differs from protected approval')
   await verifyMutationRun(config, plan, api, false)
-  await verifyQualification(config, checked.manifest, api, plan.operation === 'promote' ? payload(manifestPath, checked.files) : undefined)
+  await verifyQualification(config, checked.manifest, api, plan.operation === 'promote' ? payload(manifestPath, checked.files) : undefined, plan.operation === 'withdraw')
   if (await tagCommit(config, string(plan.tag), api) !== plan.candidate) throw new Error('Publisher cannot create or substitute the approved tag')
   let remote = await findRelease(config, string(plan.tag), api)
   if (remote === undefined || (plan.operation === 'withdraw' ? !textField(remote.body).includes(`Manifest SHA-256: ${checked.digest}`) : remote.body !== releaseBody(directory, checked.digest)) || remote.prerelease !== true) throw new Error('Existing matching draft or release is required')

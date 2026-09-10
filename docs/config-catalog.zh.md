@@ -1662,27 +1662,40 @@ export interface PresetSpec {
 需要：`systemPrompt`
 
 ```ts config-catalog
-/** Plugin config: the persona text this composition contributes. */
-export interface Config {
-  /**
-   * Persona prose rendered as the `deployment:persona-prefix` section. A template:
-   * complete `{{…}}` groups interpolate strictly against registered prompt
-   * variables. Empty text drops the section at render, matching the registry.
-   */
-  prefix: string
-  /**
-   * Persona suffix template rendered after first-party guidance. Omitted or empty
-   * text shadows the deployment suffix away; interpolation is strict.
-   */
-  suffix?: string
-  /** Make the prefix the complete system prompt, suppressing the suffix and every other section. */
+/**
+ * Accepted persona input. Legacy text becomes an exact prefix with an empty
+ * suffix; text cannot coexist with prefix or suffix, including empty values.
+ * Both forms interpolate registered prompt variables strictly.
+ */
+export type Config = PersonaPolicy & (
+  | {
+    /** Whole persona template, normalized verbatim to prefix with an empty suffix. */
+    text: string
+    /** Prohibited alongside legacy text, including an explicitly undefined value. */
+    prefix?: never
+    /** Prohibited alongside legacy text, including an empty or undefined value. */
+    suffix?: never
+  }
+  | {
+    /** Prefix template rendered before first-party guidance. */
+    prefix: string
+    /** Suffix template rendered after guidance; omitted or empty shadows deployment suffix. */
+    suffix?: string
+    /** Prohibited alongside prefix, including an explicitly undefined value. */
+    text?: never
+  }
+)
+
+/** Persona policy shared by both accepted configuration forms. */
+export interface PersonaPolicy {
+  /** Make the prefix the complete system prompt, suppressing every other section. */
   complete?: boolean
-  /** Suppress dynamic runtime-context snapshots for this persona's agent scope. */
+  /** Whether this agent scope retains dynamic runtime-context snapshots. */
   includeRuntimeContext?: boolean
 }
 ```
 
-来源：[`packages/preset/persona/src/index.ts:30`](../packages/preset/persona/src/index.ts)
+来源： [`packages/preset/persona/src/index.ts:42`](../packages/preset/persona/src/index.ts)
 
 <a id="deepseek-aidsh-plan-mode"></a>
 

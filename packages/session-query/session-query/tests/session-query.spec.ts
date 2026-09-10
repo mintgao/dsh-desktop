@@ -1,7 +1,7 @@
 import { createUserMessage, createMessage } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it, vi } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
-import SessionStore, { SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionLogOffset, SessionSeq, SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SessionEvent, SessionHeader, SessionId as SessionIdType } from '@deepseek-ai/dsh-session'
 import SessionPersistence, {
@@ -44,7 +44,7 @@ function eventLog(text = 'hello'): SessionEvent[] {
 }
 
 class TestHandle implements SessionHandle {
-  readonly inheritedEventCount = SessionLogOffset(0)
+  get inheritedEventCount(): SessionLogOffset { return TestPersistence.entries.get(this.id)?.inheritedEventCount ?? SessionLogOffset(0) }
 
   constructor(
     readonly id: SessionIdType,
@@ -100,7 +100,7 @@ function entryRevision(entry: { events: SessionEvent[] }): SessionPersistenceRev
 }
 
 class TestPersistence extends SessionPersistence {
-  static entries = new Map<SessionIdType, { meta: SessionHeader; events: SessionEvent[] }>()
+  static entries = new Map<SessionIdType, { meta: SessionHeader; events: SessionEvent[]; inheritedEventCount?: SessionLogOffset }>()
   static listFailure: unknown
   static listOverride: ((signal?: AbortSignal) => Promise<SessionPersistenceSnapshot[]>) | undefined
   static readFailure: unknown
@@ -110,12 +110,13 @@ class TestPersistence extends SessionPersistence {
     signal?: AbortSignal,
   ) => Promise<{ meta: SessionHeader; events: SessionEvent[] }>) | undefined
   static afterList: (() => void) | undefined
+  static openAccesses: SessionAccess[] = []
   static listCalls = 0
   static readCalls: SessionIdType[] = []
   static listSignals: Array<AbortSignal | undefined> = []
   static readSignals: Array<AbortSignal | undefined> = []
 
-  static reset(entries: readonly { meta: SessionHeader; events: SessionEvent[] }[] = []): void {
+  static reset(entries: readonly { meta: SessionHeader; events: SessionEvent[]; inheritedEventCount?: SessionLogOffset }[] = []): void {
     this.entries = new Map(entries.map(entry => [entry.meta.id, structuredClone(entry)]))
     this.listFailure = undefined
     this.listOverride = undefined
@@ -123,6 +124,7 @@ class TestPersistence extends SessionPersistence {
     this.readEffect = undefined
     this.readOverride = undefined
     this.afterList = undefined
+    this.openAccesses = []
     this.listCalls = 0
     this.readCalls = []
     this.listSignals = []
@@ -138,6 +140,7 @@ class TestPersistence extends SessionPersistence {
   async flush(): Promise<void> {}
 
   open(id: SessionIdType, access: SessionAccess): Promise<SessionHandle> {
+    TestPersistence.openAccesses.push(access)
     const entry = TestPersistence.entries.get(id)
     if (entry === undefined) return Promise.reject(new SessionPersistenceNotFoundError(id))
     return Promise.resolve(new TestHandle(id, structuredClone(entry.meta), access))
@@ -462,6 +465,113 @@ describe.each(cancellableExactReads.filter(read => read.inspects))(
 )
 
 describe('session-query exact reads', () => {
+  it.each([false, true])('reads live and cold seeded history with own continuation=%s without adding a marker', async (continued) => {
+    const ctx = await liveContext()
+    try {
+      const parent = ctx.sessions.create(SessionId('query-parent'))
+      parent.append('turn/start', { turn: 1 })
+      parent.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'inherited' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+      parent.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      const child = ctx.sessions.fork(parent, undefined, SessionId('query-child'))
+      if (continued) {
+        child.append('turn/start', { turn: 2 })
+        child.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'own continuation' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+        child.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+      }
+      const expected = { session: child.header, inheritedEventCount: child.inheritedEventCount, events: child.snapshotEvents() }
+      const lifecycle = vi.fn()
+      ctx.on('session/created', lifecycle)
+      ctx.on('session/disposed', lifecycle)
+      const live = await ctx.sessionQuery.readSession(child.id)
+      expect(live).toEqual(expected)
+      expect(ctx.sessions.get(child.id)).toBe(child)
+      expect(lifecycle).not.toHaveBeenCalled()
+      Object.assign(live.events[0]!, { time: -999 })
+      expect(child.snapshotEvents()).toEqual(expected.events)
+      Object.assign(live.session, { createdAt: -999 })
+      expect(child.header.createdAt).toBe(expected.session.createdAt)
+      expect(() => Session.create(child.id, expected.events, child.header, child.inheritedEventCount)).toThrow('seed must equal')
+      const cold = await liveContext()
+      try {
+        TestPersistence.reset([{ meta: child.header, events: expected.events, inheritedEventCount: child.inheritedEventCount }])
+        await cold.plugin(TestPersistence)
+        const stored = JSON.stringify([...TestPersistence.entries])
+        const create = vi.fn()
+        cold.on('session/created', create)
+        const snapshot = await cold.sessionQuery.readSession(child.id)
+        expect(snapshot).toEqual(expected)
+        expect(cold.sessions.get(child.id)).toBeUndefined()
+        expect(create).not.toHaveBeenCalled()
+        expect(JSON.stringify([...TestPersistence.entries])).toBe(stored)
+        expect(TestPersistence.openAccesses).toEqual(['read'])
+        const restored = Session.fromRestore(child.id, snapshot.events, snapshot.session, snapshot.inheritedEventCount, 'detached')
+        const detach = cold.sessions.enter(restored)
+        try {
+          restored.append('turn/start', { turn: continued ? 3 : 2 })
+          restored.append('turn/end', { turn: continued ? 3 : 2, reason: { kind: 'completed' } })
+          expect(await cold.sessionQuery.readSession(child.id)).toEqual({ session: restored.header,
+            inheritedEventCount: restored.inheritedEventCount, events: restored.snapshotEvents() })
+        } finally { detach() }
+      } finally { await cold.fiber.dispose() }
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each([
+    ['header JSON', (meta: SessionHeader, _events: SessionEvent[]) => { Object.assign(meta, { extra: Number.NaN }) }],
+    ['event JSON', (_meta: SessionHeader, events: SessionEvent[]) => { Object.assign(events[0]!, { data: { ...events[0]!.data, extra: new Date(0) } }) }],
+    ['header version', (meta: SessionHeader, _events: SessionEvent[]) => { Object.assign(meta, { version: -1 }) }],
+    ['surface transition', (_meta: SessionHeader, events: SessionEvent[]) => { Object.assign(events[0]!, { surfaceOp: { op: 'replace', startSeq: 0, endSeq: 0 } }) }],
+  ] as const)('refuses invalid durable %s without publishing a live session', async (_name, corrupt) => {
+    const meta = header('query-invalid')
+    const events = eventLog()
+    corrupt(meta, events)
+    TestPersistence.reset([{ meta, events }])
+    const ctx = await liveContext()
+    try {
+      await ctx.plugin(TestPersistence)
+      const stored = JSON.stringify([...TestPersistence.entries])
+      const lifecycle = vi.fn()
+      ctx.on('session/created', lifecycle)
+      await expect(ctx.sessionQuery.readSession(meta.id)).rejects.toThrow()
+      expect(lifecycle).not.toHaveBeenCalled()
+      expect(ctx.sessions.get(meta.id)).toBeUndefined()
+      expect(JSON.stringify([...TestPersistence.entries])).toBe(stored)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rejects a loaded header belonging to another session without registration or writes', async () => {
+    const requested = SessionId('query-requested')
+    const foreign = header('query-foreign')
+    TestPersistence.reset()
+    TestPersistence.entries.set(requested, { meta: foreign, events: eventLog() })
+    TestPersistence.listOverride = () => Promise.resolve([{ header: header(requested), revision: SessionPersistenceRevision('identity-fixture') }])
+    const ctx = await liveContext()
+    try {
+      await ctx.plugin(TestPersistence)
+      const stored = JSON.stringify([...TestPersistence.entries])
+      const lifecycle = vi.fn()
+      ctx.on('session/created', lifecycle)
+      ctx.on('session/disposed', lifecycle)
+      await expect(ctx.sessionQuery.readSession(requested)).rejects.toThrow('session source headers conflict')
+      expect(lifecycle).not.toHaveBeenCalled()
+      expect(ctx.sessions.get(requested)).toBeUndefined()
+      expect(ctx.sessions.get(foreign.id)).toBeUndefined()
+      expect(TestPersistence.openAccesses).toEqual(['read'])
+      expect(JSON.stringify([...TestPersistence.entries])).toBe(stored)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rejects an inherited count outside the durable history', async () => {
+    const meta = header('query-invalid-inheritance', 1, { isSeeded: true })
+    TestPersistence.reset([{ meta, events: eventLog(), inheritedEventCount: SessionLogOffset(2) }])
+    const ctx = await liveContext()
+    try {
+      await ctx.plugin(TestPersistence)
+      await expect(ctx.sessionQuery.readSession(meta.id)).rejects.toThrow()
+      expect(ctx.sessions.get(meta.id)).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
   it('returns a detached replay-valid full log and rejects a corrupt persisted seed', async () => {
     const valid = header('valid-log', 2)
     const corrupt = header('corrupt-log', 1)

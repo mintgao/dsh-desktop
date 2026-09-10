@@ -12,6 +12,7 @@ import {
   type SessionId,
   type SessionSeq as SessionSeqType,
 } from '@deepseek-ai/dsh-session'
+import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { foldSessionTitle } from '@deepseek-ai/dsh-session-title'
 import type { SessionTitleSnapshot } from '@deepseek-ai/dsh-session-title'
 import type {
@@ -175,19 +176,21 @@ export abstract class SessionQueryEngine extends Service {
   }
 
   /**
-   * Read and replay-validate one complete logical session log without making it live.
+   * Read and restore-validate one complete logical session log without making it live or adding restoration markers.
    * @param sessionId - live or persisted session id to read.
    * @returns cloned header and complete raw event log from one observation.
    * @throws when persistence, header compatibility, or replay validation fails.
    */
   async readSession(sessionId: SessionId): Promise<SessionLogSnapshot> {
     const loaded = await this._corpus.load(sessionId)
-    Session.create(
-      sessionId,
-      loaded.events,
-      loaded.header,
-      loaded.inheritedEventCount,
-    )
+    const header = snapshotJsonValue(loaded.header)
+    const events = loaded.events.map((event) => {
+      const snapshot = snapshotJsonValue(event)
+      if (snapshot === undefined) throw new Error('session query event is not losslessly JSON-serializable')
+      return snapshot
+    })
+    if (header === undefined) throw new Error('session query header is not losslessly JSON-serializable')
+    Session.fromRestore(sessionId, events, header, loaded.inheritedEventCount, 'detached')
     return {
       session: structuredClone(loaded.header),
       inheritedEventCount: loaded.inheritedEventCount,

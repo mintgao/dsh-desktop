@@ -1,0 +1,11 @@
+version: 1
+scenario: persona-legacy-text
+profile: headless
+composition: persona-legacy-text
+recording: authored
+header:
+  class: persona-legacy-text
+  pin: true
+  childSystemPrompts: [1, 2]
+replay:
+  override: true

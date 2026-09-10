@@ -57,3 +57,39 @@ The [initial assessment](technical-decision.md) records the ordering question th
 - Confirmed at: 2026-09-10T04:40:43Z
 - Confirmation basis: Owner exact-target and catch-up approval; Phase A merged at 6ee47a62b853cde7a91b4e43aca6da29754c40fd; Accepted ADR and registry; classification_review approved persisted bilingual fidelity and all 56 IDs; Workflow orchestrator /root confirms no open product or technical choice.
 - Readiness history: approved external design persisted as bilingual authoritative artifacts; no Phase B application or shared implementation edit has occurred
+
+## Persona compatibility technical decision readiness
+
+- Outcome: decision-accepted
+- Trigger evidence: authored preset configuration compatibility in an upstream-owned reusable parser
+- Decision owner: preset_compat_decision
+- Governing decision: [authored preset compatibility](../../decisions/20260910-persona-authored-preset-compatibility.md) (Accepted)
+- Review mode: independent-agent
+- Review result: approved
+- Review evidence: [classification_review design approval](preset-compatibility-review.json), including schema/catalog addendum
+- Material product decisions: none; preserves the accepted authored-preset requirement
+- Open blockers: none
+- Gate: implementation-ready
+- Gate owner: Workflow orchestrator /root
+- Confirmed at: 2026-09-10T07:52:39Z
+- Confirmation basis: /root confirmed Accepted bilingual ADR, independent author/reviewer approval, exact tracked synthetic evidence and no open product choice before any persona/catalog code edit
+- Readiness history: Phase B remains implementation-ready for unaffected work; actual unchanged authored preset mount failure reopened only this parser/catalog fix
+
+Catalog input-selection confirmation: Workflow orchestrator `/root` confirmed `implementation-ready` at `2026-09-10T08:00:25Z`, after checking the Accepted bilingual addendum and independent approval bound in the [review record](preset-compatibility-review.json). The confirmation precedes the type-selection edit; other Phase B requirements remain in force.
+
+## Seeded query technical decision readiness
+
+- Outcome: decision-accepted
+- Trigger evidence: existing-history validation, inherited event semantics and detached query ownership
+- Decision owner: preset_compat_decision
+- Governing decision: [seeded query restoration](../../decisions/20260910-seeded-session-query-restoration.md) (Accepted)
+- Review mode: independent-agent
+- Review result: approved
+- Review evidence: [classification_review design approval](seeded-query-review.json), bound to proposal SHA256 d19640306b35e02840e01104a6cacce04a568fa2ec12440810e8a2842d220856
+- Material product decisions: none; preserves exact query and history requirements
+- Open blockers: none
+- Gate: implementation-ready
+- Gate owner: Workflow orchestrator /root
+- Confirmed at: 2026-09-10T09:02:31Z
+- Confirmation basis: /root confirmed Accepted bilingual ADR, independently approved proposal, exact four document/evidence blobs and no affected query code changes before confirmation
+- Readiness history: actual delivered-child query refusal is recorded in the [synthetic evidence](seeded-query-evidence.json); unaffected Phase B implementation remains authorized

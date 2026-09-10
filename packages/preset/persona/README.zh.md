@@ -37,12 +37,15 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `prefix` | 必填 | 作为 `deployment:persona-prefix` 段落渲染的人设文本 |
+| `prefix` | 无 `text` 时必填 | 作为 `deployment:persona-prefix` 段落渲染的人设文本 |
+| `text` | 不提供 | 整体人设模板的替代形式；不得含 `prefix` 和 `suffix` |
 | `suffix` | `''` | `deployment:persona-suffix` 模板；省略或空文本会遮蔽掉全局后缀 |
 | `complete` | `false` | 仅将渲染后的前缀用作系统提示词；忽略后缀 |
 | `includeRuntimeContext` | `true` | 是否为此 agent 作用域包含动态 runtime-context 快照；false 会抑制所有上下文贡献，但不禁用拥有它们的服务 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-persona)是每个受支持字段及其 JSDoc 的穷尽式真源。
+
+解析器接受带可选 `suffix` 的 `prefix`，或单独的 `text`。它仅在内存中将完整 `text` 规范化为前缀及空后缀，保留用户文件和设置。空文本遮蔽两个部署段。混合形式即使值相等或为空也会拒绝。`Config` 描述可接受输入；`ResolvedConfig` 描述传给注册步骤的规范化值。已交付预设的有限保证见[兼容性决策](../../../docs/decisions/20260910-persona-authored-preset-compatibility.zh.md)。
 
 ### 人设行为
 

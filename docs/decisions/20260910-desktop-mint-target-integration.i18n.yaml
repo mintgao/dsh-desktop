@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/decisions/20260910-desktop-mint-target-integration.md
-20260910-desktop-mint-target-integration.md: e30838f5712a8d73f9800f04dbb5915eef32a959
-20260910-desktop-mint-target-integration.zh.md: 612da8f8c520ed2eba24bbbb2874c68d9535c439
+20260910-desktop-mint-target-integration.md: bc71e71db76d3d954063d47df1fa5877d1d076b8
+20260910-desktop-mint-target-integration.zh.md: fe88ab5280b618c83ec850117fe53573a61eb0a5
