@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, sep } from 'node:path'
-import { MigrationDebugger } from './migration-debugger.ts'
+import { MigrationDebugger, migrationAbortReason } from './migration-debugger.ts'
 import { digest, object } from './evidence.ts'
 import { migrationGroupQuiescent, terminateMigrationGroup } from './migration-processes.ts'
 
@@ -98,6 +98,8 @@ async function executeMigrationNative(app: string, root: string, visitor?: Nativ
   let debuggerConnection: MigrationDebugger | undefined
   let stdout = ''
   let stderr = ''
+  let phase = 'inspector-endpoint'
+  const acquired: Record<string, unknown> = {}
   child.stdout.on('data', (bytes: Buffer) => {
     stdout += bytes.toString()
     if (stdout.length > 1024 * 1024) controller.abort(new Error('Native stdout exceeds fixture limit'))
@@ -118,11 +120,15 @@ async function executeMigrationNative(app: string, root: string, visitor?: Nativ
         reject(new Error(`Native process exited before inspector: ${code}; ${stderr}`))
       })
     })
+    phase = 'inspector-connect'
     debuggerConnection = await MigrationDebugger.connect(address, controller.signal)
+    phase = 'startup-pause'
     await debuggerConnection.send('Debugger.enable', {}, controller.signal)
     await debuggerConnection.send('Runtime.runIfWaitingForDebugger', {}, controller.signal)
     const pause = await debuggerConnection.event('Debugger.paused', controller.signal)
     if (pause['reason'] !== 'Break on start') throw new Error('Native entrypoint did not report its startup barrier')
+    acquired['pauseReason'] = pause['reason']
+    phase = 'barrier-paths'
     const response = await debuggerConnection.send('Runtime.evaluate', { expression: pathsExpression, returnByValue: true }, controller.signal)
     if (response['exceptionDetails'] !== undefined) throw new Error(JSON.stringify(response['exceptionDetails']))
     const observation = checkedPaths(object(response['result'])['value'], root)
@@ -134,6 +140,8 @@ async function executeMigrationNative(app: string, root: string, visitor?: Nativ
     if (location['lineNumber'] !== 0 || location['columnNumber'] !== 0 || typeof location['scriptId'] !== 'string') {
       throw new Error('Native barrier is not the first entrypoint instruction')
     }
+    acquired['barrier'] = { ready: observation['ready'], paths: observation['paths'], location }
+    phase = 'entrypoint-source'
     const script = await debuggerConnection.send('Debugger.getScriptSource', { scriptId: location['scriptId'] }, controller.signal)
     const entry = await debuggerConnection.send('Runtime.evaluate', { expression: `(()=>{
       const fs=process.getBuiltinModule('fs'),path=process.getBuiltinModule('path'),{app}=${electronExpression};
@@ -146,9 +154,12 @@ async function executeMigrationNative(app: string, root: string, visitor?: Nativ
       throw new Error('Native paused source differs from the exact packaged main entrypoint')
     }
     const entrypoint = { path: packagedEntry['entry'], sha256: digest(script['scriptSource']) }
+    acquired['entrypoint'] = entrypoint
     let normal: Record<string, unknown> | undefined
     if (visitor !== undefined) {
+      phase = 'visitor-before-main'
       const input = await visitor.beforeMain(debuggerConnection, controller.signal, { scriptId: location['scriptId'], source: script['scriptSource'] })
+      phase = 'register-window-ready'
       const register = await debuggerConnection.send('Runtime.evaluate', { expression: `(()=>{
         const {app,BrowserWindow}=${electronExpression};
         globalThis.__dshMigrationReady=new Promise(resolve=>{
@@ -163,17 +174,23 @@ async function executeMigrationNative(app: string, root: string, visitor?: Nativ
           BrowserWindow.getAllWindows().forEach(observe);
         });return true})()`, returnByValue: true }, controller.signal)
       if (register['exceptionDetails'] !== undefined) throw new Error(JSON.stringify(register['exceptionDetails']))
+      phase = 'resume-main'
       await debuggerConnection.send('Debugger.resume', {}, controller.signal)
+      phase = 'visitor-after-resume'
       await visitor.afterResume?.(debuggerConnection, controller.signal)
+      phase = 'window-ready'
       const loaded = await debuggerConnection.send('Runtime.evaluate', { expression: 'globalThis.__dshMigrationReady',
         awaitPromise: true, returnByValue: true }, controller.signal)
       if (loaded['exceptionDetails'] !== undefined) throw new Error(JSON.stringify(loaded['exceptionDetails']))
       const ready = checkedPaths(object(loaded['result'])['value'], root)
       if (ready['ready'] !== true) throw new Error('Normal native window loaded before application readiness')
+      acquired['ready'] = { ready: ready['ready'], url: ready['url'], paths: ready['paths'] }
       const browserEndpoint = /DevTools listening on (ws:\/\/127\.0\.0\.1:\d+\/devtools\/browser\/[^\s]+)/u.exec(stderr)?.[1]
       if (browserEndpoint === undefined) throw new Error('Normal renderer has no owned browser DevTools endpoint')
+      phase = 'visitor-actions'
       const actions = await visitor.visit(debuggerConnection, browserEndpoint, ready, controller.signal)
       normal = { input, ready, actions }
+      phase = 'native-shutdown'
       await debuggerConnection.send('Runtime.evaluate', { expression: `${electronExpression}.app.quit()` }, controller.signal)
       await debuggerConnection.close()
       debuggerConnection = undefined
@@ -186,10 +203,19 @@ async function executeMigrationNative(app: string, root: string, visitor?: Nativ
       }
       normal['shutdown'] = { exit: exited, groupQuiescent: true }
     }
+    phase = 'completed'
     const result = { qualification: false, entrypoint, normal, scope: visitor === undefined ? 'confined Electron pre-entrypoint barrier only' : 'normally launched packaged Electron observations', observation, pause }
     writeFileSync(join(root, 'barrier.json'), `${JSON.stringify(result, null, 2)}\n`)
     return result
   } finally {
+    // Snapshot before transport/process cleanup clears pending observations. Diagnostic
+    // write failures cannot replace the original failure or prevent owned cleanup.
+    try {
+      writeFileSync(join(root, 'inspector-diagnostics.json'), `${JSON.stringify({
+        qualification: false, phase, acquired, operations: debuggerConnection?.diagnostics() ?? [],
+        ...controller.signal.aborted ? { abortReason: migrationAbortReason(controller.signal) } : {},
+      }, null, 2)}\n`)
+    } catch { /* Best-effort fixture diagnostics; existing logs and cleanup still run. */ }
     clearTimeout(timer)
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined
     try {

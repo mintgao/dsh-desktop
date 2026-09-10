@@ -37,6 +37,23 @@ it('observes a real entrypoint pause and releases it without replacing applicati
     expect(existsSync(marker)).toBe(false)
     const value = await connection.send('Runtime.evaluate', { expression: 'process.pid', returnByValue: true }, deadline)
     expect(value).toMatchObject({ result: { value: child.pid } })
+    for (const [kind, reason] of [
+      ['send', 'Native pre-entrypoint probe deadline exceeded'],
+      ['event', 'Native stderr exceeds fixture limit'],
+    ] as const) {
+      const controller = new AbortController()
+      const operation = kind === 'send'
+        ? connection.send('Runtime.evaluate', { expression: 'new Promise(()=>{}) /* synthetic-secret */', awaitPromise: true }, controller.signal)
+        : connection.event('Debugger.paused', controller.signal)
+      const rejected = expect(operation).rejects.toThrow(`${kind} ${kind === 'send' ? 'Runtime.evaluate' : 'Debugger.paused'} aborted: ${reason}`)
+      controller.abort(new Error(reason))
+      await rejected
+      expect(connection.diagnostics().at(-1)).toEqual({ operation: `${kind} ${kind === 'send' ? 'Runtime.evaluate' : 'Debugger.paused'}`, state: 'aborted', reason })
+      expect(JSON.stringify(connection.diagnostics())).not.toContain('synthetic-secret')
+    }
+    // Completed requests cannot grow the retained diagnostic history indefinitely.
+    for (let index = 0; index < 17; index++) await connection.send('Runtime.evaluate', { expression: '0' }, deadline)
+    expect(connection.diagnostics()).toHaveLength(32)
     await connection.send('Debugger.resume', {}, deadline)
     await connection.close()
     connection = undefined
