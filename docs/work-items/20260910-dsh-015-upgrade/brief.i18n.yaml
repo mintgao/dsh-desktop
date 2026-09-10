@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/work-items/20260910-dsh-015-upgrade/brief.md
-brief.md: bf9f26e2219c703f9a3565a94d6b7ad135b28da1
-brief.zh.md: d00d9099f890d699c8156da2407728d7f9d86d28
+brief.md: 7c919aed239e51ae6dbaaf6a5614427a76f8b272
+brief.zh.md: e64e470e261e4ce0864974f2107074b39fdcc123

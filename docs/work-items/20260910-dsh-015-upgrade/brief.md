@@ -93,3 +93,7 @@ Catalog input-selection confirmation: Workflow orchestrator `/root` confirmed `i
 - Confirmed at: 2026-09-10T09:02:31Z
 - Confirmation basis: /root confirmed Accepted bilingual ADR, independently approved proposal, exact four document/evidence blobs and no affected query code changes before confirmation
 - Readiness history: actual delivered-child query refusal is recorded in the [synthetic evidence](seeded-query-evidence.json); unaffected Phase B implementation remains authorized
+
+## Shell qualification fixture
+
+The `pwd` probe requests enough stdout bytes for the complete UTF-8 working directory and newline. The configured 64/80-byte defaults remain asserted separately and govern the overflow probe. Source collector regressions cover long ASCII and multibyte paths; protected packaged qualification remains required.

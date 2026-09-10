@@ -93,3 +93,7 @@ Phase A 安装可复用的追赶交付验证和证据机制。Phase B 按其单�
 - Confirmed at: 2026-09-10T09:02:31Z
 - Confirmation basis: /root 确认了 Accepted 双语 ADR、独立批准的提案、四份文档/证据的精确 blob，以及确认前查询代码没有受影响的修改
 - Readiness history: 真实已交付子会话查询拒绝记录于[合成证据](seeded-query-evidence.json)；不受影响的 Phase B 实现继续获得授权
+
+## Shell 资格验证夹具
+
+`pwd` 探针请求足够的标准输出字节数，以容纳完整的 UTF-8 工作目录和换行符。配置的 64/80 字节默认值仍单独断言，并用于溢出探针。源码收集器回归覆盖较长的 ASCII 和多字节路径；仍须执行受保护的封装产物资格验证。
