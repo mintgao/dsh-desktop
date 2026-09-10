@@ -10,6 +10,8 @@ DSH Desktop intentionally follows the DeepSeek Harness release stream for a pers
 
 ## Decision
 
+This record describes the retained legacy workflow design. The [reviewed delivery decision](2026-09-08-reviewed-desktop-release-delivery.md) governs the replacement; its writers remain inactive until verified migration.
+
 [`upstream-sync.yml`](../../../../.github/workflows/upstream-sync.yml) polls public `deepseek-ai/deepseek-harness` Releases twice an hour. [`.github/upstream-sync-state.json`](../../../../.github/upstream-sync-state.json) records the last adopted upstream tag, its commit and publication time, and the downstream desktop tag. The initial record points to the upstream release already contained by the downstream and its existing desktop release, so historical releases are not republished. The workflow orders public, non-draft `dsh-v*` Releases by publication time and handles exactly the next one on each run. A manual dispatch may select that queued release but cannot skip ahead.
 
 The workflow fetches the exact upstream tag and merges its commit directly into release-ready `main`. Before pushing, it installs the locked dependencies and runs desktop tests, the desktop build, repository type checking, documentation checks, and a generated-source drift check. A configuration error, conflict, or failed check stops before any remote update and creates or updates a `Blocked: adopt DeepSeek Harness ...` Issue containing the workflow run. A maintainer resolves the exact adoption on a normal branch, merges any fix through the ordinary process, and reruns the workflow.

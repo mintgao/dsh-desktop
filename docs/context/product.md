@@ -4,6 +4,8 @@ English | [中文](product.zh.md)
 
 ## Product purpose
 
+This downstream project delivers DSH Desktop Mint: a desktop client over DeepSeek Harness and a way for desktop users to discover, obtain, and apply DSH updates. The [downstream development policy](downstream-policy.md) governs current and future additions, plugin ownership, external reuse, and tested compatibility.
+
 DeepSeek Harness (`dsh`) is an open-source, developer-preview runtime for composing and operating coding agents. It combines model access, workspace tools, permissions, durable sessions, human collaboration, and multiple delivery surfaces on one plugin-based runtime; the [root README](../../README.md) and [Web UI guide](../user/guide/index.md) are the product entry points.
 
 ## Primary users
@@ -12,7 +14,7 @@ DeepSeek Harness (`dsh`) is an open-source, developer-preview runtime for compos
 - Integrators driving a Harness runtime from automation through the [Python SDK](../user/guide/python-sdk.md), TypeScript SDK, JSON-RPC, or ACP.
 - Plugin and deployment authors composing capabilities through Cordis plugins, Bundles, Profiles, presets, and user patch layers.
 
-The repository does not rank these audiences or name one primary product scenario. Treat Web as the documented first-run surface, not as evidence that automation and extension use cases are secondary.
+Desktop users are the downstream product audience; other DSH developers are the reuse audience for its additions. The inherited Harness interfaces remain available, but their presence does not add a downstream product requirement.
 
 ## Product surfaces
 
@@ -47,9 +49,9 @@ The repository does not rank these audiences or name one primary product scenari
 
 ## Open questions
 
-- Which audience and journey define product success for the developer-preview stage?
+- Which packaged desktop and upgrade scenarios constitute the release acceptance baseline on each supported Mac architecture?
 - Is the long-term model strategy DeepSeek-first, provider-neutral, or a documented layering of both?
 - How should the repository reconcile the root developer-preview compatibility warning with package tables that label many APIs as stable product surfaces?
-- What is the intended long-term relationship between upstream Harness and the unofficial Desktop Mint distribution?
+- Which exact DSH versions have verified compatibility with independently distributed downstream plugins?
 - Which currently disabled or example-only capabilities are deliberate product boundaries, and which are candidates for a default Profile?
 - What user-facing telemetry and consent policy should accompany any deployment that enables session telemetry?

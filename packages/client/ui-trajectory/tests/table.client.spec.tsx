@@ -2,13 +2,33 @@
 /** Trajectory ledger selection, details, status, and fold behavior. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import type { RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
 import type { TrajectoryTurnModel } from '../src/client/layout.ts'
 import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
 import { t, tZh } from './locale.client.ts'
+
+/** Complete the virtualizer's owned scroll debounce while its React view is mounted. */
+async function scrollVirtualTable(tablePane: HTMLElement, scrollTop: number) {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    expect(vi.getTimerCount()).toBe(0)
+    tablePane.scrollTop = scrollTop
+    fireEvent.scroll(tablePane)
+    try {
+      expect(vi.getTimerCount()).toBe(1)
+    } finally {
+      await act(async () => {
+        await vi.advanceTimersToNextTimerAsync()
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  } finally {
+    vi.useRealTimers()
+  }
+}
 
 const renderImagesStub: RenderMessageImages = ({ images }) => (
   <div data-testid="record-images" data-count={images.length}>
@@ -676,8 +696,7 @@ describe('TrajectoryTable', () => {
     expect(screen.queryByText('Context 500')).toBeNull()
 
     const tablePane = screen.getByRole('table').parentElement as HTMLElement
-    tablePane.scrollTop = 9_000
-    fireEvent.scroll(tablePane)
+    await scrollVirtualTable(tablePane, 9_000)
     await waitFor(() => {
       expect(Number(view.container.querySelector(
         'tr[data-virtual-position]',
@@ -769,8 +788,10 @@ describe('TrajectoryTable', () => {
       />,
     )
     const tablePane = screen.getByRole('table').parentElement as HTMLElement
-    tablePane.scrollTop = 5_000
-    fireEvent.scroll(tablePane)
+    await waitFor(() => {
+      expect(view.container.querySelector('tr[data-virtual-position]')).toBeTruthy()
+    })
+    await scrollVirtualTable(tablePane, 5_000)
 
     await waitFor(() => {
       expect(view.container.querySelector('tr[data-virtual-position="201"]')).toBeTruthy()

@@ -1,0 +1,38 @@
+{
+  "id": 22549859,
+  "name": "Reviewed desktop bootstrap immutability",
+  "target": "tag",
+  "source_type": "Repository",
+  "source": "mintgao/dsh-desktop",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "refs/tags/desktop-bootstrap-*"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "update"
+    },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    }
+  ],
+  "node_id": "RRS_lACqUmVwb3NpdG9yec5QKDfWzgFYFWM",
+  "created_at": "2026-09-08T13:49:50.365Z",
+  "updated_at": "2026-09-08T13:49:50.402Z",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/mintgao/dsh-desktop/rulesets/22549859"
+    },
+    "html": {
+      "href": "https://github.com/mintgao/dsh-desktop/rules/22549859"
+    }
+  }
+}

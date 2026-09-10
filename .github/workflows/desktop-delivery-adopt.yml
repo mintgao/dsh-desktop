@@ -1,0 +1,48 @@
+name: Reviewed desktop adoption
+on:
+  workflow_dispatch:
+    inputs:
+      plan:
+        description: Exact reviewed adoption-apply JSON
+        type: string
+        required: true
+      digest:
+        description: Reviewed plan SHA256
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: desktop-delivery-adoption
+  cancel-in-progress: false
+jobs:
+  finalize:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Finalize only the reviewed source lock and create the bot PR
+        env:
+          PLAN: ${{ inputs.plan }}
+          DIGEST: ${{ inputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s\n' "$PLAN" > "$RUNNER_TEMP/plan.json"
+          node --import tsx scripts/desktop-delivery/cli.ts adoption-apply --config .github/desktop-delivery/mint.json --plan "$RUNNER_TEMP/plan.json" --digest "$DIGEST" --migration-report .github/desktop-delivery/migration-report.json --apply --out "$RUNNER_TEMP/result.json" --summary "$RUNNER_TEMP/result.md"
+      - if: always()
+        run: test ! -f "$RUNNER_TEMP/result.md" || cat "$RUNNER_TEMP/result.md" >> "$GITHUB_STEP_SUMMARY"

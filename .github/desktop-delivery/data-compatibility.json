@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "persistedFormatsChanged": false,
+  "assessment": "Compared with desktop-v0.1.2-alpha.3.unsigned.1, the reviewed candidate does not change DSH session, settings, credential or workspace persistence formats. Delivery source-lock metadata changes independently of user data. Native smoke uses temporary data and does not establish upgrade or downgrade compatibility for existing installations.",
+  "evidenceReferences": [
+    "docs/work-items/20260908-desktop-reviewed-delivery/verification.md#data-compatibility"
+  ],
+  "unsupportedDowngrades": [
+    "No automatic downgrade or data restoration is verified.",
+    "This assessment does not cover adopting a later upstream commit; a new candidate requires a refreshed review."
+  ]
+}

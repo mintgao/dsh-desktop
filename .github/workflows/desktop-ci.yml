@@ -5,19 +5,35 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: One-time reviewed finalizer installation
+        type: boolean
+        default: false
+      probe:
+        description: One-time harmless draft access probe
+        type: boolean
+        default: false
+      plan:
+        description: Exact reviewed operation JSON
+        type: string
+      digest:
+        description: Reviewed operation SHA256
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ (inputs.bootstrap == true || inputs.probe == true) && 'desktop-delivery-bootstrap-dispatch' || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: ${{ inputs.bootstrap != true && inputs.probe != true }}
 
 env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
   quality:
+    if: inputs.bootstrap != true && inputs.probe != true
     name: Desktop source checks
     runs-on: ubuntu-latest
     steps:
@@ -53,7 +69,7 @@ jobs:
 
   package-smoke:
     name: Package smoke / ${{ matrix.arch }}
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap != true && inputs.probe != true
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -88,3 +104,79 @@ jobs:
           app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
           test -n "$app_path"
           "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke
+
+  bootstrap:
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap == true && inputs.probe != true
+    environment: mint-delivery-bootstrap
+    concurrency:
+      group: desktop-delivery-bootstrap
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Execute only the explicitly approved immutable bootstrap operation
+        env:
+          PLAN: ${{ inputs.plan }}
+          DIGEST: ${{ inputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s\n' "$PLAN" > "$RUNNER_TEMP/plan.json"
+          node --import tsx scripts/desktop-delivery/cli.ts bootstrap-apply --config .github/desktop-delivery/mint.json --plan "$RUNNER_TEMP/plan.json" --digest "$DIGEST" --apply --out "$RUNNER_TEMP/result.json" --summary "$RUNNER_TEMP/result.md"
+      - if: always()
+        run: test ! -f "$RUNNER_TEMP/result.md" || cat "$RUNNER_TEMP/result.md" >> "$GITHUB_STEP_SUMMARY"
+
+  draft-access-probe:
+    if: github.event_name == 'workflow_dispatch' && inputs.probe == true && inputs.bootstrap != true
+    environment: mint-delivery-bootstrap
+    concurrency:
+      group: desktop-delivery-bootstrap
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Execute only the explicitly approved immutable bootstrap operation
+        env:
+          PLAN: ${{ inputs.plan }}
+          DIGEST: ${{ inputs.digest }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s\n' "$PLAN" > "$RUNNER_TEMP/plan.json"
+          node --import tsx scripts/desktop-delivery/cli.ts bootstrap-probe --config .github/desktop-delivery/mint.json --plan "$RUNNER_TEMP/plan.json" --digest "$DIGEST" --apply --out "$RUNNER_TEMP/result.json" --summary "$RUNNER_TEMP/result.md"
+      - if: always()
+        run: test ! -f "$RUNNER_TEMP/result.md" || cat "$RUNNER_TEMP/result.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: desktop-draft-access-probe
+          path: ${{ runner.temp }}/result.json
+          retention-days: 30

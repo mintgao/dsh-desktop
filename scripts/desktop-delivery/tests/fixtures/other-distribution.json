@@ -1,0 +1,7 @@
+{
+  "id": "community-desktop",
+  "upstreamRepository": "deepseek-ai/deepseek-harness",
+  "tagPrefix": "dsh-v",
+  "architectures": ["x64"],
+  "application": "Community Desktop"
+}

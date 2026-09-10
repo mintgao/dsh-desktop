@@ -10,6 +10,8 @@ DSH Desktop Mint turns DeepSeek Harness into a user-facing macOS product. Produc
 
 ## Decision
 
+The [downstream development policy](../../../../docs/context/downstream-policy.md) makes this ownership model a standing requirement for current and future work. It requires an explicit external reuse path and tested DSH compatibility; a workspace package alone does not establish either. The product scope is desktop delivery and user-accessible DSH updates. This policy does not select a replacement release implementation.
+
 DSH is the plugin harness and reusable platform. DSH Desktop Mint is a downstream product distribution: a reviewed composition of DSH plugins, product defaults, branding, a macOS native host, and release policy. The product does not fork the Agent runtime or define a parallel client framework. Its differentiation comes from which plugins it composes and how those plugins are configured.
 
 A feature is assigned to the narrowest plane that owns its facts and effects:

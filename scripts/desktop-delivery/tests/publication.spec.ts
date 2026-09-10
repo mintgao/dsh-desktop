@@ -1,0 +1,276 @@
+/** Exact artifact and recovery behavior with real local payloads and injected GitHub transport. */
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterEach, expect, it } from 'vitest'
+import { selectRelease } from '../../../apps/desktop/src/github-releases.ts'
+import { reviewedMutation } from '../reviewed-cli.ts'
+import { checkedManifest } from '../manifest.ts'
+import { digest, object } from '../evidence.ts'
+import { deliveryConfig, operationPlan, type GitHub } from '../operations.ts'
+import { mutateRelease, promotionPlan, retainedBundle, preparePublication } from '../publication.ts'
+
+const config = deliveryConfig(resolve('.github/desktop-delivery/mint.json'))
+const temporary: string[] = []
+afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }) })
+function directory(): string { const path = mkdtempSync(join(tmpdir(), 'delivery-payload-')); temporary.push(path); return path }
+function json(value: unknown): Buffer { return Buffer.from(`${JSON.stringify(value, null, 2)}\n`) }
+function fixture(version = '1.2.3-alpha.1.unsigned.2') {
+  const path = directory()
+  const upstream = { id: 1, tag: 'dsh-v0.1.0-alpha.1', commit: 'a'.repeat(40), publishedAt: '2026-01-01T00:00:00Z' }
+  const lock = { schemaVersion: 2, upstreamRepository: config.upstreamRepository, release: upstream, predecessor: null, observed: [upstream], adoptionSeed: { commit: 'b'.repeat(40), tree: 'c'.repeat(40) } }
+  const candidate = { purpose: 'desktop-delivery-shadow', kind: 'candidate', qualificationEligible: true, sourceDifference: { status: '' }, downstreamCommit: 'd'.repeat(40), sourceLockDigest: digest(json(lock)), configDigest: 'e'.repeat(64), upstream, components: { dsh: '0.1.0-alpha.1' } }
+  const baseline = { schemaVersion: 1, purpose: 'desktop-legacy-baseline', repository: config.repository, repositoryId: config.repositoryId, upstream, desktopTag: 'desktop-v1.2.3-alpha.1.unsigned.1', sourceCommit: 'f'.repeat(40), releaseId: 1, assets: [] }
+  const localConfig = { ...config, baselinePath: join(path, 'baseline.json') }
+  writeFileSync(localConfig.baselinePath, json(baseline))
+  const file = (name: string,
+    content: Uint8Array | string) => { writeFileSync(join(path,
+    name),
+  content); const bytes = readFileSync(join(path,
+    name)); return { name,
+    size: bytes.length,
+    sha256: digest(bytes) } }
+  const native = config.architectures.map((architecture) => {
+    const dmg = file(`DSH-Desktop-Mint-${version}-${architecture}.dmg`, `DMG fixture ${architecture}`)
+    const evidence = file(`native-${architecture}.json`, json({ schemaVersion: 1, purpose: 'desktop-release-native-evidence', mode: 'unsigned-preview', qualificationEligible: true, candidateDigest: digest(json(candidate)), desktopVersion: version, architecture, dmgDigest: dmg.sha256, executableArchitectures: architecture === 'x64' ? 'x86_64' : architecture, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true, copiedInstallation: true, installationStopped: true, installationRemoved: true }))
+    return { architecture, evidence, dmg }
+  })
+  const notes = 'Unsigned preview / 未签名预览\nNo automatic installation.\n'
+  const compatibility = { schemaVersion: 1, persistedFormatsChanged: false, assessment: 'Fixture data assessment', evidenceReferences: ['verification.md'], unsupportedDowngrades: ['Not tested'] }
+  const files = [...native.flatMap(item => [item.dmg, item.evidence]), file('candidate.json', json(candidate)), file('release-notes.md', notes), file('data-compatibility.json', json(compatibility)), file('predecessor.json', json(baseline)), file('SHA256SUMS.txt', native.map(item => `${item.dmg.sha256}  ${item.dmg.name}`).sort().join('\n') + '\n')]
+  const manifest = { schemaVersion: 1, purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id, desktopVersion: version, tag: `desktop-v${version}`, releaseKind: 'desktop', upstream, downstreamCommit: candidate.downstreamCommit, sourceLockDigest: candidate.sourceLockDigest, configDigest: candidate.configDigest, componentVersions: candidate.components, workflow: { path: '.github/workflows/desktop-delivery-qualify.yml', commit: '1'.repeat(40), runId: 10, attempt: 1 }, predecessor: { tag: baseline.desktopTag, digest: digest(json(baseline)), kind: baseline.purpose, upstream }, native, candidateDigest: digest(json(candidate)), releaseNotesDigest: digest(notes), dataCompatibilityDigest: digest(json(compatibility)), files }
+  const manifestPath = join(path, 'manifest.json')
+  writeFileSync(manifestPath, json(manifest))
+  return { path, localConfig, manifestPath, manifest, lock, notes, compatibility, baseline, files }
+}
+
+it('rehashes native descriptors and source evidence and emits desktop assets accepted by both client architectures', () => {
+  const data = fixture()
+  checkedManifest(data.localConfig, data.manifestPath, data.path)
+  for (const arch of config.architectures) expect(selectRelease([{ tag_name: data.manifest.tag,
+    draft: false,
+    prerelease: true,
+    assets: data.files }],
+  arch)?.version).toBe(data.manifest.desktopVersion)
+  const dmg = data.manifest.files.find(file => file.name.endsWith('arm64.dmg'))
+  if (dmg === undefined) throw new Error('Fixture DMG missing')
+  writeFileSync(join(data.path, dmg.name), 'changed bytes')
+  dmg.size = 'changed bytes'.length
+  dmg.sha256 = digest('changed bytes')
+  writeFileSync(data.manifestPath, json(data.manifest))
+  expect(() => checkedManifest(data.localConfig, data.manifestPath, data.path)).toThrow()
+  const dirty = fixture()
+  const candidateFile = join(dirty.path, 'candidate.json')
+  const candidate = object(JSON.parse(readFileSync(candidateFile, 'utf8')) as unknown)
+  candidate.qualificationEligible = false
+  writeFileSync(candidateFile, json(candidate))
+  const descriptor = dirty.manifest.files.find(file => file.name === 'candidate.json')
+  if (descriptor === undefined) throw new Error('Fixture candidate missing')
+  descriptor.sha256 = digest(json(candidate)); descriptor.size = json(candidate).length
+  dirty.manifest.candidateDigest = descriptor.sha256
+  writeFileSync(dirty.manifestPath, json(dirty.manifest))
+  expect(() => checkedManifest(dirty.localConfig, dirty.manifestPath, dirty.path)).toThrow('Candidate source identity')
+})
+
+function server(data: ReturnType<typeof fixture>) {
+  const manifestDigest = digest(readFileSync(data.manifestPath))
+  const release = { id: 2, tag_name: data.manifest.tag, draft: true, prerelease: true, body: `${data.notes}\n\nManifest SHA-256: ${manifestDigest}\n`, published_at: '2026-01-02T00:00:00Z' }
+  const assets = new Map<number, { name: string; bytes: Uint8Array }>()
+  const otherReleases: Record<string, unknown>[] = []
+  const otherAssets = new Map<number, Array<{ id: number; name: string; bytes: Uint8Array }>>()
+  const issues: Record<string, unknown>[] = []
+  let nextAsset = 1
+  let plan: Record<string, unknown> = {}
+  let expire = false
+  let event = 'workflow_dispatch'
+  let waiting = false
+  let loseUpload = true
+  let writes = 0
+  const archive = (name: string, files: Record<string, Uint8Array>): Buffer => {
+    const root = directory(); const zip = join(root, `${name}.zip`)
+    for (const [file, bytes] of Object.entries(files)) writeFileSync(join(root, file), bytes)
+    execFileSync('zip', ['-q', zip, ...Object.keys(files)], { cwd: root })
+    return readFileSync(zip)
+  }
+  const api: GitHub = { async request(method, path, body) {
+    if (method !== 'GET' && method !== 'DOWNLOAD') writes++
+    const relative = path.replace(`https://uploads.github.com/repos/${config.repository}`, '').replace(`/repos/${config.repository}`, '')
+    if (relative.startsWith('/issues')) {
+      if (method === 'POST') { issues.push({ ...object(body), user: { id: config.botId, type: 'Bot' }, number: 200 }); return issues[0] }
+      if (method === 'PATCH') { Object.assign(issues[0] ?? {}, object(body)); return issues[0] }
+      return issues
+    }
+    if (relative.startsWith('/actions/runs/10/artifacts')) return { artifacts: expire ? [] : [{ id: 100, name: 'desktop-release-bundle', expired: false }] }
+    if (relative.startsWith('/actions/runs/20/artifacts')) return { artifacts: [{ id: 200, name: 'desktop-approved-plan', expired: false }] }
+    if (relative === '/actions/artifacts/100/zip') return archive('qualification', Object.fromEntries([...data.files.map(file => [file.name, readFileSync(join(data.path, file.name))]), ['manifest.json', readFileSync(data.manifestPath)]]) as Record<string, Uint8Array>)
+    if (relative === '/actions/artifacts/200/zip') return archive('approval', { 'approved-plan.json': json(plan) })
+    if (relative.endsWith('/pending_deployments')) return waiting ? [{ environment: { name: config.releaseEnvironment } }] : []
+    if (relative === '/actions/runs/10') return { event, head_branch: 'main', path: data.manifest.workflow.path, head_sha: data.manifest.workflow.commit, run_attempt: 1, status: 'completed', conclusion: 'success', repository: { id: config.repositoryId } }
+    if (relative === '/actions/runs/20') return { event, head_branch: 'main', path: '.github/workflows/desktop-delivery-mutate.yml', head_sha: '1'.repeat(40), run_attempt: 1, status: 'in_progress', repository: { id: config.repositoryId } }
+    if (relative === '/git/ref/heads/main') return { object: { sha: '1'.repeat(40) } }
+    if (relative.startsWith('/git/ref/tags/')) return { object: { type: 'commit', sha: relative.includes(data.baseline.desktopTag) ? data.baseline.sourceCommit : data.manifest.downstreamCommit } }
+    if (relative.startsWith('/compare/')) return { status: 'ahead', files: [{ filename: config.sourceLockPath }] }
+    if (relative.startsWith('/contents/')) return { content: (relative.includes('source-lock') ? json(data.lock) : relative.includes('release-notes') ? Buffer.from(data.notes) : json(data.compatibility)).toString('base64') }
+    if (relative.startsWith('/commits?')) return [{ sha: '2'.repeat(40) }]
+    if (relative.startsWith('/git/commits/')) return { tree: { sha: relative.endsWith(data.lock.adoptionSeed.commit) ? data.lock.adoptionSeed.tree : '3'.repeat(40) }, parents: [{ sha: data.lock.adoptionSeed.commit }] }
+    if (relative.startsWith('/releases?')) return [{ id: 1, tag_name: data.baseline.desktopTag, draft: false, published_at: '2026-01-01T00:00:00Z' }, release, ...otherReleases]
+    for (const [id, list] of otherAssets) {
+      if (relative.startsWith(`/releases/${String(id)}/assets`)) return list.map(item => ({ id: item.id, name: item.name, size: item.bytes.length }))
+      const asset = list.find(item => relative === `/releases/assets/${String(item.id)}`)
+      if (asset !== undefined) return asset.bytes
+    }
+    if (relative.startsWith('/releases/1/assets')) return []
+    if (relative.startsWith('/releases/2/assets') && method === 'GET') return [...assets].map(([id, value]) => ({ id, name: value.name, size: value.bytes.length }))
+    if (relative.startsWith('/releases/assets/')) { const asset = assets.get(Number(relative.split('/').at(-1))); if (asset === undefined) throw new Error('Fixture asset missing'); return asset.bytes }
+    if (relative.startsWith('/releases/2/assets?') && method === 'POST') {
+      const name = new URL(`https://example.invalid${relative}`).searchParams.get('name')
+      if (name === null || !(body instanceof Uint8Array)) throw new Error('Fixture upload malformed')
+      assets.set(nextAsset++, { name, bytes: body })
+      if (loseUpload) { loseUpload = false; throw new Error('Ambiguous upload response') }
+      return {}
+    }
+    if (relative === '/releases/2') {
+      if (method === 'PATCH') {
+        const patch = object(body)
+        expect(patch.tag_name).toBe(data.manifest.tag)
+        expect(patch.prerelease).toBe(true)
+        expect(patch).not.toHaveProperty('target_commitish')
+        if (patch.draft === false) expect(patch.make_latest).toBe('false')
+        Object.assign(release, patch)
+      }
+      return release
+    }
+    throw new Error(`Unhandled publication fixture: ${method} ${relative}`)
+  } }
+  return { api,
+    otherReleases, otherAssets, issues,
+    release,
+    assets,
+    setPlan(value: Record<string,
+      unknown>) { plan = value },
+    setExpired() { expire = true },
+    setEvent(value: string) { event = value },
+    setWaiting() { waiting = true },
+    writes: () => writes }
+}
+
+it('publishes an exact existing draft, reconciles an interrupted upload, and restores after artifact expiry', async () => {
+  const data = fixture(); const remote = server(data)
+  const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
+  remote.setPlan(plan)
+  expect((await mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)).state).toBe('published-and-verified')
+  const writes = remote.writes()
+  await mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)
+  expect(remote.writes()).toBe(writes)
+  remote.setExpired()
+  const withdrawal = { ...plan, operation: 'withdraw' }; remote.setPlan(withdrawal)
+  await mutateRelease(data.localConfig, withdrawal, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)
+  expect(remote.release.draft).toBe(true)
+  const retained = directory()
+  await retainedBundle(data.localConfig, data.manifest.tag, retained, remote.api)
+  const restore = { ...plan, operation: 'restore' }; remote.setPlan(restore)
+  await mutateRelease(data.localConfig, restore, join(retained, 'manifest.json'), retained, data.manifest.predecessor.digest, remote.api)
+  expect(remote.release.draft).toBe(false)
+  const corrupt = [...remote.assets.values()].find(asset => asset.name.endsWith('.dmg'))
+  if (corrupt === undefined) throw new Error('Missing published DMG')
+  corrupt.bytes = Buffer.from('corrupted')
+  remote.setPlan(withdrawal)
+  const result = await mutateRelease(data.localConfig,
+    withdrawal,
+    data.manifestPath,
+    data.path,
+    data.manifest.predecessor.digest,
+    remote.api)
+  expect(result.assetBlocker).toBeTruthy()
+  expect(remote.release.draft).toBe(true)
+  remote.setPlan(restore)
+  await expect(mutateRelease(data.localConfig, restore, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)).rejects.toThrow('asset')
+})
+
+it('rejects stale run origins and a preparation plan with a substituted candidate before writing', async () => {
+  const data = fixture(); const remote = server(data)
+  remote.setEvent('push')
+  await expect(promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)).rejects.toThrow('run identity')
+  const substituted = operationPlan(config, 'promote', { candidate: 'f'.repeat(40), tag: data.manifest.tag, manifestDigest: digest(readFileSync(data.manifestPath)) })
+  await expect(preparePublication(data.localConfig, substituted, data.manifestPath, data.path, remote.api)).rejects.toThrow('differs')
+  expect(remote.writes()).toBe(0)
+})
+
+it('qualifies a withdrawn-tip replacement but refuses to discard a published successor', async () => {
+  const data = fixture('1.2.3-alpha.1.unsigned.5')
+  const withdrawn = fixture('1.2.3-alpha.1.unsigned.2')
+  const priorBytes = json(withdrawn.manifest)
+  writeFileSync(join(data.path, 'predecessor.json'), priorBytes)
+  const descriptor = data.manifest.files.find(item => item.name === 'predecessor.json')
+  if (descriptor === undefined) throw new Error('Missing fixture predecessor')
+  descriptor.sha256 = digest(priorBytes); descriptor.size = priorBytes.length
+  Object.assign(data.manifest, { releaseKind: 'replacement', supersedes: { tag: withdrawn.manifest.tag, manifestDigest: digest(priorBytes) } })
+  writeFileSync(data.manifestPath, json(data.manifest))
+  const remote = server(data)
+  remote.otherReleases.push({ id: 3, tag_name: withdrawn.manifest.tag, draft: true, published_at: '2026-01-02T00:00:00Z' })
+  remote.otherAssets.set(3, [{ id: 900, name: 'manifest.json', bytes: priorBytes }])
+  const identity = { id: 20, attempt: 1, commit: '1'.repeat(40) }
+  expect((await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', identity, remote.api)).state).toBe('planned')
+  remote.otherReleases.push({ id: 4, tag_name: 'desktop-v1.2.3-alpha.1.unsigned.3', draft: false })
+  remote.otherAssets.set(4, [{ id: 901, name: 'manifest.json', bytes: json({ predecessor: { tag: withdrawn.manifest.tag } }) }])
+  await expect(promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', identity, remote.api)).rejects.toThrow('published successor')
+  expect(remote.writes()).toBe(0)
+})
+
+it('CLI mutation handling reports an approved blocker once and never notifies for invalid approval', async () => {
+  const data = fixture(); const remote = server(data)
+  const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
+  remote.setPlan(plan)
+  remote.assets.set(999, { name: data.files[0]?.name ?? 'missing', bytes: Buffer.from('conflicting bytes') })
+  const result = await reviewedMutation(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)
+  expect(result.state).toBe('blocked')
+  expect(result.blocker).toBe(`Release asset bytes conflict: ${String(data.files[0]?.name)}`)
+  expect(remote.issues).toHaveLength(1)
+  expect(remote.issues[0]?.body).toContain(`Release asset bytes conflict: ${String(data.files[0]?.name)}`)
+  const writes = remote.writes()
+  await reviewedMutation(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)
+  expect(remote.writes()).toBe(writes)
+  await expect(reviewedMutation(data.localConfig, { ...plan, manifestDigest: '0'.repeat(64) }, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)).rejects.toThrow('protected approval')
+  expect(remote.writes()).toBe(writes)
+  expect(remote.assets.get(999)?.bytes).toEqual(Buffer.from('conflicting bytes'))
+})
+
+it('blocks successful publication identity drift without a recovery PATCH', async () => {
+  for (const drift of [{ id: 99 }, { tag_name: 'temporary-server-tag' }, { prerelease: false }, { draft: true }, { body: 'Foreign body' }]) {
+    const data = fixture(); const remote = server(data)
+    const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
+    remote.setPlan(plan)
+    let patches = 0
+    const api: GitHub = { async request(method, path, body) {
+      const result = await remote.api.request(method, path, body)
+      if (method === 'PATCH') { patches++; Object.assign(remote.release, drift) }
+      return result
+    } }
+    await expect(mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, api)).rejects.toThrow('maintainer recovery')
+    expect(patches).toBe(1)
+  }
+})
+
+it('withdraws a post-publication byte mismatch using the same approved release identity', async () => {
+  const data = fixture(); const remote = server(data)
+  const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
+  remote.setPlan(plan)
+  const patches: unknown[] = []
+  const api: GitHub = { async request(method, path, body) {
+    const result = await remote.api.request(method, path, body)
+    if (method === 'PATCH') {
+      patches.push(body)
+      if (object(body).draft === false) {
+        const asset = [...remote.assets.values()][0]
+        if (asset === undefined) throw new Error('Missing fixture asset')
+        asset.bytes = Buffer.from('Corrupt after publication')
+      }
+    }
+    return result
+  } }
+  await expect(mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, api)).rejects.toThrow('Public mismatch caused withdrawal')
+  expect(patches.map(value => object(value).draft)).toEqual([false, true])
+  for (const patch of patches) expect(patch).toMatchObject({ tag_name: data.manifest.tag, prerelease: true })
+  expect(remote.release.draft).toBe(true)
+})

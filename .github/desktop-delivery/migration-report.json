@@ -1,0 +1,1100 @@
+{
+  "preparedDraftTokenAccessVerified": true,
+  "configDigest": "1e5c668f6b472fe5baf73bd29b0109cf1a7ce960921ad488b0cf5a8dabc98444",
+  "attestations": [
+    {
+      "check": "actions-permissions",
+      "resource": "/repos/mintgao/dsh-desktop/actions/permissions/workflow",
+      "values": {
+        "default_workflow_permissions": "read",
+        "can_approve_pull_request_reviews": true
+      },
+      "repositoryId": 1344813014,
+      "observedAt": "2026-09-10T00:48:56.863Z",
+      "administratorId": 154321591,
+      "evidenceDigest": "b6b16dd0b1e2894083a98dcb5ff00ac0dc6e9d9586db5f00b3a323c0caeb5301"
+    },
+    {
+      "check": "ruleset-bypass",
+      "resource": 21944549,
+      "values": {
+        "visible": {
+          "id": 21944549,
+          "target": "branch",
+          "enforcement": "active",
+          "conditions": {
+            "ref_name": {
+              "exclude": [],
+              "include": [
+                "~DEFAULT_BRANCH"
+              ]
+            }
+          },
+          "rules": [
+            {
+              "type": "pull_request",
+              "parameters": {
+                "required_approving_review_count": 1,
+                "dismiss_stale_reviews_on_push": true,
+                "required_reviewers": [],
+                "require_code_owner_review": false,
+                "require_last_push_approval": true,
+                "required_review_thread_resolution": true,
+                "require_extra_approval_for_unattributed_changes": true,
+                "allowed_merge_methods": [
+                  "merge",
+                  "squash",
+                  "rebase"
+                ]
+              }
+            },
+            {
+              "type": "non_fast_forward"
+            },
+            {
+              "type": "required_status_checks",
+              "parameters": {
+                "strict_required_status_checks_policy": true,
+                "do_not_enforce_on_create": false,
+                "required_status_checks": [
+                  {
+                    "context": "Desktop source checks"
+                  }
+                ]
+              }
+            }
+          ],
+          "updated_at": "2026-09-08T16:48:28.929Z"
+        },
+        "bypass_actors": []
+      },
+      "repositoryId": 1344813014,
+      "observedAt": "2026-09-10T00:48:56.863Z",
+      "administratorId": 154321591,
+      "evidenceDigest": "ebbf28c783df2343216b5472428459e071fe6dd3dc4851d6e7f1f4c133c3165c"
+    },
+    {
+      "check": "ruleset-bypass",
+      "resource": 21944575,
+      "values": {
+        "visible": {
+          "id": 21944575,
+          "target": "tag",
+          "enforcement": "active",
+          "conditions": {
+            "ref_name": {
+              "exclude": [],
+              "include": [
+                "refs/tags/desktop-v*"
+              ]
+            }
+          },
+          "rules": [
+            {
+              "type": "creation"
+            }
+          ],
+          "updated_at": "2026-09-08T16:48:34.681Z"
+        },
+        "bypass_actors": [
+          {
+            "actor_id": 2,
+            "actor_type": "RepositoryRole",
+            "bypass_mode": "always"
+          }
+        ]
+      },
+      "repositoryId": 1344813014,
+      "observedAt": "2026-09-10T00:48:56.863Z",
+      "administratorId": 154321591,
+      "evidenceDigest": "ab432f4e98f4bf020681d85aac4b773b27789370c2f7e53eb172cc2bcaede37f"
+    },
+    {
+      "check": "ruleset-bypass",
+      "resource": 21944588,
+      "values": {
+        "visible": {
+          "id": 21944588,
+          "target": "tag",
+          "enforcement": "active",
+          "conditions": {
+            "ref_name": {
+              "exclude": [],
+              "include": [
+                "refs/tags/desktop-v*"
+              ]
+            }
+          },
+          "rules": [
+            {
+              "type": "update"
+            },
+            {
+              "type": "deletion"
+            },
+            {
+              "type": "non_fast_forward"
+            }
+          ],
+          "updated_at": "2026-08-31T17:13:08.297Z"
+        },
+        "bypass_actors": []
+      },
+      "repositoryId": 1344813014,
+      "observedAt": "2026-09-10T00:48:56.863Z",
+      "administratorId": 154321591,
+      "evidenceDigest": "e8131509b06e854bc37738842a4187536228d1ef0c8d7f1ef111ec37bd684d1e"
+    },
+    {
+      "check": "legacy-administrator-evidence",
+      "resource": "mintgao/dsh-desktop",
+      "values": {
+        "schemaVersion": 1,
+        "repositoryId": 1344813014,
+        "revokedAppIds": [
+          4782984,
+          4783001,
+          4783016
+        ],
+        "revocationEvidence": [
+          {
+            "observedAt": "2026-09-10T00:48:39.366978+00:00",
+            "account": "mintgao",
+            "url": "https://github.com/settings/installations",
+            "installedApps": [
+              {
+                "name": "ChatGPT Codex Connector",
+                "installationId": 155107427
+              }
+            ],
+            "absentInstallationIds": [
+              158011022,
+              158010848,
+              158010627
+            ],
+            "method": "Current complete browser accessibility tree: installation list contains only Codex Connector; user confirmed final Publisher dialog.",
+            "review": {
+              "url": "https://github.com/mintgao/dsh-desktop/pull/67/changes",
+              "head": "221047ad740df88806f2b4344ce6d9e6a3b57dfb",
+              "approveRadioEnabled": true,
+              "reviewSubmitted": false
+            },
+            "lastPushActivityId": 43107247224
+          }
+        ],
+        "outstandingAuthorityRevoked": true,
+        "delayedCallbacksDisabled": true,
+        "botReviewEligibilityVerified": true,
+        "draftAccessProbe": {
+          "schemaVersion": 1,
+          "purpose": "desktop-delivery-operation",
+          "repository": "mintgao/dsh-desktop",
+          "distribution": "dsh-desktop-mint",
+          "operation": "bootstrap-probe",
+          "state": "draft-access-verified",
+          "repositoryId": 1344813014,
+          "releaseId": 384901300,
+          "tag": "desktop-bootstrap-reviewed-20260909-608079d892",
+          "commit": "608079d892e865ce05f9998410480fa0b9d0e76b",
+          "workflow": {
+            "path": ".github/workflows/desktop-ci.yml",
+            "commit": "608079d892e865ce05f9998410480fa0b9d0e76b",
+            "runId": 34252363039,
+            "attempt": 1
+          },
+          "tokenPermissions": {
+            "contents": "write",
+            "issues": "write",
+            "actions": "read"
+          },
+          "uploaded": true,
+          "downloadedDigest": "6c58534b55b6dc1b5218ea900fbf32028b4db5b3de12994121fcb5087f713c58",
+          "deleted": true,
+          "bodyRestored": true,
+          "remainedDraft": true,
+          "nextAction": "Use this completed probe as draft-operation evidence in administrator preflight; it does not prove publication."
+        }
+      },
+      "repositoryId": 1344813014,
+      "observedAt": "2026-09-10T00:48:56.863Z",
+      "administratorId": 154321591,
+      "evidenceDigest": "50b97f3a85bba25e87e6e83bf8e8f351693208e82df09c55eedad002a3c4fa2b"
+    }
+  ],
+  "schemaVersion": 1,
+  "purpose": "desktop-delivery-migration",
+  "repositoryId": 1344813014,
+  "distribution": "dsh-desktop-mint",
+  "state": "controls-verified",
+  "blockers": [],
+  "observed": {
+    "administrator": {
+      "login": "mintgao",
+      "id": 154321591,
+      "node_id": "U_kgDOCTLCtw",
+      "avatar_url": "https://avatars.githubusercontent.com/u/154321591?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/mintgao",
+      "html_url": "https://github.com/mintgao",
+      "followers_url": "https://api.github.com/users/mintgao/followers",
+      "following_url": "https://api.github.com/users/mintgao/following{/other_user}",
+      "gists_url": "https://api.github.com/users/mintgao/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/mintgao/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/mintgao/subscriptions",
+      "organizations_url": "https://api.github.com/users/mintgao/orgs",
+      "repos_url": "https://api.github.com/users/mintgao/repos",
+      "events_url": "https://api.github.com/users/mintgao/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/mintgao/received_events",
+      "type": "User",
+      "user_view_type": "public",
+      "site_admin": false,
+      "name": null,
+      "company": null,
+      "blog": "",
+      "location": null,
+      "email": null,
+      "hireable": null,
+      "bio": null,
+      "twitter_username": null,
+      "notification_email": null,
+      "public_repos": 7,
+      "public_gists": 0,
+      "followers": 0,
+      "following": 0,
+      "created_at": "2023-12-19T09:36:12Z",
+      "updated_at": "2026-09-08T15:15:15Z"
+    },
+    "repository": {
+      "id": 1344813014,
+      "node_id": "R_kgDOUCg31g",
+      "name": "dsh-desktop",
+      "full_name": "mintgao/dsh-desktop",
+      "private": false,
+      "owner": {
+        "login": "mintgao",
+        "id": 154321591,
+        "node_id": "U_kgDOCTLCtw",
+        "avatar_url": "https://avatars.githubusercontent.com/u/154321591?v=4",
+        "gravatar_id": "",
+        "url": "https://api.github.com/users/mintgao",
+        "html_url": "https://github.com/mintgao",
+        "followers_url": "https://api.github.com/users/mintgao/followers",
+        "following_url": "https://api.github.com/users/mintgao/following{/other_user}",
+        "gists_url": "https://api.github.com/users/mintgao/gists{/gist_id}",
+        "starred_url": "https://api.github.com/users/mintgao/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/mintgao/subscriptions",
+        "organizations_url": "https://api.github.com/users/mintgao/orgs",
+        "repos_url": "https://api.github.com/users/mintgao/repos",
+        "events_url": "https://api.github.com/users/mintgao/events{/privacy}",
+        "received_events_url": "https://api.github.com/users/mintgao/received_events",
+        "type": "User",
+        "user_view_type": "public",
+        "site_admin": false
+      },
+      "html_url": "https://github.com/mintgao/dsh-desktop",
+      "description": "Unofficial macOS desktop client built on DeepSeek Harness, maintained by Mint.",
+      "fork": false,
+      "url": "https://api.github.com/repos/mintgao/dsh-desktop",
+      "forks_url": "https://api.github.com/repos/mintgao/dsh-desktop/forks",
+      "keys_url": "https://api.github.com/repos/mintgao/dsh-desktop/keys{/key_id}",
+      "collaborators_url": "https://api.github.com/repos/mintgao/dsh-desktop/collaborators{/collaborator}",
+      "teams_url": "https://api.github.com/repos/mintgao/dsh-desktop/teams",
+      "hooks_url": "https://api.github.com/repos/mintgao/dsh-desktop/hooks",
+      "issue_events_url": "https://api.github.com/repos/mintgao/dsh-desktop/issues/events{/number}",
+      "events_url": "https://api.github.com/repos/mintgao/dsh-desktop/events",
+      "assignees_url": "https://api.github.com/repos/mintgao/dsh-desktop/assignees{/user}",
+      "branches_url": "https://api.github.com/repos/mintgao/dsh-desktop/branches{/branch}",
+      "tags_url": "https://api.github.com/repos/mintgao/dsh-desktop/tags",
+      "blobs_url": "https://api.github.com/repos/mintgao/dsh-desktop/git/blobs{/sha}",
+      "git_tags_url": "https://api.github.com/repos/mintgao/dsh-desktop/git/tags{/sha}",
+      "git_refs_url": "https://api.github.com/repos/mintgao/dsh-desktop/git/refs{/sha}",
+      "trees_url": "https://api.github.com/repos/mintgao/dsh-desktop/git/trees{/sha}",
+      "statuses_url": "https://api.github.com/repos/mintgao/dsh-desktop/statuses/{sha}",
+      "languages_url": "https://api.github.com/repos/mintgao/dsh-desktop/languages",
+      "stargazers_url": "https://api.github.com/repos/mintgao/dsh-desktop/stargazers",
+      "contributors_url": "https://api.github.com/repos/mintgao/dsh-desktop/contributors",
+      "subscribers_url": "https://api.github.com/repos/mintgao/dsh-desktop/subscribers",
+      "subscription_url": "https://api.github.com/repos/mintgao/dsh-desktop/subscription",
+      "commits_url": "https://api.github.com/repos/mintgao/dsh-desktop/commits{/sha}",
+      "git_commits_url": "https://api.github.com/repos/mintgao/dsh-desktop/git/commits{/sha}",
+      "comments_url": "https://api.github.com/repos/mintgao/dsh-desktop/comments{/number}",
+      "issue_comment_url": "https://api.github.com/repos/mintgao/dsh-desktop/issues/comments{/number}",
+      "contents_url": "https://api.github.com/repos/mintgao/dsh-desktop/contents/{+path}",
+      "compare_url": "https://api.github.com/repos/mintgao/dsh-desktop/compare/{base}...{head}",
+      "merges_url": "https://api.github.com/repos/mintgao/dsh-desktop/merges",
+      "archive_url": "https://api.github.com/repos/mintgao/dsh-desktop/{archive_format}{/ref}",
+      "downloads_url": "https://api.github.com/repos/mintgao/dsh-desktop/downloads",
+      "issues_url": "https://api.github.com/repos/mintgao/dsh-desktop/issues{/number}",
+      "pulls_url": "https://api.github.com/repos/mintgao/dsh-desktop/pulls{/number}",
+      "milestones_url": "https://api.github.com/repos/mintgao/dsh-desktop/milestones{/number}",
+      "notifications_url": "https://api.github.com/repos/mintgao/dsh-desktop/notifications{?since,all,participating}",
+      "labels_url": "https://api.github.com/repos/mintgao/dsh-desktop/labels{/name}",
+      "releases_url": "https://api.github.com/repos/mintgao/dsh-desktop/releases{/id}",
+      "deployments_url": "https://api.github.com/repos/mintgao/dsh-desktop/deployments",
+      "created_at": "2026-08-24T10:11:23Z",
+      "updated_at": "2026-09-01T16:21:46Z",
+      "pushed_at": "2026-09-09T16:22:21Z",
+      "git_url": "git://github.com/mintgao/dsh-desktop.git",
+      "ssh_url": "git@github.com:mintgao/dsh-desktop.git",
+      "clone_url": "https://github.com/mintgao/dsh-desktop.git",
+      "svn_url": "https://github.com/mintgao/dsh-desktop",
+      "homepage": null,
+      "size": 144680,
+      "stargazers_count": 0,
+      "watchers_count": 0,
+      "language": "TypeScript",
+      "has_issues": true,
+      "has_projects": false,
+      "has_downloads": false,
+      "has_wiki": false,
+      "has_pages": false,
+      "has_discussions": false,
+      "forks_count": 0,
+      "mirror_url": null,
+      "archived": false,
+      "disabled": false,
+      "open_issues_count": 14,
+      "license": {
+        "key": "mit",
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "url": "https://api.github.com/licenses/mit",
+        "node_id": "MDc6TGljZW5zZTEz"
+      },
+      "allow_forking": true,
+      "is_template": false,
+      "web_commit_signoff_required": false,
+      "has_pull_requests": true,
+      "pull_request_creation_policy": "all",
+      "topics": [
+        "deepseek-harness",
+        "desktop-app",
+        "dsh",
+        "electron",
+        "macos"
+      ],
+      "visibility": "public",
+      "forks": 0,
+      "open_issues": 14,
+      "watchers": 0,
+      "default_branch": "main",
+      "permissions": {
+        "admin": true,
+        "maintain": true,
+        "push": true,
+        "triage": true,
+        "pull": true
+      },
+      "temp_clone_token": "",
+      "allow_squash_merge": true,
+      "allow_merge_commit": false,
+      "allow_rebase_merge": false,
+      "allow_auto_merge": false,
+      "delete_branch_on_merge": true,
+      "allow_update_branch": true,
+      "use_squash_pr_title_as_default": true,
+      "squash_merge_commit_message": "PR_BODY",
+      "squash_merge_commit_title": "PR_TITLE",
+      "merge_commit_message": "PR_TITLE",
+      "merge_commit_title": "MERGE_MESSAGE",
+      "security_and_analysis": {
+        "secret_scanning": {
+          "status": "enabled"
+        },
+        "secret_scanning_push_protection": {
+          "status": "enabled"
+        },
+        "dependabot_security_updates": {
+          "status": "disabled"
+        },
+        "secret_scanning_non_provider_patterns": {
+          "status": "disabled"
+        },
+        "secret_scanning_validity_checks": {
+          "status": "disabled"
+        }
+      },
+      "network_count": 0,
+      "subscribers_count": 0
+    },
+    "main-rules": {
+      "id": 21944549,
+      "name": "Mint main finalization",
+      "target": "branch",
+      "source_type": "Repository",
+      "source": "mintgao/dsh-desktop",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "~DEFAULT_BRANCH"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "pull_request",
+          "parameters": {
+            "required_approving_review_count": 1,
+            "dismiss_stale_reviews_on_push": true,
+            "required_reviewers": [],
+            "require_code_owner_review": false,
+            "require_last_push_approval": true,
+            "required_review_thread_resolution": true,
+            "require_extra_approval_for_unattributed_changes": true,
+            "allowed_merge_methods": [
+              "merge",
+              "squash",
+              "rebase"
+            ]
+          }
+        },
+        {
+          "type": "non_fast_forward"
+        },
+        {
+          "type": "required_status_checks",
+          "parameters": {
+            "strict_required_status_checks_policy": true,
+            "do_not_enforce_on_create": false,
+            "required_status_checks": [
+              {
+                "context": "Desktop source checks"
+              }
+            ]
+          }
+        }
+      ],
+      "node_id": "RRS_lACqUmVwb3NpdG9yec5QKDfWzgFO2OU",
+      "created_at": "2026-09-01T01:12:18.546+08:00",
+      "updated_at": "2026-09-09T00:48:28.929+08:00",
+      "bypass_actors": [],
+      "current_user_can_bypass": "never",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/mintgao/dsh-desktop/rulesets/21944549"
+        },
+        "html": {
+          "href": "https://github.com/mintgao/dsh-desktop/rules/21944549"
+        }
+      }
+    },
+    "creation-rules": {
+      "id": 21944575,
+      "name": "Mint desktop tag creation",
+      "target": "tag",
+      "source_type": "Repository",
+      "source": "mintgao/dsh-desktop",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/tags/desktop-v*"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "creation"
+        }
+      ],
+      "node_id": "RRS_lACqUmVwb3NpdG9yec5QKDfWzgFO2P8",
+      "created_at": "2026-09-01T01:12:53.536+08:00",
+      "updated_at": "2026-09-09T00:48:34.681+08:00",
+      "bypass_actors": [
+        {
+          "actor_id": 2,
+          "actor_type": "RepositoryRole",
+          "bypass_mode": "always"
+        }
+      ],
+      "current_user_can_bypass": "always",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/mintgao/dsh-desktop/rulesets/21944575"
+        },
+        "html": {
+          "href": "https://github.com/mintgao/dsh-desktop/rules/21944575"
+        }
+      }
+    },
+    "immutable-rules": {
+      "id": 21944588,
+      "name": "Mint desktop tag immutability",
+      "target": "tag",
+      "source_type": "Repository",
+      "source": "mintgao/dsh-desktop",
+      "enforcement": "active",
+      "conditions": {
+        "ref_name": {
+          "exclude": [],
+          "include": [
+            "refs/tags/desktop-v*"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "type": "update"
+        },
+        {
+          "type": "deletion"
+        },
+        {
+          "type": "non_fast_forward"
+        }
+      ],
+      "node_id": "RRS_lACqUmVwb3NpdG9yec5QKDfWzgFO2Qw",
+      "created_at": "2026-09-01T01:13:08.262+08:00",
+      "updated_at": "2026-09-01T01:13:08.297+08:00",
+      "bypass_actors": [],
+      "current_user_can_bypass": "never",
+      "_links": {
+        "self": {
+          "href": "https://api.github.com/repos/mintgao/dsh-desktop/rulesets/21944588"
+        },
+        "html": {
+          "href": "https://github.com/mintgao/dsh-desktop/rules/21944588"
+        }
+      }
+    },
+    "release-environment": {
+      "id": 20943901530,
+      "node_id": "EN_kwDOUCg31s8AAAAE4FqTWg",
+      "name": "mint-publication",
+      "url": "https://api.github.com/repos/mintgao/dsh-desktop/environments/mint-publication",
+      "html_url": "https://github.com/mintgao/dsh-desktop/deployments/activity_log?environments_filter=mint-publication",
+      "created_at": "2026-08-31T16:47:39Z",
+      "updated_at": "2026-08-31T16:47:39Z",
+      "can_admins_bypass": true,
+      "protection_rules": [
+        {
+          "id": 64196846,
+          "node_id": "GA_kwDOUCg31s4D05Du",
+          "type": "branch_policy"
+        },
+        {
+          "id": 64958075,
+          "node_id": "GA_kwDOUCg31s4D3y57",
+          "type": "required_reviewers",
+          "prevent_self_review": false,
+          "reviewers": [
+            {
+              "type": "User",
+              "reviewer": {
+                "login": "mintgao",
+                "id": 154321591,
+                "node_id": "U_kgDOCTLCtw",
+                "avatar_url": "https://avatars.githubusercontent.com/u/154321591?v=4",
+                "gravatar_id": "",
+                "url": "https://api.github.com/users/mintgao",
+                "html_url": "https://github.com/mintgao",
+                "followers_url": "https://api.github.com/users/mintgao/followers",
+                "following_url": "https://api.github.com/users/mintgao/following{/other_user}",
+                "gists_url": "https://api.github.com/users/mintgao/gists{/gist_id}",
+                "starred_url": "https://api.github.com/users/mintgao/starred{/owner}{/repo}",
+                "subscriptions_url": "https://api.github.com/users/mintgao/subscriptions",
+                "organizations_url": "https://api.github.com/users/mintgao/orgs",
+                "repos_url": "https://api.github.com/users/mintgao/repos",
+                "events_url": "https://api.github.com/users/mintgao/events{/privacy}",
+                "received_events_url": "https://api.github.com/users/mintgao/received_events",
+                "type": "User",
+                "user_view_type": "public",
+                "site_admin": false
+              }
+            }
+          ]
+        }
+      ],
+      "deployment_branch_policy": {
+        "protected_branches": true,
+        "custom_branch_policies": false
+      }
+    },
+    "actions-permissions": {
+      "default_workflow_permissions": "read",
+      "can_approve_pull_request_reviews": true
+    },
+    "workflows": [
+      {
+        "id": 341130730,
+        "node_id": "W_kwDOUCg31s4UVT3q",
+        "name": "Build single-exe",
+        "path": ".github/workflows/build-exe-for-python-sdk.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130730",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/build-exe-for-python-sdk.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Build%20single-exe/badge.svg"
+      },
+      {
+        "id": 347063867,
+        "node_id": "W_kwDOUCg31s4Ur8Y7",
+        "name": "Build PR preview",
+        "path": ".github/workflows/build-preview-cloudflare.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-09-01T08:15:14.000+08:00",
+        "updated_at": "2026-09-02T00:25:46.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/347063867",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/build-preview-cloudflare.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Build%20PR%20preview/badge.svg"
+      },
+      {
+        "id": 341130731,
+        "node_id": "W_kwDOUCg31s4UVT3r",
+        "name": "CI master",
+        "path": ".github/workflows/ci-master.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130731",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/ci-master.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/CI%20master/badge.svg"
+      },
+      {
+        "id": 341130732,
+        "node_id": "W_kwDOUCg31s4UVT3s",
+        "name": "CI",
+        "path": ".github/workflows/ci.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130732",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/ci.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/CI/badge.svg"
+      },
+      {
+        "id": 341130733,
+        "node_id": "W_kwDOUCg31s4UVT3t",
+        "name": "DSH Desktop CI",
+        "path": ".github/workflows/desktop-ci.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130733",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/desktop-ci.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/DSH%20Desktop%20CI/badge.svg"
+      },
+      {
+        "id": 343450410,
+        "node_id": "W_kwDOUCg31s4UeKMq",
+        "name": "Withdraw DSH Desktop release",
+        "path": ".github/workflows/desktop-release-withdraw.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-27T11:58:49.000+08:00",
+        "updated_at": "2026-09-09T00:43:13.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/343450410",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/desktop-release-withdraw.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Withdraw%20DSH%20Desktop%20release/badge.svg"
+      },
+      {
+        "id": 341130735,
+        "node_id": "W_kwDOUCg31s4UVT3v",
+        "name": "Publish qualified DSH Desktop bundle",
+        "path": ".github/workflows/desktop-release.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-09-09T00:43:19.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130735",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/desktop-release.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Publish%20qualified%20DSH%20Desktop%20bundle/badge.svg"
+      },
+      {
+        "id": 341130736,
+        "node_id": "W_kwDOUCg31s4UVT3w",
+        "name": "Deploy documentation",
+        "path": ".github/workflows/docs-pages.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130736",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/docs-pages.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Deploy%20documentation/badge.svg"
+      },
+      {
+        "id": 341130738,
+        "node_id": "W_kwDOUCg31s4UVT3y",
+        "name": "E2E (E2B sandbox)",
+        "path": ".github/workflows/e2b-e2e.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130738",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/e2b-e2e.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/E2E%20(E2B%20sandbox)/badge.svg"
+      },
+      {
+        "id": 341130739,
+        "node_id": "W_kwDOUCg31s4UVT3z",
+        "name": "E2E (real DeepSeek API)",
+        "path": ".github/workflows/e2e.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130739",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/e2e.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/E2E%20(real%20DeepSeek%20API)/badge.svg"
+      },
+      {
+        "id": 341130740,
+        "node_id": "W_kwDOUCg31s4UVT30",
+        "name": "Expected filenames",
+        "path": ".github/workflows/expected-filenames.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130740",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/expected-filenames.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Expected%20filenames/badge.svg"
+      },
+      {
+        "id": 341130741,
+        "node_id": "W_kwDOUCg31s4UVT31",
+        "name": "Issue lifecycle",
+        "path": ".github/workflows/issue-lifecycle.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130741",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/issue-lifecycle.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Issue%20lifecycle/badge.svg"
+      },
+      {
+        "id": 341130742,
+        "node_id": "W_kwDOUCg31s4UVT32",
+        "name": "Issue policy",
+        "path": ".github/workflows/issue-policy.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130742",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/issue-policy.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Issue%20policy/badge.svg"
+      },
+      {
+        "id": 341130743,
+        "node_id": "W_kwDOUCg31s4UVT33",
+        "name": "Landlock Run Release",
+        "path": ".github/workflows/landlock-run-release.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130743",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/landlock-run-release.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Landlock%20Run%20Release/badge.svg"
+      },
+      {
+        "id": 341130744,
+        "node_id": "W_kwDOUCg31s4UVT34",
+        "name": "Landlock Run",
+        "path": ".github/workflows/landlock-run.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130744",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/landlock-run.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Landlock%20Run/badge.svg"
+      },
+      {
+        "id": 341130746,
+        "node_id": "W_kwDOUCg31s4UVT36",
+        "name": "E2E (pi-ai Azure OpenAI and Anthropic)",
+        "path": ".github/workflows/pi-ai-provider-e2e.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130746",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/pi-ai-provider-e2e.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/E2E%20(pi-ai%20Azure%20OpenAI%20and%20Anthropic)/badge.svg"
+      },
+      {
+        "id": 341130748,
+        "node_id": "W_kwDOUCg31s4UVT38",
+        "name": "Release (Python)",
+        "path": ".github/workflows/python-release.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130748",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/python-release.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Release%20(Python)/badge.svg"
+      },
+      {
+        "id": 341130749,
+        "node_id": "W_kwDOUCg31s4UVT39",
+        "name": "Release publish (dsh)",
+        "path": ".github/workflows/release-publish.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130749",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/release-publish.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Release%20publish%20(dsh)/badge.svg"
+      },
+      {
+        "id": 341130750,
+        "node_id": "W_kwDOUCg31s4UVT3-",
+        "name": "Release publish (vendor)",
+        "path": ".github/workflows/release-vendor-publish.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130750",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/release-vendor-publish.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Release%20publish%20(vendor)/badge.svg"
+      },
+      {
+        "id": 341130751,
+        "node_id": "W_kwDOUCg31s4UVT3_",
+        "name": "Release (vendor)",
+        "path": ".github/workflows/release-vendor.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130751",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/release-vendor.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Release%20(vendor)/badge.svg"
+      },
+      {
+        "id": 341130752,
+        "node_id": "W_kwDOUCg31s4UVT4A",
+        "name": "Release (dsh)",
+        "path": ".github/workflows/release.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130752",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/release.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Release%20(dsh)/badge.svg"
+      },
+      {
+        "id": 341130753,
+        "node_id": "W_kwDOUCg31s4UVT4B",
+        "name": "Sandbox",
+        "path": ".github/workflows/sandbox.yml",
+        "state": "active",
+        "created_at": "2026-08-24T18:13:53.000+08:00",
+        "updated_at": "2026-08-24T18:13:53.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341130753",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/sandbox.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Sandbox/badge.svg"
+      },
+      {
+        "id": 346575804,
+        "node_id": "W_kwDOUCg31s4UqFO8",
+        "name": "Reconcile upstream adoption",
+        "path": ".github/workflows/upstream-adoption-controller.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-31T19:59:58.000+08:00",
+        "updated_at": "2026-09-09T00:43:23.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/346575804",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/upstream-adoption-controller.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Reconcile%20upstream%20adoption/badge.svg"
+      },
+      {
+        "id": 346579843,
+        "node_id": "W_kwDOUCg31s4UqGOD",
+        "name": "Finalize qualified upstream adoption",
+        "path": ".github/workflows/upstream-adoption-finalizer.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-31T20:06:00.000+08:00",
+        "updated_at": "2026-09-09T00:43:26.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/346579843",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/upstream-adoption-finalizer.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Finalize%20qualified%20upstream%20adoption/badge.svg"
+      },
+      {
+        "id": 346579844,
+        "node_id": "W_kwDOUCg31s4UqGOE",
+        "name": "Observe upstream adoption outcomes",
+        "path": ".github/workflows/upstream-adoption-observer.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-31T20:06:00.000+08:00",
+        "updated_at": "2026-09-09T00:43:30.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/346579844",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/upstream-adoption-observer.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Observe%20upstream%20adoption%20outcomes/badge.svg"
+      },
+      {
+        "id": 346579846,
+        "node_id": "W_kwDOUCg31s4UqGOG",
+        "name": "Verify Mint release policy",
+        "path": ".github/workflows/upstream-adoption-preflight.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-31T20:06:00.000+08:00",
+        "updated_at": "2026-09-09T00:43:33.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/346579846",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/upstream-adoption-preflight.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Verify%20Mint%20release%20policy/badge.svg"
+      },
+      {
+        "id": 346579848,
+        "node_id": "W_kwDOUCg31s4UqGOI",
+        "name": "Validate and qualify upstream candidate",
+        "path": ".github/workflows/upstream-adoption-validation.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-31T20:06:00.000+08:00",
+        "updated_at": "2026-09-09T00:43:37.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/346579848",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/upstream-adoption-validation.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Validate%20and%20qualify%20upstream%20candidate/badge.svg"
+      },
+      {
+        "id": 341215688,
+        "node_id": "W_kwDOUCg31s4UVonI",
+        "name": "Legacy upstream sync is retired",
+        "path": ".github/workflows/upstream-sync.yml",
+        "state": "disabled_manually",
+        "created_at": "2026-08-24T20:25:43.000+08:00",
+        "updated_at": "2026-08-31T20:06:00.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341215688",
+        "html_url": "https://github.com/mintgao/dsh-desktop/blob/main/.github/workflows/upstream-sync.yml",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/workflows/Legacy%20upstream%20sync%20is%20retired/badge.svg"
+      },
+      {
+        "id": 341164568,
+        "node_id": "W_kwDOUCg31s4UVcIY",
+        "name": "Dependabot Updates",
+        "path": "dynamic/dependabot/dependabot-updates",
+        "state": "active",
+        "created_at": "2026-08-24T19:06:56.000+08:00",
+        "updated_at": "2026-08-24T19:06:56.000+08:00",
+        "url": "https://api.github.com/repos/mintgao/dsh-desktop/actions/workflows/341164568",
+        "html_url": "https://github.com/mintgao/dsh-desktop/actions/workflows/dependabot/dependabot-updates",
+        "badge_url": "https://github.com/mintgao/dsh-desktop/actions/workflows/dependabot/dependabot-updates/badge.svg"
+      }
+    ]
+  },
+  "administratorEvidence": {
+    "schemaVersion": 1,
+    "repositoryId": 1344813014,
+    "revokedAppIds": [
+      4782984,
+      4783001,
+      4783016
+    ],
+    "revocationEvidence": [
+      {
+        "observedAt": "2026-09-10T00:48:39.366978+00:00",
+        "account": "mintgao",
+        "url": "https://github.com/settings/installations",
+        "installedApps": [
+          {
+            "name": "ChatGPT Codex Connector",
+            "installationId": 155107427
+          }
+        ],
+        "absentInstallationIds": [
+          158011022,
+          158010848,
+          158010627
+        ],
+        "method": "Current complete browser accessibility tree: installation list contains only Codex Connector; user confirmed final Publisher dialog.",
+        "review": {
+          "url": "https://github.com/mintgao/dsh-desktop/pull/67/changes",
+          "head": "221047ad740df88806f2b4344ce6d9e6a3b57dfb",
+          "approveRadioEnabled": true,
+          "reviewSubmitted": false
+        },
+        "lastPushActivityId": 43107247224
+      }
+    ],
+    "outstandingAuthorityRevoked": true,
+    "delayedCallbacksDisabled": true,
+    "botReviewEligibilityVerified": true,
+    "draftAccessProbe": {
+      "schemaVersion": 1,
+      "purpose": "desktop-delivery-operation",
+      "repository": "mintgao/dsh-desktop",
+      "distribution": "dsh-desktop-mint",
+      "operation": "bootstrap-probe",
+      "state": "draft-access-verified",
+      "repositoryId": 1344813014,
+      "releaseId": 384901300,
+      "tag": "desktop-bootstrap-reviewed-20260909-608079d892",
+      "commit": "608079d892e865ce05f9998410480fa0b9d0e76b",
+      "workflow": {
+        "path": ".github/workflows/desktop-ci.yml",
+        "commit": "608079d892e865ce05f9998410480fa0b9d0e76b",
+        "runId": 34252363039,
+        "attempt": 1
+      },
+      "tokenPermissions": {
+        "contents": "write",
+        "issues": "write",
+        "actions": "read"
+      },
+      "uploaded": true,
+      "downloadedDigest": "6c58534b55b6dc1b5218ea900fbf32028b4db5b3de12994121fcb5087f713c58",
+      "deleted": true,
+      "bodyRestored": true,
+      "remainedDraft": true,
+      "nextAction": "Use this completed probe as draft-operation evidence in administrator preflight; it does not prove publication."
+    }
+  },
+  "adminEvidenceDigest": "50b97f3a85bba25e87e6e83bf8e8f351693208e82df09c55eedad002a3c4fa2b",
+  "nextAction": "Review baseline and this exact report before enabling activation.",
+  "legacyBaseline": {
+    "schemaVersion": 1,
+    "purpose": "desktop-legacy-baseline",
+    "repository": "mintgao/dsh-desktop",
+    "repositoryId": 1344813014,
+    "upstream": {
+      "id": 379884041,
+      "tag": "dsh-v0.1.2-alpha.3",
+      "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+      "publishedAt": "2026-08-31T16:03:39Z"
+    },
+    "desktopTag": "desktop-v0.1.2-alpha.3.unsigned.1",
+    "sourceCommit": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
+    "assets": [
+      {
+        "name": "DSH-Desktop-Mint-0.1.2-alpha.3.unsigned.1-arm64.dmg",
+        "size": 176212489,
+        "sha256": "e7f45dc0ec39504171f2248732de3c1eeab756c6e2f1388d745f022ffa7020ce",
+        "githubAssetId": 539784667
+      },
+      {
+        "name": "DSH-Desktop-Mint-0.1.2-alpha.3.unsigned.1-x64.dmg",
+        "size": 179047088,
+        "sha256": "2be2e3fc1ece76132fd7ba2ce5b5d87010fc8895f68213e0148c4c779ebe3e49",
+        "githubAssetId": 539784669
+      },
+      {
+        "name": "SHA256SUMS.txt",
+        "size": 248,
+        "sha256": "e5c13b4c317ed9e35ff7d15bb0eebe80325342c5dd69c58aa98afe501212f938",
+        "githubAssetId": 539784668
+      }
+    ],
+    "releaseId": 380641449,
+    "releaseMetadataDigest": "52135f51b7c7905369e5a208e82e8b9aa7924fa06081dd584fe3032d035c5e5d",
+    "evidenceReferences": [
+      "https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.2-alpha.3.unsigned.1"
+    ],
+    "unresolvedAdoption": [],
+    "bootstrapInstallation": {
+      "context": {
+        "schemaVersion": 1,
+        "purpose": "desktop-bootstrap-installation",
+        "repository": "mintgao/dsh-desktop",
+        "repositoryId": 1344813014,
+        "pullRequest": 67,
+        "baseBranch": "main",
+        "baseCommit": "089d92d9f6e051472c2522af32aac75ed3e04742",
+        "tag": "desktop-bootstrap-reviewed-20260910-c5cf7df833",
+        "seedCommit": "c5cf7df83339222793123774a87fa8d60bda68ee",
+        "seedTree": "db90e0608eab6fdd7bd4cf478307ed790efa9bc3",
+        "runId": 34376111618,
+        "attempt": 1
+      },
+      "contextDigest": "eae00c24321c46870c3dac9cc361edeb693e1ccbf57bb4afd88fe47d3c6377c8",
+      "observedHead": "221047ad740df88806f2b4344ce6d9e6a3b57dfb"
+    },
+    "releaseBodyDigest": "489e510bdafc9a0302a3f487653eea3dd480e17c81d692ff8acc113ab1d34f51",
+    "releasePublishedAt": "2026-09-01T15:57:00Z"
+  }
+}

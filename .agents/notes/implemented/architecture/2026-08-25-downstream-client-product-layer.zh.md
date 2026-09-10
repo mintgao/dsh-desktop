@@ -10,6 +10,8 @@ DSH Desktop Mint 把 DeepSeek Harness 变成面向用户的 macOS 产品。产�
 
 ## 决策
 
+[二次开发规范](../../../../docs/context/downstream-policy.zh.md) 将本职责模型作为约束当前与未来工作的长期要求。它要求明确外部复用途径，并验证 DSH 兼容性；仅有 workspace 包不能证明二者成立。产品范围为桌面交付及用户可获取的 DSH 更新。本规范不决定替代发布实现。
+
 DSH 是插件式 harness 与可复用平台。DSH Desktop Mint 是下游产品发行版：由经过审查的 DSH 插件组合、产品默认值、品牌、macOS 原生宿主与发布策略组成。该产品不会 fork agent 运行时，也不会定义一套平行客户端框架。产品差异来自它选择了哪些插件以及如何配置这些插件。
 
 功能应该归入持有其事实与副作用的最窄平面：

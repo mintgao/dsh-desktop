@@ -1,0 +1,99 @@
+# Implement reviewed desktop release delivery
+
+English | [中文](brief.zh.md)
+
+- ID: `20260908-desktop-reviewed-delivery`
+- Size: `L`
+- Status: local implementation verified; remote activation pending
+
+## Authorization and product outcome
+
+The owner confirmed the GitHub-protection and per-release-confirmation trust model in the [delivery decision](../../decisions/20260908-desktop-update-delivery.md#owner-confirmation). Continue implementation of ordinary reviewed upstream adoption and whole-client release delivery. The [downstream policy](../../context/downstream-policy.md) governs reusable tooling and Mint configuration. End users receive one desktop update, regardless of component changes.
+
+The [shadow implementation](../20260908-desktop-delivery-shadow/verification.md) passed local acceptance and default checks. Build on it. Preserve unrelated working-tree changes. Implement and test the complete next operational path locally, including migration preflight and recovery; remote activation must be backed by exact protection, credential, sole-writer and artifact evidence. This task does not implicitly authorize publishing an unspecified release or replacing the user's installed application.
+
+## Acceptance criteria
+
+- RD-1: ordered discovery prepares one reviewable adoption change per upstream release, with source identity, conflict/version checks and a source lock; it cannot merge or publish implicitly.
+- RD-2: qualification binds an exact clean downstream commit and source lock to complete native artifacts, recorded evidence and a final manifest; altered or missing artifacts and unqualified signing modes fail closed.
+- RD-3: explicit promotion verifies the approved manifest, run identity, exact source and immediate predecessor; draft/upload/publish reconciliation and public verification are idempotent, and conflicts block without overwrite.
+- RD-4: a single mutation owner serializes publication, withdrawal and recovery; migration checks every legacy entry point and prevents delayed callbacks from competing with the replacement. Missing live controls prevent activation.
+- RD-5: maintainers receive reviewable action/error summaries; unchanged blockers do not cause repeated mutation or notification. Local tests exercise a second distribution through shared tooling. Product defaults stay in configuration.
+- RD-6: focused behavior and failure-recovery tests, workflow checks and independent default verification cover the final implementation; live native, signing, installation, GitHub notification and migration limits are explicit.
+
+## Ownership
+
+Read-only Tech Lead author and separate reviewer resolve the exact executable architecture before one RD writer edits scripts/workflows. The orchestrator owns documents and gate confirmation. Independent QA owns final acceptance and configured default verification. Existing shadow scripts may be extended without presenting shadow evidence as publication approval.
+
+## Technical decision readiness
+
+- Outcome: `decision-accepted`
+- Trigger evidence: release authority, immutable artifact identity, protected environments, ordered adoption, remote mutation and migration recovery
+- Decision owner: Tech Lead `distribution_design`
+- Governing decision: [Accepted operational decision](../../decisions/20260908-desktop-reviewed-delivery.md)
+- Review mode: `independent-agent`
+- Review result: `approved`
+- Review evidence: Tech Lead `distribution_review` approved operational implementation, repeatable seed finalization and scheduled bot-identity notification on 2026-09-08
+- Material product decisions: owner confirmed GitHub protection and per-release confirmation replacing custom App policy attestation
+- Open blockers: none
+- Gate: `implementation-ready`
+- Gate owner: Workflow orchestrator
+- Confirmed at: 2026-09-08T12:14:46Z
+- Confirmation basis: independent review approved the exact operational decision, seed recovery and scheduled notification identity amendments; owner trust choice resolved; live activation conditional
+- Readiness history: 2026-09-08T12:05:53Z operational implementation approved; reopened before scheduled notification edits
+
+## Lineage implementation readiness
+
+Tech Lead `distribution_design` authored the [desktop delivery order amendment](../../decisions/20260908-desktop-reviewed-delivery.md#desktop-delivery-order); `distribution_review` approved its exact persisted text. The orchestrator reopened the affected lineage gate at `2026-09-08T12:31:23Z`. Desktop-only and replacement releases preserve upstream identity while recording their own delivery predecessor; dependent implementation is `implementation-ready`.
+
+## Bootstrap implementation readiness
+
+The independent reviewer approved the persisted initial workflow bootstrap exception. The orchestrator releases local bootstrap implementation at `2026-09-08T12:34:26Z`; live execution still requires an independently reviewed exact snapshot, immutable bootstrap tag and protected environment approval. This gate does not authorize remote changes.
+
+Independent review approved the absent-base-lock bootstrap amendment. The orchestrator releases this narrowly scoped implementation; exact Git-tree absence and pinned existing adoption evidence are mandatory. Routine adoption cannot use this exception.
+
+Independent review approved the administrator-preflight/runtime split. The orchestrator releases implementation of the fixed administrator-only allowlist and digest-bound attestations; generic read failures remain blockers.
+
+Independent review approved initial activation ordering and the exact nonpublic draft-access probe. The orchestrator releases their implementation; first merge includes verified activation, and probe success requires restored body and removed probe asset. No remote execution is authorized by this receipt.
+
+## Bootstrap visibility readiness
+
+Tech Lead `distribution_design` authored the bootstrap ruleset visibility amendment; independent reviewer `distribution_review` approved its persisted text. The orchestrator confirms `implementation-ready` at `2026-09-08T13:55:05.947606+00:00` for that scoped fix and its rejection tests. Remote Actions PR permissions remain a separate authorization blocker.
+
+## Live timestamp correction readiness
+
+Run `34238478819` rejected equivalent administrator and public `updated_at` representations. Read-only comparison confirmed timezone representation as the sole difference. Tech Lead `distribution_design` authored the ruleset timestamp amendment and independent reviewer `distribution_review` approved it. The orchestrator confirms `implementation-ready` at `2026-09-08T14:35:09.137075+00:00` for shared bootstrap/migration timestamp normalization and its tests, with raw evidence unchanged.
+
+## Supporting fixture correction
+
+The sampler candidate passed HMR acceptance but failed RD-6 on a baseline compaction duration assertion and an unhandled table scroll callback. Controlled experiments reproduced both failure mechanisms. The orchestrator classifies their correction as S: test-owned clock progression and completion of the specifically admitted scroll debounce, with production behavior and existing assertions preserved. No shared contract or durable decision changes. One RD writer may edit only the two owning test files; independent QA must verify the changed combined candidate. The failed matrix is retained rather than retried unchanged.
+
+## Release PATCH correction readiness
+
+The live probe changed the draft tag while applying its body edit. Tech Lead `distribution_design` proposed the explicit Release PATCH identity amendment under the Accepted no-retargeting decision. Outcome: `covered-by-accepted-decision`; review mode: `independent-agent`; review result: `approved`; gate: `implementation-ready`. The orchestrator permits no affected source edits before independent approval. Owner recovery restored the exact tag/body and removed the verified probe asset; legacy authority is unchanged.
+
+Independent Tech Lead `distribution_review` approved the persisted Release PATCH identity amendment. The orchestrator confirms the scoped implementation gate at `2026-09-08T16:25:57.440733+00:00` with no open decision blockers. One RD writer owns the probe/publication protocol correction and rejection tests; independent QA owns verification, followed by a new live nonpublic probe.
+
+## Bootstrap classification readiness
+
+- Outcome: `decision-accepted`
+- Trigger evidence: migration classification, bootstrap identity and final-head evidence freshness
+- Decision owner: Tech Lead `classification_design`
+- Governing decision: [Bootstrap installation classification](../../decisions/20260908-desktop-reviewed-delivery.md#bootstrap-installation-evidence)
+- Review mode: `independent-agent`
+- Review result: `approved`
+- Review evidence: independent Tech Lead `classification_review` approved ADR blobs `d4d74c44de297370bf09f9970015ba9778827598` and `618026ff53649c6c9f38f3e056cfe8d6675f0299`
+- Material product decisions: accepted first merge includes verified activation; no new product choice
+- Open blockers: none
+- Gate: `implementation-ready`
+- Gate owner: Workflow orchestrator
+- Confirmed at: 2026-09-09T15:50:00.240097+00:00
+- Confirmation basis: Accepted amendment, independent approval, BI-1 through BI-6 and existing owner cutover decisions verified
+- Readiness history: temporary uncommitted amendment was lost during interruption; reconstructed from retained decision context and current source
+
+- BI-1: Valid explicit context classifies exactly one installation PR separately; omitted context preserves existing behavior. Another pending adoption blocks activation.
+- BI-2: Reject wrong repository, author, base, branch, head, tag, seed/tree, run/attempt, skipped bootstrap job, installed workflow, present base lock, changed lineage, non-substantive or additional-file finalization, incomplete pagination/tree data and API failures.
+- BI-3: Capture completed finalization A, embed unchanged evidence into successor seed B, finalize B and externally validate without rewriting evidence. Reject altered embedded bytes or stale final-head evidence.
+- BI-4: Reject changed publication assets/source, protections, legacy writer state and pending inventory at final validation; perform no remote mutation.
+- BI-5: Installed ordinary workflows disable new exceptions while historically classified activation remains readable; verify another distribution configuration.
+- BI-6: Independent QA verifies focused failures and the final candidate's configured default checks. Live bot last-pusher, owner-review eligibility and final validation remain rollout requirements.

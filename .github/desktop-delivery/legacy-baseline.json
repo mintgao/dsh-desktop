@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "purpose": "desktop-legacy-baseline",
+  "repository": "mintgao/dsh-desktop",
+  "repositoryId": 1344813014,
+  "upstream": {
+    "id": 379884041,
+    "tag": "dsh-v0.1.2-alpha.3",
+    "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+    "publishedAt": "2026-08-31T16:03:39Z"
+  },
+  "desktopTag": "desktop-v0.1.2-alpha.3.unsigned.1",
+  "sourceCommit": "67406fc6af451f7f68874cb31c2d0f3242c0c8ad",
+  "assets": [
+    {
+      "name": "DSH-Desktop-Mint-0.1.2-alpha.3.unsigned.1-arm64.dmg",
+      "size": 176212489,
+      "sha256": "e7f45dc0ec39504171f2248732de3c1eeab756c6e2f1388d745f022ffa7020ce",
+      "githubAssetId": 539784667
+    },
+    {
+      "name": "DSH-Desktop-Mint-0.1.2-alpha.3.unsigned.1-x64.dmg",
+      "size": 179047088,
+      "sha256": "2be2e3fc1ece76132fd7ba2ce5b5d87010fc8895f68213e0148c4c779ebe3e49",
+      "githubAssetId": 539784669
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "size": 248,
+      "sha256": "e5c13b4c317ed9e35ff7d15bb0eebe80325342c5dd69c58aa98afe501212f938",
+      "githubAssetId": 539784668
+    }
+  ],
+  "releaseId": 380641449,
+  "releaseMetadataDigest": "52135f51b7c7905369e5a208e82e8b9aa7924fa06081dd584fe3032d035c5e5d",
+  "evidenceReferences": [
+    "https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.2-alpha.3.unsigned.1"
+  ],
+  "unresolvedAdoption": [],
+  "bootstrapInstallation": {
+    "context": {
+      "schemaVersion": 1,
+      "purpose": "desktop-bootstrap-installation",
+      "repository": "mintgao/dsh-desktop",
+      "repositoryId": 1344813014,
+      "pullRequest": 67,
+      "baseBranch": "main",
+      "baseCommit": "089d92d9f6e051472c2522af32aac75ed3e04742",
+      "tag": "desktop-bootstrap-reviewed-20260910-c5cf7df833",
+      "seedCommit": "c5cf7df83339222793123774a87fa8d60bda68ee",
+      "seedTree": "db90e0608eab6fdd7bd4cf478307ed790efa9bc3",
+      "runId": 34376111618,
+      "attempt": 1
+    },
+    "contextDigest": "eae00c24321c46870c3dac9cc361edeb693e1ccbf57bb4afd88fe47d3c6377c8",
+    "observedHead": "221047ad740df88806f2b4344ce6d9e6a3b57dfb"
+  },
+  "releaseBodyDigest": "489e510bdafc9a0302a3f487653eea3dd480e17c81d692ff8acc113ab1d34f51",
+  "releasePublishedAt": "2026-09-01T15:57:00Z"
+}
