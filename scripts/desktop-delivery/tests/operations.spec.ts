@@ -295,3 +295,167 @@ it('prepares and finalizes successive desktop fixes while upstream waits, then a
   expect(lock.predecessor).toEqual(fixture.lock.release)
   expect(deliveryPredecessor('upstream', lock, delivered).tag).toBe(delivered.tag)
 })
+
+/** Allocate one private upstream history and reviewed assessment for a catch-up scenario. */
+async function catchUpRepository() {
+  const fixture = repository()
+  const { root } = fixture
+  git(root, 'checkout', 'upstream')
+  const releases = [fixture.lock.release, fixture.next]
+  for (let id = 3; id <= 9; id++) {
+    writeFileSync(join(root, 'upstream.txt'), `upstream ${String(id)}`)
+    git(root, 'commit', '-am', `upstream ${String(id)}`)
+    releases.push({ id, tag: `dsh-v1.0.0-alpha.${String(id)}`, publishedAt: `2026-01-${String(id).padStart(2, '0')}T00:00:00Z`, commit: git(root, 'rev-parse', 'HEAD') })
+  }
+  git(root, 'checkout', 'main')
+  mkdirSync(join(root, 'docs'))
+  writeFileSync(join(root, 'docs/upgrade.md'), 'Seven edges and one direct upgrade fixture')
+  const target = releases[7]
+  if (target === undefined) throw new Error('Fixture target missing')
+  const scenario = (from: unknown, to: unknown) => ({ from, to, status: 'verified', persistedFormatsChanged: false, unsupportedDowngrades: ['Unsupported'], compatibilityFindings: ['Verified fixture'], evidenceReferences: [{ path: 'docs/upgrade.md', sha256: digest(readFileSync(join(root, 'docs/upgrade.md'))) }] })
+  store(join(root, 'docs/assessment.json'), { schemaVersion: 1, from: fixture.lock.release, to: target, releases: releases.slice(1, 8), edges: releases.slice(1, 8).map((to, index) => scenario(releases[index], to)), directUpgrade: scenario(fixture.lock.release, target) })
+  git(root, 'add', '.'); git(root, 'commit', '-m', 'Review catch-up assessment')
+  const base = git(root, 'rev-parse', 'HEAD')
+  const prior = { schemaVersion: 1, purpose: 'desktop-release-qualification', mode: 'unsigned-preview', distribution: config.id, repository: config.repository, repositoryId: config.repositoryId, upstream: fixture.lock.release, tag: 'desktop-v1.0.0-alpha.1.unsigned.1', downstreamCommit: base }
+  let observed = [...releases]
+  let invalidTree = false
+  const wrap = (fallback: GitHub, checkout: string): GitHub => {
+    const immutable = new Map<string, unknown>()
+    return { async request(method, path, body) {
+      const upstream = `/repos/${config.upstreamRepository}`
+      const downstream = `/repos/${config.repository}`
+      if (path.startsWith(`${upstream}/releases?`)) return observed.map(item => ({ id: item.id, tag_name: item.tag, published_at: item.publishedAt, draft: false, prerelease: true }))
+      if (path.startsWith(`${upstream}/git/ref/tags/`)) return { object: { type: 'commit', sha: observed.find(item => path.endsWith(encodeURIComponent(item.tag)))?.commit } }
+      if (path.startsWith(`${upstream}/compare/`) || path.startsWith(`${downstream}/git/commits/`)) {
+        if (!immutable.has(path)) immutable.set(path, await fallback.request(method, path.replace(upstream, downstream), body))
+        return immutable.get(path)
+      }
+      if (path.startsWith(`${downstream}/releases?`)) return [{ id: 10, tag_name: prior.tag, draft: false }]
+      if (path.startsWith(`${downstream}/releases/10/assets`)) return [{ id: 20, name: 'manifest.json' }]
+      if (path === `${downstream}/releases/assets/20`) return Buffer.from(JSON.stringify(prior))
+      if (path.startsWith(`${downstream}/git/ref/tags/`)) return { object: { type: 'commit', sha: base } }
+      if (path.includes('/git/trees/') && method === 'GET') return { truncated: false, tree: ['docs/assessment.json', 'docs/upgrade.md'].map(path => ({ path, type: 'blob', mode: invalidTree ? '120000' : '100644' })) }
+      if (path.includes('/contents/docs/')) {
+        const [file, commit] = path.split('/contents/')[1]?.split('?ref=') ?? []
+        return { type: 'file', encoding: 'base64', path: file, content: Buffer.from(execFileSync('git', ['show', `${String(commit)}:${String(file)}`], { cwd: checkout })).toString('base64') }
+      }
+      return fallback.request(method, path, body)
+    } }
+  }
+  const selected = { tag: target.tag, commit: target.commit, assessment: 'docs/assessment.json' }
+  const plan = await adoptionPlan(config, root, join(root, config.sourceLockPath), { complete: true, releases }, base, '1.0.0-alpha.8.unsigned.1', wrap(gitHubRepository(root).api, root), 'catch-up', prior, selected)
+  return { fixture, root, releases, target, prior, base, selected, plan, wrap,
+    setObserved: (value: typeof releases) => { observed = value },
+    setInvalidTree: (value: boolean) => { invalidTree = value } }
+}
+
+/** Prepare a private seed so each scenario owns its mutable branch and mock server. */
+async function preparedCatchUp() {
+  const data = await catchUpRepository()
+  const { root, plan, releases, wrap } = data
+  const checkout = join(temporary(), 'checkout')
+  const prepared = await prepareAdoption(config, root, plan, checkout, async (cwd, env) => {
+    expect(env.GH_TOKEN).toBeUndefined(); expect(env.GITHUB_TOKEN).toBeUndefined()
+    expect(readFileSync(join(cwd, 'upstream.txt'), 'utf8')).toBe('upstream 8')
+  })
+  expect(object(prepared.proposedLock).schemaVersion).toBe(3)
+  expect(object(prepared.proposedLock).observed).toEqual(releases)
+  git(checkout, 'branch', String(prepared.branch), String(prepared.seed))
+  const remote = gitHubRepository(checkout)
+  const api = wrap(remote.api, checkout)
+  return { ...data, checkout, prepared, remote, api }
+}
+
+it('plans seven-release catch-up through the actual CLI', async () => {
+  const { root, releases, prior, base, target, selected, plan } = await catchUpRepository()
+  expect(object(plan.catchUp).releases).toHaveLength(7)
+  const cliRoot = temporary()
+  const mock = join(cliRoot, 'remote.mjs')
+  const observationsPath = join(cliRoot, 'observations.json')
+  const priorPath = join(cliRoot, 'prior.json')
+  const cliOut = join(cliRoot, 'plan.json')
+  store(observationsPath, { complete: true, releases }); store(priorPath, prior)
+  writeFileSync(mock, `const prior = ${JSON.stringify(prior)};
+const base = ${JSON.stringify(base)};
+globalThis.fetch = async (url, options) => {
+  const path = new URL(url).pathname;
+  let value;
+  if (path.endsWith('/git/ref/heads/main')) value = {object:{sha:base}};
+  else if (path.endsWith('/releases/assets/20')) return new Response(JSON.stringify(prior));
+  else if (path.endsWith('/releases/10/assets')) value = [{id:20,name:'manifest.json'}];
+  else if (path.endsWith('/releases')) value = [{id:10,tag_name:prior.tag,draft:false}];
+  else if (path.includes('/git/ref/tags/')) value = {object:{type:'commit',sha:base}};
+  else if (path.endsWith('/pulls')) value = [];
+  else throw new Error('Unexpected CLI request '+url);
+  return new Response(JSON.stringify(value),{headers:{'Content-Type':'application/json'}});
+};
+`)
+  const cliResult = spawnSync(process.execPath, ['--import', 'tsx', '--import', mock, resolve('scripts/desktop-delivery/cli.ts'),
+    'adoption-plan', '--root', root, '--config', configPath, '--lock', join(root, config.sourceLockPath),
+    '--fixture', observationsPath, '--baseline', priorPath, '--base', base, '--version', '1.0.0-alpha.8.unsigned.1',
+    '--kind', 'catch-up', '--target-tag', target.tag, '--target-commit', target.commit, '--assessment', selected.assessment,
+    '--out', cliOut], { encoding: 'utf8', timeout: 30_000 })
+  expect(cliResult.error).toBeUndefined(); expect(cliResult.signal).toBeNull()
+  expect(cliResult.status, cliResult.stdout + cliResult.stderr).toBe(0)
+  expect(object(JSON.parse(readFileSync(cliOut, 'utf8')) as unknown).catchUp).toEqual(plan.catchUp)
+
+})
+
+it('prepares seven actual upstream commits and rejects fabricated predecessor evidence', async () => {
+  const { plan, root, fixture, target } = await preparedCatchUp()
+  const fabricated = { ...plan, previousLock: { ...fixture.lock, observed: [fixture.lock.release, target] } }
+  await expect(prepareAdoption(config, root, fabricated, join(temporary(), 'checkout'), () => Promise.resolve())).rejects.toThrow('Fabricated')
+})
+
+it('rejects catch-up kind, live-range and seed-file substitutions before writing', async () => {
+  const { prepared, api, remote, releases, setObserved, setInvalidTree } = await preparedCatchUp()
+  for (const releaseKind of ['desktop', 'replacement']) await expect(applyAdoption(config, { ...prepared, releaseKind }, api)).rejects.toThrow('adoption kind')
+  expect(remote.writes()).toBe(0)
+  setObserved(releases.filter(item => item.id !== 4))
+  await expect(applyAdoption(config, prepared, api)).rejects.toThrow('omits')
+  expect(remote.writes()).toBe(0)
+  setObserved(releases); setInvalidTree(true)
+  await expect(applyAdoption(config, prepared, api)).rejects.toThrow('regular Git file')
+  expect(remote.writes()).toBe(0)
+
+})
+
+it('finalizes the exact catch-up seed and retries without another write', async () => {
+  const { prepared, api, remote, checkout, plan } = await preparedCatchUp()
+  await applyAdoption(config, prepared, api)
+  const final = git(checkout, 'rev-parse', String(prepared.branch))
+  expect(verifyFinalization(checkout, config, final).catchUp).toEqual(plan.catchUp)
+  const writes = remote.writes()
+  await applyAdoption(config, prepared, api)
+  expect(remote.writes()).toBe(writes)
+})
+
+it('refinalizes a reviewed human correction without changing catch-up provenance', async () => {
+  const { prepared, api, checkout, plan } = await preparedCatchUp()
+  await applyAdoption(config, prepared, api)
+  git(checkout, 'checkout', '--force', String(prepared.branch))
+  writeFileSync(join(checkout, 'downstream.txt'), 'Reviewed human correction')
+  git(checkout, 'commit', '-am', 'Reviewed correction')
+  const amended = await prepareAdoption(config, checkout, plan, checkout, () => Promise.resolve())
+  expect(object(amended.proposedLock).catchUp).toEqual(plan.catchUp)
+  await applyAdoption(config, amended, api)
+  expect(verifyFinalization(checkout, config, git(checkout, 'rev-parse', String(prepared.branch))).catchUp).toEqual(plan.catchUp)
+})
+
+it('preserves catch-up provenance when preparing and finalizing a desktop-only successor', async () => {
+  const { prepared, api, checkout, plan, prior, target, releases, wrap } = await preparedCatchUp()
+  await applyAdoption(config, prepared, api)
+  const latest = git(checkout, 'rev-parse', String(prepared.branch))
+  git(checkout, 'checkout', '--force', 'main')
+  git(checkout, 'merge', '--no-ff', latest, '-m', 'Owner merges catch-up')
+  const desktopBase = git(checkout, 'rev-parse', 'HEAD')
+  const desktopPlan = await adoptionPlan(config, checkout, join(checkout, config.sourceLockPath), { complete: true, releases },
+    desktopBase, '1.0.0-alpha.8.unsigned.2', api, 'desktop', { ...prior, upstream: target, downstreamCommit: latest })
+  const desktopCheckout = join(temporary(), 'checkout')
+  const desktopSeed = await prepareAdoption(config, checkout, desktopPlan, desktopCheckout, () => Promise.resolve())
+  expect(object(desktopSeed.proposedLock).catchUp).toEqual(plan.catchUp)
+  git(desktopCheckout, 'branch', String(desktopSeed.branch), String(desktopSeed.seed))
+  const desktopRemote = gitHubRepository(desktopCheckout)
+  await applyAdoption(config, desktopSeed, wrap(desktopRemote.api, desktopCheckout))
+  expect(verifyFinalization(desktopCheckout, config, git(desktopCheckout, 'rev-parse', String(desktopSeed.branch))).catchUp).toEqual(plan.catchUp)
+})

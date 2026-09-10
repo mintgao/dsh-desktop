@@ -2,11 +2,12 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { assessmentAsset, assessmentFiles, gitEvidence } from './catch-up.ts'
 import { deliveryPredecessor, requireUnsignedVersion } from './lineage.ts'
 import { checkArchitecture } from './artifacts.ts'
 import { readCandidate } from './candidate.ts'
 import { git, verifyFinalization } from './adoption.ts'
-import { assetPath, digest, hex, object, readJson, sameRelease, release, string, textField } from './evidence.ts'
+import { assetPath, catchUpEvidence, digest, hex, object, readJson, sameRelease, release, string, textField } from './evidence.ts'
 import type { DeliveryConfig } from './operations.ts'
 
 /** Exact trusted orchestration identity recorded by the qualification workflow. */
@@ -84,15 +85,18 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
   if (Array.isArray(prior.unresolvedAdoption) && prior.unresolvedAdoption.length > 0) throw new Error('Baseline unresolved adoption must be reconciled before qualification')
   if (!Number.isSafeInteger(input.run.id) || input.run.id < 1 || !Number.isSafeInteger(input.run.attempt) || input.run.attempt < 1) throw new Error('Missing qualification run identity')
   hex(input.run.commit, 40)
+  const rangeFiles = lock.catchUp === undefined || lock.catchUp === null ? []
+    : assessmentFiles(lock.catchUp, config.sourceLockPath, path => gitEvidence(input.root, commit, path), true)
+  for (const item of rangeFiles) writeFileSync(join(input.directory, assessmentAsset(item.reference)), item.bytes)
   const checksums = native.map(item => `${item.dmg.sha256}  ${item.dmg.name}`).sort().join('\n') + '\n'
   for (const [name, bytes] of [['release-notes.md', notes], ['data-compatibility.json', compatibilityBytes], ['SHA256SUMS.txt', Buffer.from(checksums)], ['candidate.json', readFileSync(input.candidatePath)], ['predecessor.json', predecessorBytes]] as const) writeFileSync(join(input.directory, name), bytes)
   return {
-    schemaVersion: 1, purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id,
+    schemaVersion: 2, catchUp: lock.catchUp ?? null, purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id,
     releaseKind: input.releaseKind, ...(input.releaseKind === 'replacement' ? { supersedes: { tag: prior.tag, manifestDigest: digest(predecessorBytes) } } : {}), desktopVersion: input.version, tag: `desktop-v${input.version}`, upstream: lock.release, downstreamCommit: commit, sourceLockDigest: candidate.record.sourceLockDigest, configDigest: candidate.record.configDigest, componentVersions: candidate.record.components,
     workflow: { path: '.github/workflows/desktop-delivery-qualify.yml', commit: input.run.commit, runId: input.run.id, attempt: input.run.attempt },
     predecessor: input.releaseKind === 'replacement' ? predecessor : { ...predecessor, digest: digest(predecessorBytes) },
     native, candidateDigest: candidate.digest, releaseNotesDigest: digest(notes), dataCompatibilityDigest: digest(compatibilityBytes),
-    files: [...native.flatMap(item => [item.dmg, item.evidence]), ...['release-notes.md', 'data-compatibility.json', 'SHA256SUMS.txt', 'candidate.json', 'predecessor.json'].map(name => file(input.directory, name))],
+    files: [...rangeFiles.map(item => file(input.directory, assessmentAsset(item.reference))), ...native.flatMap(item => [item.dmg, item.evidence]), ...['release-notes.md', 'data-compatibility.json', 'SHA256SUMS.txt', 'candidate.json', 'predecessor.json'].map(name => file(input.directory, name))],
     nextAction: 'Review these exact manifest bytes before starting the protected publication operation.',
   }
 }
@@ -109,7 +113,8 @@ export function checkedManifest(config: DeliveryConfig,
   digest: string
   files: ReleaseFile[] } {
   const manifest = object(readJson(path))
-  if (manifest.schemaVersion !== 1 || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview' || manifest.repository !== config.repository || manifest.repositoryId !== config.repositoryId || manifest.distribution !== config.id) throw new Error('Invalid production qualification; signed-mode-unconfigured or shadow evidence')
+  if ((manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview' || manifest.repository !== config.repository || manifest.repositoryId !== config.repositoryId || manifest.distribution !== config.id) throw new Error('Invalid production qualification; signed-mode-unconfigured or shadow evidence')
+  const range = manifestCatchUp(manifest)
   if (manifest.tag !== `desktop-v${string(manifest.desktopVersion)}`) throw new Error('Invalid unsigned desktop identity')
   requireUnsignedVersion(string(manifest.desktopVersion))
   hex(manifest.downstreamCommit, 40)
@@ -143,6 +148,12 @@ export function checkedManifest(config: DeliveryConfig,
     || !Array.isArray(compatibility.evidenceReferences)
     || compatibility.evidenceReferences.length === 0 || !Array.isArray(compatibility.unsupportedDowngrades) || compatibility.unsupportedDowngrades.length === 0) throw new Error('Compatibility assessment requires separate migration qualification')
   textField(compatibility.assessment)
+  if (range !== null) {
+    const rangeFiles = assessmentFiles(range, config.sourceLockPath, path => readFileSync(assetPath(directory, assessmentAsset({ path, sha256: '' }))), true)
+    for (const item of rangeFiles) if (!names.has(assessmentAsset(item.reference))) throw new Error('Missing catch-up assessment asset')
+    const expected = new Set(rangeFiles.map(item => assessmentAsset(item.reference)))
+    if ([...names].some(name => name.startsWith('catch-up-') && !expected.has(name))) throw new Error('Unexpected catch-up assessment asset')
+  } else if ([...names].some(name => name.startsWith('catch-up-'))) throw new Error('Catch-up assets without range evidence')
   for (const arch of config.architectures) {
     const entries = manifest.native.map(object).filter(item => item.architecture === arch)
     if (entries.length !== 1) throw new Error('Missing or duplicate native architecture')
@@ -161,4 +172,18 @@ export function checkedManifest(config: DeliveryConfig,
     for (const key of ['bootstrap', 'backendHttp', 'backendStopped', 'mountedReadOnly', 'detached', 'copiedInstallation', 'installationStopped', 'installationRemoved']) if (native[key] !== true) throw new Error('Native qualification check failed')
   }
   return { manifest, digest: digest(readFileSync(path)), files }
+}
+
+/** Validate versioned manifest provenance without discarding historical evidence.
+ * @param manifest - parsed production manifest.
+ * @returns Normalized range or null for ordinary/historical qualification.
+ */
+export function manifestCatchUp(manifest: Record<string, unknown>): ReturnType<typeof catchUpEvidence> | null {
+  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) throw new Error('Unknown production manifest schema')
+  if (manifest.schemaVersion === 1 && 'catchUp' in manifest) throw new Error('Historical manifests cannot carry catch-up evidence')
+  const range = manifest.schemaVersion === 1 || manifest.catchUp === null ? null : catchUpEvidence(manifest.catchUp)
+  if (range !== null && !sameRelease(range.to, release(manifest.upstream))) throw new Error('Manifest catch-up target mismatch')
+  if (manifest.releaseKind === 'catch-up' && range === null) throw new Error('Missing manifest catch-up evidence')
+  if (range !== null && !['catch-up', 'desktop', 'replacement'].includes(String(manifest.releaseKind))) throw new Error('Invalid catch-up manifest kind')
+  return range
 }

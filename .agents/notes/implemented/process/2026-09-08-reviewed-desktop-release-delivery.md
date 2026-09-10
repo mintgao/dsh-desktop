@@ -30,6 +30,6 @@ The [initial installation check](../../../../docs/cookbook/bootstrap-installatio
 
 ## Consequences
 
-Desktop-only fixes preserve upstream identity; adopting a new upstream preserves its order. Withdrawal removes discovery without remotely downgrading installed applications. Restore requires retained exact bytes. A copied installation proves neither existing-user data migration nor signed native capabilities.
+Desktop-only fixes preserve upstream identity. Ordinary upstream adoption preserves immediate-successor order; the [catch-up extension](../../../../docs/decisions/20260910-desktop-catch-up-delivery.md) retains an explicitly reviewed complete interval and requires direct-upgrade evidence. Schema-versioned provenance prevents implicit skipping and avoids fabricated intermediate desktop releases. Withdrawal removes discovery without remotely downgrading installed applications. Restore requires retained exact bytes. A copied installation proves neither existing-user data migration nor signed native capabilities.
 
 The [verification record](../../../../docs/work-items/20260908-desktop-reviewed-delivery/verification.md) owns executed evidence and remaining limits. The [rollout prerequisites](../../../../docs/work-items/20260908-desktop-reviewed-delivery/rollout.md) preserve the unresolved adoption and identify live controls. Local checks do not prove remote activation, notification receipt or public release delivery.

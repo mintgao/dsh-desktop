@@ -60,9 +60,10 @@ Status: Accepted
 
 ### 上游顺序与桌面交付顺序
 
-每份清单声明 `releaseKind: upstream | desktop | replacement`：
+每份清单声明 `releaseKind: upstream | catch-up | desktop | replacement`：
 
 - `upstream`：其上游身份是最后已验证交付的上游身份之后直接下一个已采用身份。源码锁定的上游前序匹配该上一个上游身份，不能跳过中间采用。
+- `catch-up`：由[追赶决策](20260910-desktop-catch-up-delivery.zh.md)规定显式审核区间和基线到目标的直接升级资格认定；普通 upstream 仍保持紧邻后继语义。
 - `desktop`：其上游身份等于最后已验证交付的上游身份。保留源码锁定的上游前序；交付前序为最后已验证桌面清单或经过审查的旧基线。这允许仅桌面修复和独立验证的重新构建，而不捏造上游采用。发现更新的上游不阻止此类交付。
 - `replacement`：其上游身份等于被替代的撤回版本。包含 `supersedes: { tag, manifestDigest }`；交付前序为撤回版本之前的已验证交付。保留源码锁定的上游前序，原样保留撤回清单。
 

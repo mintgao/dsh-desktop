@@ -1,4 +1,5 @@
 /** Digest-approved publication and recovery over immutable tags and an existing matching draft. */
+import { verifyLiveCatchUp, verifyRemoteAssessment } from './catch-up.ts'
 import { compareVersions } from 'compare-versions'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -7,7 +8,7 @@ import { join } from 'node:path'
 import { assetPath, digest, hex, object, sameRelease, release, string, textField } from './evidence.ts'
 import { deliveryPredecessor, requireNewVersion } from './lineage.ts'
 import { sourceLock } from './evidence.ts'
-import { checkedManifest, type ReleaseFile } from './manifest.ts'
+import { checkedManifest, manifestCatchUp, type ReleaseFile } from './manifest.ts'
 import { operationPlan, pages, validatePlan, type DeliveryConfig, type GitHub } from './operations.ts'
 import { patchRelease, readRelease } from './release-patch.ts'
 import { tagCommit } from './migration.ts'
@@ -15,9 +16,10 @@ import { tagCommit } from './migration.ts'
 function withdrawalManifest(config: DeliveryConfig, path: string): ReturnType<typeof checkedManifest> {
   const bytes = readFileSync(path)
   const manifest = object(JSON.parse(bytes.toString()) as unknown)
-  if (manifest.schemaVersion !== 1 || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview'
+  if ((manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview'
     || manifest.repository !== config.repository || manifest.repositoryId !== config.repositoryId || manifest.distribution !== config.id
     || manifest.tag !== `desktop-v${string(manifest.desktopVersion)}` || !Array.isArray(manifest.files)) throw new Error('Withdrawal manifest identity mismatch')
+  manifestCatchUp(manifest)
   hex(manifest.downstreamCommit, 40)
   hex(manifest.sourceLockDigest)
   release(manifest.upstream)
@@ -72,10 +74,12 @@ export async function verifyQualification(config: DeliveryConfig,
   const source = object(await api.request('GET', `/repos/${config.repository}/contents/${config.sourceLockPath}?ref=${string(manifest.downstreamCommit)}`))
   const bytes = Buffer.from(textField(source.content), 'base64')
   if (digest(bytes) !== manifest.sourceLockDigest) throw new Error('Qualified source-lock bytes changed')
-  const lock = object(JSON.parse(bytes.toString()) as unknown)
+  const lock = sourceLock(JSON.parse(bytes.toString()) as unknown, config)
+  const range = manifestCatchUp(manifest)
+  if (JSON.stringify(range) !== JSON.stringify(lock.catchUp ?? null)) throw new Error('Manifest and source-lock catch-up evidence disagree')
   const seed = object(lock.adoptionSeed)
   const seedCommit = object(await api.request('GET', `/repos/${config.repository}/git/commits/${hex(seed.commit, 40)}`))
-  if (lock.schemaVersion !== 2 || object(seedCommit.tree).sha !== seed.tree || !sameRelease(release(lock.release), release(manifest.upstream))) throw new Error('Qualified source-lock seed is inconsistent')
+  if ((lock.schemaVersion !== 2 && lock.schemaVersion !== 3) || object(seedCommit.tree).sha !== seed.tree || !sameRelease(release(lock.release), release(manifest.upstream))) throw new Error('Qualified source-lock seed is inconsistent')
   const history = await api.request('GET', `/repos/${config.repository}/commits?sha=${string(manifest.downstreamCommit)}&path=${config.sourceLockPath}&per_page=1`)
   if (!Array.isArray(history) || history.length !== 1) throw new Error('Missing source-lock finalization history')
   const finalization = object(await api.request('GET', `/repos/${config.repository}/git/commits/${hex(object(history[0]).sha, 40)}`))
@@ -87,6 +91,11 @@ export async function verifyQualification(config: DeliveryConfig,
   for (const [path, expected] of [['release-notes.md', manifest.releaseNotesDigest], ['data-compatibility.json', manifest.dataCompatibilityDigest]]) {
     const document = object(await api.request('GET', `/repos/${config.repository}/contents/.github/desktop-delivery/${String(path)}?ref=${string(manifest.downstreamCommit)}`))
     if (digest(Buffer.from(textField(document.content), 'base64')) !== expected) throw new Error('Published assessment differs from candidate source')
+  }
+  if (range !== null) {
+    const upstream = object(await api.request('GET', `/repos/${config.repository}/compare/${range.to.commit}...${hex(seed.commit, 40)}`))
+    if (!['ahead', 'identical'].includes(String(upstream.status))) throw new Error('Catch-up target is absent from qualified seed ancestry')
+    await verifyRemoteAssessment(config, api, hex(seed.commit, 40), range, true)
   }
   if (files !== undefined) {
     const artifacts = (await pages(api, `/repos/${config.repository}/actions/runs/${String(identity.runId)}/artifacts`, 'artifacts')).filter(item => item.name === 'desktop-release-bundle')
@@ -129,6 +138,13 @@ async function verifyDelivery(config: DeliveryConfig,
   const retained = (await pages(api, `/repos/${config.repository}/releases`)).filter(item => string(item.tag_name).startsWith('desktop-v'))
   const matching = retained.find(item => item.tag_name === manifest.tag)
   if (matching !== undefined && matching.body !== releaseBody(directory, manifestDigest)) throw new Error('Desktop tag is already reserved by another manifest')
+  const range = manifestCatchUp(manifest)
+  if (range !== null) {
+    const source = object(await api.request('GET', `/repos/${config.repository}/contents/${config.sourceLockPath}?ref=${string(manifest.downstreamCommit)}`))
+    const bytes = Buffer.from(textField(source.content), 'base64')
+    if (digest(bytes) !== manifest.sourceLockDigest) throw new Error('Delivery source-lock bytes changed')
+    await verifyLiveCatchUp(config, api, range, sourceLock(JSON.parse(bytes.toString()) as unknown, config).observed)
+  }
   if (matching?.draft === false) return
   requireNewVersion(string(manifest.desktopVersion), retained, matching === undefined ? undefined : string(manifest.tag))
   const priorBytes = readFileSync(assetPath(directory, 'predecessor.json'))
@@ -189,6 +205,7 @@ async function verifyLineage(config: DeliveryConfig,
     if (digest(bytes) !== predecessor.digest) throw new Error('Predecessor manifest digest changed')
     const previous = object(JSON.parse(Buffer.from(bytes).toString()) as unknown)
     if (previous.repository !== config.repository || previous.tag !== tag || !sameRelease(release(previous.upstream), release(predecessor.upstream))) throw new Error('Predecessor identity changed')
+    manifestCatchUp(previous)
     if (previous.purpose !== 'desktop-release-qualification' || previous.repositoryId !== config.repositoryId || previous.distribution !== config.id
       || !Array.isArray(previous.files) || await tagCommit(config, tag, api) !== previous.downstreamCommit) throw new Error('Predecessor qualification changed')
     const priorFiles = previous.files.map((value) => { const entry = object(value); return { name: string(entry.name),
@@ -260,6 +277,7 @@ export async function preparePublication(config: DeliveryConfig,
   const existing = await tagCommit(config, tag, api)
   if (existing !== undefined && existing !== candidate) throw new Error('Immutable tag points to a conflicting commit')
   if (existing === undefined) {
+    await verifyDelivery(config, checked.manifest, directory, checked.digest, api)
     try { await api.request('POST', `/repos/${config.repository}/git/refs`, { ref: `refs/tags/${tag}`, sha: candidate }) }
     catch (error) { if (await tagCommit(config, tag, api) !== candidate) throw error }
   }
@@ -267,6 +285,7 @@ export async function preparePublication(config: DeliveryConfig,
   const body = releaseBody(directory, checked.digest)
   let remote = await findRelease(config, tag, api)
   if (remote === undefined) {
+    await verifyDelivery(config, checked.manifest, directory, checked.digest, api)
     try { remote = object(await api.request('POST', `/repos/${config.repository}/releases`, { tag_name: tag, target_commitish: candidate, name: tag, body, draft: true, prerelease: true })) }
     catch (error) { remote = await findRelease(config, tag, api); if (remote === undefined) throw error }
   }
@@ -322,6 +341,7 @@ export async function mutateRelease(config: DeliveryConfig,
   }
   await verifyAssets(config, remote, files, api, false)
   if (remote.draft === true) {
+    if (plan.operation === 'promote') await verifyDelivery(config, checked.manifest, directory, checked.digest, api)
     await patchRelease(config, api, { ...identity, draft: false })
   }
   remote = await readRelease(config, api, { ...identity, draft: false })

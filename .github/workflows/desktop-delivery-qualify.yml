@@ -13,7 +13,7 @@ on:
       kind:
         description: Desktop delivery kind
         type: choice
-        options: [upstream, desktop, replacement]
+        options: [upstream, catch-up, desktop, replacement]
         required: true
       predecessor:
         description: Exact predecessor JSON committed in the trusted orchestration revision

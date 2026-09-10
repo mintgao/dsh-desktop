@@ -19,12 +19,60 @@ export interface Distribution {
 export interface Release { id: number; tag: string; commit: string; publishedAt: string }
 /** Supplied source evidence, with all previously observed selected releases. */
 export interface SourceLock {
-  schemaVersion: 1 | 2
+  schemaVersion: 1 | 2 | 3
   upstreamRepository: string
   release: Release
   predecessor: Release | null
   observed: Release[]
   adoptionSeed?: { commit: string; tree: string }
+  catchUp?: CatchUp | null
+}
+
+/** Committed assessment file identity. */
+export interface EvidenceReference { path: string; sha256: string }
+/** Exact reviewed upstream interval retained through subsequent desktop fixes. */
+export interface CatchUp {
+  schemaVersion: 1
+  from: Release
+  to: Release
+  releases: Release[]
+  assessment: EvidenceReference
+}
+
+/** Validate a repository-relative evidence path without aliases or parent traversal.
+ * @param value - external path.
+ * @returns Canonical slash-separated relative path.
+ */
+export function evidencePath(value: unknown): string {
+  const path = string(value)
+  if (!/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/u.test(path) || path.split('/').some(part => part === '.' || part === '..' || part.toLowerCase() === '.git')) throw new Error('Unsafe assessment evidence path')
+  return path
+}
+/** Parse exact range provenance, optionally checking its full observation interval.
+ * @param value - non-null catch-up record.
+ * @param observed - complete recorded observations when available.
+ * @returns Validated range and assessment digest.
+ */
+export function catchUpEvidence(value: unknown, observed?: Release[]): CatchUp {
+  const item = object(value)
+  if (item.schemaVersion !== 1 || !Array.isArray(item.releases) || item.releases.length < 2) throw new Error('Catch-up requires at least two releases')
+  const from = release(item.from)
+  const to = release(item.to)
+  const releases = item.releases.map(release)
+  let previous = from
+  const ids = new Set([from.id])
+  const tags = new Set([from.tag])
+  for (const entry of releases) {
+    if (compareRelease(previous, entry) >= 0 || ids.has(entry.id) || tags.has(entry.tag)) throw new Error('Invalid catch-up range order or duplicate identity')
+    ids.add(entry.id); tags.add(entry.tag); previous = entry
+  }
+  if (!sameRelease(previous, to)) throw new Error('Catch-up target differs from range')
+  if (observed !== undefined) {
+    const interval = observed.filter(entry => compareRelease(entry, from) > 0 && compareRelease(entry, to) <= 0).sort(compareRelease)
+    if (!observed.some(entry => sameRelease(entry, from)) || interval.length !== releases.length || interval.some((entry, index) => !sameRelease(entry, release(releases[index])))) throw new Error('Catch-up range omits or changes observed releases')
+  }
+  const assessment = object(item.assessment)
+  return { schemaVersion: 1, from, to, releases, assessment: { path: evidencePath(assessment.path), sha256: hex(assessment.sha256) } }
 }
 
 /** Require an object at an external JSON input.
@@ -92,15 +140,19 @@ export function distribution(value: unknown): Distribution {
  */
 export function sourceLock(value: unknown, config: Distribution): SourceLock {
   const item = object(value)
-  if ((item.schemaVersion !== 1 && item.schemaVersion !== 2) || item.upstreamRepository !== config.upstreamRepository || !Array.isArray(item.observed)) throw new Error('Invalid source lock repository or schema')
+  if ((item.schemaVersion !== 1 && item.schemaVersion !== 2 && item.schemaVersion !== 3) || item.upstreamRepository !== config.upstreamRepository || !Array.isArray(item.observed)) throw new Error('Invalid source lock repository or schema')
   const current = release(item.release)
   const predecessor = item.predecessor === null ? null : release(item.predecessor)
   const observed = item.observed.map(release)
   if (!observed.every(entry => entry.tag.startsWith(config.tagPrefix)) || !observed.some(entry => sameRelease(entry, current))) throw new Error('Source lock current identity is not recorded')
   if (new Set(observed.map(entry => entry.id)).size !== observed.length || new Set(observed.map(entry => entry.tag)).size !== observed.length) throw new Error('Duplicate source lock identity')
   if (predecessor !== null && (!observed.some(entry => sameRelease(entry, predecessor)) || compareRelease(predecessor, current) >= 0)) throw new Error('Invalid predecessor identity')
-  const adoptionSeed = item.schemaVersion === 2 ? object(item.adoptionSeed) : undefined
+  if (item.schemaVersion !== 3 && 'catchUp' in item) throw new Error('Historical source-lock schemas cannot carry catch-up evidence')
+  const catchUp = item.schemaVersion === 3 ? (item.catchUp === null ? null : catchUpEvidence(item.catchUp, observed)) : undefined
+  if (catchUp !== undefined && catchUp !== null && (predecessor === null || !sameRelease(catchUp.from, predecessor) || !sameRelease(catchUp.to, current))) throw new Error('Source-lock catch-up identity mismatch')
+  const adoptionSeed = item.schemaVersion === 1 ? undefined : object(item.adoptionSeed)
   return {
+    ...(catchUp === undefined ? {} : { catchUp }),
     schemaVersion: item.schemaVersion, upstreamRepository: config.upstreamRepository, release: current, predecessor, observed,
     ...(adoptionSeed === undefined ? {} : { adoptionSeed: { commit: hex(adoptionSeed.commit, 40), tree: hex(adoptionSeed.tree, 40) } }),
   }

@@ -6,8 +6,9 @@ import { join, resolve } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { selectRelease } from '../../../apps/desktop/src/github-releases.ts'
 import { reviewedMutation } from '../reviewed-cli.ts'
+import { assessmentAsset } from '../catch-up.ts'
 import { checkedManifest } from '../manifest.ts'
-import { digest, object } from '../evidence.ts'
+import { catchUpEvidence, digest, object } from '../evidence.ts'
 import { deliveryConfig, operationPlan, type GitHub } from '../operations.ts'
 import { mutateRelease, promotionPlan, retainedBundle, preparePublication } from '../publication.ts'
 
@@ -16,12 +17,23 @@ const temporary: string[] = []
 afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }) })
 function directory(): string { const path = mkdtempSync(join(tmpdir(), 'delivery-payload-')); temporary.push(path); return path }
 function json(value: unknown): Buffer { return Buffer.from(`${JSON.stringify(value, null, 2)}\n`) }
-function fixture(version = '1.2.3-alpha.1.unsigned.2') {
+function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false) {
   const path = directory()
   const upstream = { id: 1, tag: 'dsh-v0.1.0-alpha.1', commit: 'a'.repeat(40), publishedAt: '2026-01-01T00:00:00Z' }
-  const lock = { schemaVersion: 2, upstreamRepository: config.upstreamRepository, release: upstream, predecessor: null, observed: [upstream], adoptionSeed: { commit: 'b'.repeat(40), tree: 'c'.repeat(40) } }
+  const earlier = Array.from({ length: 7 }, (_, index) => ({ id: index + 10, tag: `dsh-v0.0.9-alpha.${String(index)}`, commit: String(index + 2).repeat(40), publishedAt: `2025-12-${String(index + 20)}T00:00:00Z` }))
+  const from = earlier[0]
+  if (from === undefined) throw new Error('Fixture baseline missing')
+  const rangeReleases = [...earlier.slice(1), upstream]
+  const leaf = { path: 'docs/upgrade.md', sha256: digest('Verified copied-home fixture') }
+  const scenario = (source: unknown, target: unknown) => ({ from: source, to: target, status: 'verified', persistedFormatsChanged: false, unsupportedDowngrades: ['Unsupported'], compatibilityFindings: ['Verified copied-home fixture'], evidenceReferences: [leaf] })
+  const assessment = { schemaVersion: 1, from, to: upstream, releases: rangeReleases,
+    edges: rangeReleases.map((to, index) => scenario(earlier[index], to)),
+    directUpgrade: scenario(from, upstream) }
+  const range = catchUp ? catchUpEvidence({ schemaVersion: 1, from, to: upstream, releases: rangeReleases, assessment: { path: 'docs/catch-up.json', sha256: digest(json(assessment)) } }) : null
+  const catchUpFiles = range === null ? [] : [{ reference: range.assessment, bytes: json(assessment) }, { reference: leaf, bytes: Buffer.from('Verified copied-home fixture') }]
+  const lock = { schemaVersion: catchUp ? 3 : 2, ...(catchUp ? { catchUp: range } : {}), upstreamRepository: config.upstreamRepository, release: upstream, predecessor: catchUp ? from : null, observed: catchUp ? [...earlier, upstream] : [upstream], adoptionSeed: { commit: 'b'.repeat(40), tree: 'c'.repeat(40) } }
   const candidate = { purpose: 'desktop-delivery-shadow', kind: 'candidate', qualificationEligible: true, sourceDifference: { status: '' }, downstreamCommit: 'd'.repeat(40), sourceLockDigest: digest(json(lock)), configDigest: 'e'.repeat(64), upstream, components: { dsh: '0.1.0-alpha.1' } }
-  const baseline = { schemaVersion: 1, purpose: 'desktop-legacy-baseline', repository: config.repository, repositoryId: config.repositoryId, upstream, desktopTag: 'desktop-v1.2.3-alpha.1.unsigned.1', sourceCommit: 'f'.repeat(40), releaseId: 1, assets: [] }
+  const baseline = { schemaVersion: 1, purpose: 'desktop-legacy-baseline', repository: config.repository, repositoryId: config.repositoryId, upstream: catchUp ? from : upstream, desktopTag: 'desktop-v1.2.3-alpha.1.unsigned.1', sourceCommit: 'f'.repeat(40), releaseId: 1, assets: [] }
   const localConfig = { ...config, baselinePath: join(path, 'baseline.json') }
   writeFileSync(localConfig.baselinePath, json(baseline))
   const file = (name: string,
@@ -38,11 +50,11 @@ function fixture(version = '1.2.3-alpha.1.unsigned.2') {
   })
   const notes = 'Unsigned preview / 未签名预览\nNo automatic installation.\n'
   const compatibility = { schemaVersion: 1, persistedFormatsChanged: false, assessment: 'Fixture data assessment', evidenceReferences: ['verification.md'], unsupportedDowngrades: ['Not tested'] }
-  const files = [...native.flatMap(item => [item.dmg, item.evidence]), file('candidate.json', json(candidate)), file('release-notes.md', notes), file('data-compatibility.json', json(compatibility)), file('predecessor.json', json(baseline)), file('SHA256SUMS.txt', native.map(item => `${item.dmg.sha256}  ${item.dmg.name}`).sort().join('\n') + '\n')]
-  const manifest = { schemaVersion: 1, purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id, desktopVersion: version, tag: `desktop-v${version}`, releaseKind: 'desktop', upstream, downstreamCommit: candidate.downstreamCommit, sourceLockDigest: candidate.sourceLockDigest, configDigest: candidate.configDigest, componentVersions: candidate.components, workflow: { path: '.github/workflows/desktop-delivery-qualify.yml', commit: '1'.repeat(40), runId: 10, attempt: 1 }, predecessor: { tag: baseline.desktopTag, digest: digest(json(baseline)), kind: baseline.purpose, upstream }, native, candidateDigest: digest(json(candidate)), releaseNotesDigest: digest(notes), dataCompatibilityDigest: digest(json(compatibility)), files }
+  const files = [...catchUpFiles.map(item => file(assessmentAsset(item.reference), item.bytes)), ...native.flatMap(item => [item.dmg, item.evidence]), file('candidate.json', json(candidate)), file('release-notes.md', notes), file('data-compatibility.json', json(compatibility)), file('predecessor.json', json(baseline)), file('SHA256SUMS.txt', native.map(item => `${item.dmg.sha256}  ${item.dmg.name}`).sort().join('\n') + '\n')]
+  const manifest = { schemaVersion: catchUp ? 2 : 1, ...(catchUp ? { catchUp: range } : {}), purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id, desktopVersion: version, tag: `desktop-v${version}`, releaseKind: catchUp ? 'catch-up' : 'desktop', upstream, downstreamCommit: candidate.downstreamCommit, sourceLockDigest: candidate.sourceLockDigest, configDigest: candidate.configDigest, componentVersions: candidate.components, workflow: { path: '.github/workflows/desktop-delivery-qualify.yml', commit: '1'.repeat(40), runId: 10, attempt: 1 }, predecessor: { tag: baseline.desktopTag, digest: digest(json(baseline)), kind: baseline.purpose, upstream: baseline.upstream }, native, candidateDigest: digest(json(candidate)), releaseNotesDigest: digest(notes), dataCompatibilityDigest: digest(json(compatibility)), files }
   const manifestPath = join(path, 'manifest.json')
   writeFileSync(manifestPath, json(manifest))
-  return { path, localConfig, manifestPath, manifest, lock, notes, compatibility, baseline, files }
+  return { path, localConfig, manifestPath, manifest, lock, notes, compatibility, baseline, files, catchUpFiles }
 }
 
 it('rehashes native descriptors and source evidence and emits desktop assets accepted by both client architectures', () => {
@@ -95,6 +107,9 @@ function server(data: ReturnType<typeof fixture>) {
   }
   const api: GitHub = { async request(method, path, body) {
     if (method !== 'GET' && method !== 'DOWNLOAD') writes++
+    if (path.startsWith(`/repos/${config.upstreamRepository}/releases?`)) return data.lock.observed.map(item => ({ id: item.id, tag_name: item.tag, published_at: item.publishedAt, draft: false, prerelease: true }))
+    if (path.startsWith(`/repos/${config.upstreamRepository}/git/ref/tags/`)) return { object: { type: 'commit', sha: data.lock.observed.find(item => path.endsWith(encodeURIComponent(item.tag)))?.commit } }
+    if (path.startsWith(`/repos/${config.upstreamRepository}/compare/`)) return { status: 'ahead' }
     const relative = path.replace(`https://uploads.github.com/repos/${config.repository}`, '').replace(`/repos/${config.repository}`, '')
     if (relative.startsWith('/issues')) {
       if (method === 'POST') { issues.push({ ...object(body), user: { id: config.botId, type: 'Bot' }, number: 200 }); return issues[0] }
@@ -111,6 +126,12 @@ function server(data: ReturnType<typeof fixture>) {
     if (relative === '/git/ref/heads/main') return { object: { sha: '1'.repeat(40) } }
     if (relative.startsWith('/git/ref/tags/')) return { object: { type: 'commit', sha: relative.includes(data.baseline.desktopTag) ? data.baseline.sourceCommit : data.manifest.downstreamCommit } }
     if (relative.startsWith('/compare/')) return { status: 'ahead', files: [{ filename: config.sourceLockPath }] }
+    if (relative.startsWith('/git/trees/')) return { truncated: false, tree: data.catchUpFiles.map(item => ({ path: item.reference.path, type: 'blob', mode: '100644' })) }
+    if (relative.startsWith('/contents/docs/')) {
+      const file = data.catchUpFiles.find(item => relative === `/contents/${item.reference.path}?ref=${data.lock.adoptionSeed.commit}`)
+      if (file === undefined) throw new Error('Missing fixture catch-up file')
+      return { type: 'file', encoding: 'base64', path: file.reference.path, content: Buffer.from(file.bytes).toString('base64') }
+    }
     if (relative.startsWith('/contents/')) return { content: (relative.includes('source-lock') ? json(data.lock) : relative.includes('release-notes') ? Buffer.from(data.notes) : json(data.compatibility)).toString('base64') }
     if (relative.startsWith('/commits?')) return [{ sha: '2'.repeat(40) }]
     if (relative.startsWith('/git/commits/')) return { tree: { sha: relative.endsWith(data.lock.adoptionSeed.commit) ? data.lock.adoptionSeed.tree : '3'.repeat(40) }, parents: [{ sha: data.lock.adoptionSeed.commit }] }
@@ -197,9 +218,9 @@ it('rejects stale run origins and a preparation plan with a substituted candidat
   expect(remote.writes()).toBe(0)
 })
 
-it('qualifies a withdrawn-tip replacement but refuses to discard a published successor', async () => {
-  const data = fixture('1.2.3-alpha.1.unsigned.5')
-  const withdrawn = fixture('1.2.3-alpha.1.unsigned.2')
+it.each([false, true])('qualifies a withdrawn-tip replacement and preserves catch-up provenance (%s)', async (catchUp) => {
+  const data = fixture('1.2.3-alpha.1.unsigned.5', catchUp)
+  const withdrawn = fixture('1.2.3-alpha.1.unsigned.2', catchUp)
   const priorBytes = json(withdrawn.manifest)
   writeFileSync(join(data.path, 'predecessor.json'), priorBytes)
   const descriptor = data.manifest.files.find(item => item.name === 'predecessor.json')
@@ -273,4 +294,46 @@ it('withdraws a post-publication byte mismatch using the same approved release i
   expect(patches.map(value => object(value).draft)).toEqual([false, true])
   for (const patch of patches) expect(patch).toMatchObject({ tag_name: data.manifest.tag, prerelease: true })
   expect(remote.release.draft).toBe(true)
+})
+
+
+it('publishes and restores a seven-release bundle without intermediate desktop manifests', async () => {
+  const data = fixture('1.2.3-alpha.1.unsigned.8', true)
+  const remote = server(data)
+  checkedManifest(data.localConfig, data.manifestPath, data.path)
+  const identity = { id: 20, attempt: 1, commit: '1'.repeat(40) }
+  const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', identity, remote.api)
+  remote.setPlan(plan)
+  await mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)
+  expect(remote.release.draft).toBe(false)
+  const writes = remote.writes()
+  await mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)
+  expect(remote.writes()).toBe(writes)
+  const withdrawal = { ...plan, operation: 'withdraw' }; remote.setPlan(withdrawal)
+  await mutateRelease(data.localConfig, withdrawal, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)
+  const retained = directory()
+  await retainedBundle(data.localConfig, data.manifest.tag, retained, remote.api)
+  expect(object(JSON.parse(readFileSync(join(retained, 'manifest.json'), 'utf8')) as unknown).catchUp).toEqual(data.manifest.catchUp)
+  const restore = { ...plan, operation: 'restore' }; remote.setPlan(restore)
+  await mutateRelease(data.localConfig, restore, join(retained, 'manifest.json'), retained, data.manifest.predecessor.digest, remote.api)
+  expect(remote.release.draft).toBe(false)
+})
+
+it('blocks changed live ranges after approval and rejects missing or altered retained catch-up assets', async () => {
+  const data = fixture('1.2.3-alpha.1.unsigned.8', true)
+  const remote = server(data)
+  const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
+  remote.setPlan(plan)
+  const inserted = { id: 99, tag_name: 'dsh-v0.0.9-extra', published_at: '2025-12-23T12:00:00Z', draft: false, prerelease: true }
+  const changed: GitHub = { async request(method, path, body) {
+    if (path.startsWith(`/repos/${config.upstreamRepository}/releases?`)) return [...await remote.api.request(method, path) as unknown[], inserted]
+    if (path.endsWith('/git/ref/tags/dsh-v0.0.9-extra')) return { object: { type: 'commit', sha: '9'.repeat(40) } }
+    return remote.api.request(method, path, body)
+  } }
+  await expect(mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, changed)).rejects.toThrow('omits')
+  expect(remote.writes()).toBe(0)
+  const rangeFile = data.catchUpFiles[0]
+  if (rangeFile === undefined) throw new Error('Missing fixture assessment')
+  writeFileSync(join(data.path, assessmentAsset(rangeFile.reference)), 'tampered')
+  expect(() => checkedManifest(data.localConfig, data.manifestPath, data.path)).toThrow('file changed')
 })
