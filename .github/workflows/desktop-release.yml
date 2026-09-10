@@ -56,7 +56,7 @@ jobs:
             --argjson validationRun "$(jq -r '.activeDelivery.artifacts.runId' "$RUNNER_TEMP/state.json")" \
             '{schemaVersion:1,kind:"publication",runId:$runId,runAttempt:$runAttempt,stateRefCommit:$stateRefCommit,stateRevision:$stateRevision,inputKey:$inputKey,releaseTag:$releaseTag,sourceCommit:$sourceCommit,validationRun:$validationRun}' \
             > "$RUNNER_TEMP/publication-attempt-context.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name == 'repository_dispatch'
         with:
           name: publication-attempt-context
@@ -216,7 +216,7 @@ jobs:
             -e 's|__SOURCE_COMMIT__|${{ needs.prepare.outputs.source_commit }}|g' \
             "$template" > bundle/release-notes.md
           printf '\nRelease mode: `%s`\n' '${{ needs.prepare.outputs.mode }}' >> bundle/release-notes.md
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: publication-bundle
           path: bundle

@@ -33,7 +33,7 @@ jobs:
       - name: Report discovery
         if: always()
         run: test ! -f "$RUNNER_TEMP/discovery.md" || cat "$RUNNER_TEMP/discovery.md" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: shadow-discovery
@@ -60,7 +60,7 @@ jobs:
         run: pnpm run desktop:delivery candidate --config .github/desktop-delivery/mint.json --lock .github/desktop-delivery/source-lock.json --expected-commit "$GITHUB_SHA" --out "$RUNNER_TEMP/candidate.json" --summary "$RUNNER_TEMP/candidate.md"
       - name: Require clean source
         run: node -e 'if (JSON.parse(require("fs").readFileSync(process.argv[1])).qualificationEligible !== true) process.exit(1)' "$RUNNER_TEMP/candidate.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: shadow-candidate
           path: ${{ runner.temp }}/candidate.json
@@ -124,7 +124,7 @@ jobs:
       - name: Report architecture
         if: always()
         run: test ! -f "$RUNNER_TEMP/shadow/artifact-${{ matrix.arch }}.md" || cat "$RUNNER_TEMP/shadow/artifact-${{ matrix.arch }}.md" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: shadow-${{ matrix.arch }}
@@ -156,7 +156,7 @@ jobs:
       - name: Report combined outcome
         if: always()
         run: test ! -f "$RUNNER_TEMP/combined.md" || cat "$RUNNER_TEMP/combined.md" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: shadow-combined
