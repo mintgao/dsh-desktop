@@ -1,6 +1,16 @@
 /** Owned DevTools connection for a normally launched packaged Electron process. */
 import { object } from './evidence.ts'
 
+/** Return only fixture-owned cancellation text; arbitrary reasons may contain secrets.
+ * @param signal - Fixture cancellation signal.
+ * @returns A recognized reason or a redacted classification.
+ */
+export function migrationAbortReason(signal: AbortSignal): string {
+  const reason: unknown = signal.reason
+  const known = ['Native pre-entrypoint probe deadline exceeded', 'Native stdout exceeds fixture limit', 'Native stderr exceeds fixture limit']
+  return reason instanceof Error && known.includes(reason.message) ? reason.message : 'Unrecognized cancellation reason (redacted)'
+}
+
 interface PendingRequest {
   resolve(value: Record<string, unknown>): void
   reject(error: Error): void
@@ -13,6 +23,19 @@ export class MigrationDebugger {
   private readonly events = new Map<string, Record<string, unknown>[]>()
   private readonly waiters = new Map<string, PendingRequest[]>()
   private failure: Error | undefined
+  private readonly trace: Array<{ operation: string; state: string; reason?: string }> = []
+
+  /** Read bounded method/event diagnostics, excluding parameters and responses.
+   * @returns A detached copy of the last 32 operation transitions.
+   */
+  diagnostics(): Array<{ operation: string; state: string; reason?: string }> {
+    return this.trace.map(entry => ({ ...entry }))
+  }
+
+  private record(operation: string, state: string, reason?: string): void {
+    this.trace.push({ operation, state, ...reason === undefined ? {} : { reason } })
+    if (this.trace.length > 32) this.trace.shift()
+  }
 
   private constructor(private readonly socket: WebSocket) {
     socket.addEventListener('message', (event) => {
@@ -79,14 +102,20 @@ export class MigrationDebugger {
     } catch (error) { await connection.close(); throw error }
   }
 
-  private async bounded<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  private async bounded<T>(operation: Promise<T>, signal: AbortSignal, label: string): Promise<T> {
     signal.throwIfAborted()
     let abort: (() => void) | undefined
+    this.record(label, 'pending')
     try {
-      return await Promise.race([operation, new Promise<never>((_resolve, reject) => {
-        abort = () => { reject(new Error('Migration inspector operation aborted')) }
+      const result = await Promise.race([operation, new Promise<never>((_resolve, reject) => {
+        abort = () => { reject(new Error(`Migration inspector ${label} aborted: ${migrationAbortReason(signal)}`)) }
         signal.addEventListener('abort', abort, { once: true })
       })])
+      this.record(label, 'completed')
+      return result
+    } catch (error) {
+      this.record(label, signal.aborted ? 'aborted' : 'failed', signal.aborted ? migrationAbortReason(signal) : undefined)
+      throw error
     } finally { if (abort !== undefined) signal.removeEventListener('abort', abort) }
   }
 
@@ -103,7 +132,7 @@ export class MigrationDebugger {
     const result = new Promise<Record<string, unknown>>((resolve, reject) => { this.pending.set(id, { resolve, reject }) })
     try {
       this.socket.send(JSON.stringify({ id, method, params }))
-      return await this.bounded(result, signal)
+      return await this.bounded(result, signal, `send ${method}`)
     } finally { this.pending.delete(id) }
   }
 
@@ -124,7 +153,7 @@ export class MigrationDebugger {
       queue.push(entry)
       this.waiters.set(method, queue)
     })
-    try { return await this.bounded(operation, signal) }
+    try { return await this.bounded(operation, signal, `event ${method}`) }
     finally {
       const queue = this.waiters.get(method)
       if (queue !== undefined && entry !== undefined) {

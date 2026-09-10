@@ -97,3 +97,5 @@ Catalog input-selection confirmation: Workflow orchestrator `/root` confirmed `i
 ## Shell qualification fixture
 
 The `pwd` probe requests enough stdout bytes for the complete UTF-8 working directory and newline. The configured 64/80-byte defaults remain asserted separately and govern the overflow probe. Source collector regressions cover long ASCII and multibyte paths; protected packaged qualification remains required.
+
+Native fixture diagnostics retain the current phase, acquired startup observations and the last 32 protocol operation transitions before cleanup. Parameters, expressions and replies are excluded; cancellation text is restricted to fixture-owned reasons. Diagnostic writes are best effort and neither extend the deadline nor establish qualification.
