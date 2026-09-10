@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/work-items/20260910-dsh-015-upgrade/native-assessment.md
-native-assessment.md: 1bebacc488b96ff95222650a10dd58284af540d7
-native-assessment.zh.md: 0fabafd9d26a8741c6e94f308dce4d84696b7da6
+native-assessment.md: 885a64954a2a5b2d8e4d7caea9c7d85db9888c80
+native-assessment.zh.md: a12ea275ac69d24cbd1a288e76c3325c9c44fcbd
