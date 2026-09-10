@@ -411,7 +411,7 @@ abstract searchEvents( request: SessionEventSearchRequest, exec?: SessionSearchE
 listSessions(signal?: AbortSignal): Promise<SessionRecord[]>
 
 /**
- * Read and replay-validate one complete logical session log without making it live.
+ * Read and restore-validate one complete logical session log without making it live or adding restoration markers.
  * @param sessionId - live or persisted session id to read.
  * @returns cloned header and complete raw event log from one observation.
  * @throws when persistence, header compatibility, or replay validation fails.

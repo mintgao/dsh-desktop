@@ -65,7 +65,10 @@ describe('Node compatibility self-hosted routing', () => {
   })
 
   it('preserves all three required version jobs and their concurrency', () => {
-    expect(job.if).toBe("github.event_name == 'pull_request'")
+    expect(job.if).toBe("github.repository == 'deepseek-ai/deepseek-harness' && github.event_name == 'pull_request'")
+    for (const [repository, enabled] of [['deepseek-ai/deepseek-harness', true], ['mintgao/dsh-desktop', false]] as const) {
+      expect(evaluate('${{ ' + job.if + ' }}', { github: { repository, event_name: 'pull_request' } })).toBe(enabled)
+    }
     expect(job.strategy['fail-fast']).toBe(false)
     expect(job.strategy.matrix.include).toEqual([
       { node: '22.19', name: 'node 22.19', runner: 'ubuntu-latest', gate_concurrency: '1' },

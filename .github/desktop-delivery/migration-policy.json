@@ -2026,7 +2026,7 @@
       },
       {
         "path": "packages/client/ui-session-notifications/src/client/TaskNotificationRow.module.css",
-        "sha256": "285530a81675adb2234b9098865e39abd199c0262049c4804d8ef4b5dadf2d71"
+        "sha256": "1a816a2d8dabc9234b0ade17950996cb151546dbe307cd8d7189d2b6ff4dd282"
       },
       {
         "path": "packages/client/ui-session-notifications/src/client/TaskNotificationRow.tsx",

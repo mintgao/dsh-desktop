@@ -12,6 +12,6 @@
   ],
   "migrationPolicy": {
     "path": ".github/desktop-delivery/migration-policy.json",
-    "sha256": "6816fbe84be2fe736696e21ff38be0c014d1d751998827f50b4d7874ba4ea4d6"
+    "sha256": "a1356a32bce0fbae700d10ff30c09cf24be5e7a20a89ee96dacaa36191979c04"
   }
 }

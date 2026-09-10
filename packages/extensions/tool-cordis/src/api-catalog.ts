@@ -1769,7 +1769,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'async readSession(sessionId: SessionId): Promise<SessionLogSnapshot>',
-        description: 'Read and replay-validate one complete logical session log without making it live.',
+        description: 'Read and restore-validate one complete logical session log without making it live or adding restoration markers.',
         parameters: [{ name: 'sessionId', description: 'live or persisted session id to read.' }],
         returns: 'cloned header and complete raw event log from one observation.',
         throws: ['when persistence, header compatibility, or replay validation fails.'],

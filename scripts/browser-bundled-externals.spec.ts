@@ -78,8 +78,10 @@ describe('browser dependency discovery', () => {
     await expect(browserBundledExternals(root)).rejects.toThrow('has no browser build config')
   })
 
-  it('follows shell workspace aliases, CSS assets and lazy imports without writing output', async () => {
-    const root = fixture()
+  it.each(['direct', 'symlink'])('follows shell workspace aliases, CSS assets and lazy imports without writing output through a %s root', async (kind) => {
+    const directory = fixture()
+    const root = kind === 'symlink' ? join(fixture(), 'linked-repository') : directory
+    if (kind === 'symlink') symlinkSync(directory, root, 'junction')
     library(root, 'shell-lib')
     library(root, 'lazy-lib')
     library(root, 'asset-lib')

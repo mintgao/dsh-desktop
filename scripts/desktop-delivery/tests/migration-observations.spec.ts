@@ -72,6 +72,6 @@ it('refuses a clean candidate moved to a different commit during execution', () 
     assertMigrationCheckout(root, original)
     git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'moved', '--allow-empty')
     expect(git('status', '--porcelain')).toBe('')
-    expect(() => assertMigrationCheckout(root, original)).toThrow(/exact clean checkout/)
+    expect(() => { assertMigrationCheckout(root, original) }).toThrow(/exact clean checkout/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })

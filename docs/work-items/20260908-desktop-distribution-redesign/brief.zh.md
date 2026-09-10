@@ -63,7 +63,7 @@
 
 ## 范围与复用评估
 
-保留桌面的标准启动器和共享 Web 客户端。[Mint Bundle](../../../packages/bundle/desktop-mint/cordis.patch.yml) 选择独立持有的通知插件。原生更新与进程模块缺少受支持的外部分发包；[GitHub Release 解析](../../../apps/desktop/src/github-releases.ts) 硬编码了发布仓库身份。宣称可复用分发前，须单独验证包发布者元数据、外部打包安装和版本兼容性。恢复分支的 Inspector、沙箱及开发工具改动应分类为上游贡献或独立开发工作，不能自动纳入桌面待办。
+保留桌面的标准启动器和共享 Web 客户端。[Mint Bundle](../../../packages/bundle/desktop-mint/cordis.patch.yml) 选择独立持有的通知插件。原生更新与进程模块缺少受支持的外部分发包；[GitHub Release 解析](../../../apps/desktop-mint/src/github-releases.ts) 硬编码了发布仓库身份。宣称可复用分发前，须单独验证包发布者元数据、外部打包安装和版本兼容性。恢复分支的 Inspector、沙箱及开发工具改动应分类为上游贡献或独立开发工作，不能自动纳入桌面待办。
 
 ## 交付状态
 

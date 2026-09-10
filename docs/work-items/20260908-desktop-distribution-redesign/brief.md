@@ -63,7 +63,7 @@ The evidence supports separating source adoption, qualification and publication.
 
 ## Scope and reuse assessment
 
-Retain the desktop's standard launcher and shared Web client. The [Mint Bundle](../../../packages/bundle/desktop-mint/cordis.patch.yml) selects the independently owned notification plugin. Native update/process modules lack an external supported package; release repository identity is hardcoded in [GitHub release parsing](../../../apps/desktop/src/github-releases.ts). Package publisher metadata and external packed-install/version compatibility need separate verification before claiming reusable distribution. Recovery-branch Inspector, sandbox and development-tool changes require classification as upstream contributions or separate development work, not automatic inclusion in the desktop backlog.
+Retain the desktop's standard launcher and shared Web client. The [Mint Bundle](../../../packages/bundle/desktop-mint/cordis.patch.yml) selects the independently owned notification plugin. Native update/process modules lack an external supported package; release repository identity is hardcoded in [GitHub release parsing](../../../apps/desktop-mint/src/github-releases.ts). Package publisher metadata and external packed-install/version compatibility need separate verification before claiming reusable distribution. Recovery-branch Inspector, sandbox and development-tool changes require classification as upstream contributions or separate development work, not automatic inclusion in the desktop backlog.
 
 ## Delivery status
 

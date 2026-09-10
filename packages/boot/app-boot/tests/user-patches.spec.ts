@@ -404,6 +404,12 @@ describe('boot with user patches', () => {
   })
 
   it('watches add, failure, recovery, and removal through transactional HMR', { timeout: 20_000 }, async () => {
+    const previousPolling = process.env['CHOKIDAR_USEPOLLING']
+    delete process.env['CHOKIDAR_USEPOLLING']
+    onTestFinished(() => {
+      if (previousPolling === undefined) delete process.env['CHOKIDAR_USEPOLLING']
+      else process.env['CHOKIDAR_USEPOLLING'] = previousPolling
+    })
     const dir = tmp()
     const userDir = tmp()
     const filename = join(userDir, PROFILE_PATCH_FILENAME)
@@ -411,7 +417,7 @@ describe('boot with user patches', () => {
     const ctx = await boot(NAME, writeTree(dir), basePatches)
     onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(Timer)
-    await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+    await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0, usePolling: false })
     // Native notifications belong to hmr-config.spec.ts; this case owns the
     // real HMR/Include transaction after each delivered filesystem event.
     const watchers: FSWatcher[] = []
@@ -517,7 +523,7 @@ describe('boot with user patches', () => {
     const ctx = await boot(NAME, writeTree(dir))
     try {
       await ctx.plugin(Timer)
-      await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0 })
+      await ctx.plugin(Hmr, { root: [], ignored: [], debounce: 0, usePolling: false })
       const dispose = await watchUserPatches(ctx, { binName: NAME, filename })
       // Same user-layer path registered twice: HMR refuses; not a teardown race.
       await expect(watchUserPatches(ctx, { binName: NAME, filename })).rejects.toThrow('already registered')

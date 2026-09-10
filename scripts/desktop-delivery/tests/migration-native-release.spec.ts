@@ -138,9 +138,9 @@ caller();
     await connection.send('Debugger.stepOut', {}, signal)
     const returned = await connection.event('Debugger.paused', signal)
     returnedToCaller(returned, callers)
-    expect(() => returnedToCaller({ ...returned, reason: 'exception' }, callers)).toThrow()
-    expect(() => returnedToCaller({ ...returned, hitBreakpoints: ['unrelated'] }, callers)).toThrow()
-    expect(() => returnedToCaller(returned, callers.slice(1))).toThrow()
+    expect(() => { returnedToCaller({ ...returned, reason: 'exception' }, callers) }).toThrow()
+    expect(() => { returnedToCaller({ ...returned, hitBreakpoints: ['unrelated'] }, callers) }).toThrow()
+    expect(() => { returnedToCaller(returned, callers.slice(1)) }).toThrow()
     await connection.send('Debugger.resume', {}, signal)
     await connection.close()
     connection = undefined

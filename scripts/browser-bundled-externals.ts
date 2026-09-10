@@ -1,6 +1,6 @@
 /** Resolve direct third-party browser inputs through the shipping build configurations, without emitting files. */
 
-import { globSync, readFileSync } from 'node:fs'
+import { globSync, readFileSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -127,7 +127,7 @@ async function collectShell(
   seen: Set<string>,
 ): Promise<void> {
   for (const path of globSync('apps/*/vite.config.ts', { cwd: root }).sort()) {
-    const dir = dirname(resolve(root, path))
+    const dir = realpathSync(dirname(resolve(root, path)))
     const manifest = readManifest(resolve(dir, 'package.json'))
     if (manifest.private === true || manifest.exports?.['./dist/*'] === undefined) continue
     const vitePath = createRequire(resolve(dir, 'package.json')).resolve('vite')
