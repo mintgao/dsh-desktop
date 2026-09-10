@@ -96,7 +96,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/migration-baseline"
           curl --fail --location --retry 2 --output "$RUNNER_TEMP/migration-baseline/$baseline" "https://github.com/mintgao/dsh-desktop/releases/download/desktop-v0.1.2-alpha.3.unsigned.1/$baseline"
           node --import tsx scripts/desktop-delivery/cli.ts qualify-migration --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --native "$RUNNER_TEMP/bundle/native-$ARCH.json" --baseline-dmg "$RUNNER_TEMP/migration-baseline/$baseline" --dmg "$RUNNER_TEMP/bundle/DSH-Desktop-Mint-$VERSION-$ARCH.dmg" --arch "$ARCH" --directory "$RUNNER_TEMP/bundle" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/migration-$ARCH.json"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: desktop-native-${{ matrix.arch }}
@@ -142,7 +142,7 @@ jobs:
           fi
           node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json,native-x64.json "${migration_args[@]}" --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg,DSH-Desktop-Mint-$VERSION-x64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/manifest.json" --summary "$RUNNER_TEMP/manifest.md"
           cat "$RUNNER_TEMP/manifest.md" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-release-bundle
           path: ${{ runner.temp }}/bundle/*
