@@ -3,9 +3,10 @@ import { spawnSync } from 'node:child_process'
 import { cpSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
-import { BackendSupervisor } from '../../apps/desktop/src/backend.ts'
+import { BackendSupervisor } from '../../apps/desktop-mint/src/backend.ts'
 import { checkArchitecture } from './artifacts.ts'
 import { readCandidate } from './candidate.ts'
+import { runtimeInventory } from './runtime-inventory.ts'
 import { assetPath, digest, distribution, readJson, shadow, type Architecture } from './evidence.ts'
 
 function command(executable: string, args: string[], environment: NodeJS.ProcessEnv): string {
@@ -137,7 +138,7 @@ export async function smokeDmg(
   const workspace = join(temporary, 'workspace')
   const home = join(temporary, 'home')
   for (const directory of [mount, workspace, home]) mkdirSync(directory, { mode: 0o700 })
-  const environment = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: home, TMPDIR: temporary, DSH_HOME: join(home, '.dsh'), DSH_TELEMETRY_DISABLED: '1' }
+  const environment = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: home, CFFIXED_USER_HOME: home, TMPDIR: temporary, MAC_CHROMIUM_TMPDIR: temporary, DSH_HOME: join(home, '.dsh'), DSH_TELEMETRY_DISABLED: '1' }
   let mountAttempted = false
   let result: Record<string, unknown>
   try {
@@ -147,6 +148,7 @@ export async function smokeDmg(
     if (apps.length !== 1 || apps[0] !== `${config.application}.app`) throw new Error('DMG must contain exactly the expected application')
     const app = join(mount, `${config.application}.app`)
     validateApplicationRoot(mount, app)
+    const packagedRuntimeDigest = runtimeInventory(app).sha256
     const executableArchitectures = await exercisePayload(
       app, config.application, architecture, options.desktopVersion ?? selected.record.desktopVersion,
       selected.record.desktopVersion, workspace, environment,
@@ -160,8 +162,9 @@ export async function smokeDmg(
         selected.record.desktopVersion, workspace, environment,
       )
     }
+    if (runtimeInventory(app).sha256 !== packagedRuntimeDigest) throw new Error('Packaged runtime changed during smoke')
     if (digest(readFileSync(dmg)) !== dmgDigest) throw new Error('DMG changed during smoke')
-    result = { ...shadow, ...(options.copyInstall === true ? { purpose: 'desktop-release-native-evidence', state: selected.record.qualificationEligible === true ? 'native-checks-passed' : 'diagnostic-native-checks-passed', mode: 'unsigned-preview', copiedInstallation: true, installationStopped: true, installationRemoved: true, qualificationEligible: selected.record.qualificationEligible, desktopVersion: options.desktopVersion ?? selected.record.desktopVersion } : {}), kind: 'smoke', candidateDigest: selected.digest, dmgDigest, architecture, executableArchitectures, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true }
+    result = { ...shadow, ...(options.copyInstall === true ? { purpose: 'desktop-release-native-evidence', state: selected.record.qualificationEligible === true ? 'native-checks-passed' : 'diagnostic-native-checks-passed', mode: 'unsigned-preview', copiedInstallation: true, installationStopped: true, installationRemoved: true, qualificationEligible: selected.record.qualificationEligible, desktopVersion: options.desktopVersion ?? selected.record.desktopVersion } : {}), kind: 'smoke', packagedRuntimeDigest, candidateDigest: selected.digest, dmgDigest, architecture, executableArchitectures, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true }
   } finally {
     cleanupSmoke(temporary, () => {
       if (mountAttempted) command('/usr/bin/hdiutil', ['detach', mount], environment)

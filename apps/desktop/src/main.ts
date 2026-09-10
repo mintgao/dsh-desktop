@@ -1,616 +1,397 @@
-/** Electron main process for the DSH Desktop macOS application. */
+/** Electron shell: desktop project ownership, custom protocol, windows, and lifecycle. */
 
-import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { readFile, writeFile } from 'node:fs/promises'
+import { extname, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   app,
   BrowserWindow,
   dialog,
+  ipcMain,
   Menu,
-  net,
-  Notification,
-  shell,
-  type MenuItemConstructorOptions,
-  type MessageBoxOptions,
-  type MessageBoxReturnValue,
+  protocol,
+  type IpcMainInvokeEvent,
 } from 'electron'
-import { BackendSupervisor, redactBackendDiagnostics, type BackendExit } from './backend.ts'
-import { ElectronUpdateDriver } from './electron-updates.ts'
-import { GitHubReleaseDriver } from './github-releases.ts'
-import { FileManualUpdatePreferencesStore } from './manual-update-preferences.ts'
-import {
-  ManualUpdateController,
-  type DesktopArchitecture,
-  type ManualDesktopReleaseInfo,
-  type ManualUpdatePresentation,
-  type ManualUpdateStatus,
-} from './manual-updates.ts'
-import { externalWebUrl, isAllowedAppNavigation } from './navigation.ts'
-import {
-  DesktopUpdateController,
-  type DesktopUpdateInfo,
-  type DesktopUpdatePresentation,
-  type DesktopUpdateStatus,
-} from './updates.ts'
+import { resolveDesktopPaths } from './paths.ts'
+import { DesktopProjectManager, type DesktopProjectHooks } from './project-manager.ts'
+import { DesktopHostProcess } from './host-process.ts'
+import { DESKTOP_IPC, type DesktopUpdateState } from './ipc.ts'
+import { formatDesktopMessage, resolveDesktopLocale } from './locale.ts'
+import { claimDesktopSingleInstance } from './single-instance.ts'
+import { DesktopUpdateCoordinator } from './update-coordinator.ts'
 
-const APPLICATION_NAME = 'DSH Desktop'
-const PACKAGE_SMOKE_ARGUMENT = '--dsh-package-smoke'
-const UPDATE_MENU_ITEM_ID = 'check-for-updates'
-const RELEASES_URL = 'https://github.com/mintgao/dsh-desktop/releases'
+const SCHEME = 'dsh-app'
+let focusPrimaryWindow = (): void => {}
 
-let backend: BackendSupervisor | undefined
-let backendStopped = false
-let cleanupPromise: Promise<void> | undefined
-let installUpdateOnQuit = false
-let mainWindow: BrowserWindow | undefined
-let logStream: WriteStream | undefined
-let logPath: string | undefined
-let manualUpdateController: ManualUpdateController | undefined
-let updateController: DesktopUpdateController | undefined
-let updateDriver: ElectronUpdateDriver | undefined
-let requestUpdateCheck: (() => Promise<void>) | undefined
+function errorOf(reason: unknown, fallback: string): Error {
+  return reason instanceof Error ? reason : new Error(fallback)
+}
 
-if (process.argv.includes(PACKAGE_SMOKE_ARGUMENT)) {
-  app.exit(0)
-} else {
-  app.setName(APPLICATION_NAME)
-  app.setAboutPanelOptions({
-    applicationName: APPLICATION_NAME,
-    applicationVersion: app.getVersion(),
-    version: app.getVersion(),
-    copyright: 'Unofficial distribution maintained by Mint.',
-    credits: 'Built on DeepSeek Harness. Not endorsed by DeepSeek.',
-  })
+protocol.registerSchemesAsPrivileged([{
+  scheme: SCHEME,
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: false,
+    stream: true,
+    codeCache: true,
+  },
+}])
 
-  if (!app.requestSingleInstanceLock()) {
-    app.quit()
-  } else {
-    app.on('second-instance', () => {
-      if (mainWindow === undefined) return
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.show()
-      mainWindow.focus()
-    })
-    app.on('before-quit', (event) => {
-      if (backend === undefined || backendStopped) return
-      event.preventDefault()
-      void stopApplicationBackend().then(finishApplicationQuit)
-    })
-    app.on('window-all-closed', () => {
-      app.quit()
-    })
-    void app.whenReady().then(startApplication).catch(reportStartupFailure)
+const MIME: Readonly<Record<string, string>> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.svg': 'image/svg+xml',
+}
+
+interface RuntimeResources {
+  readonly node: string
+  readonly pnpm: string
+  readonly seed: string
+}
+
+function runtimeResources(): RuntimeResources {
+  const development = !app.isPackaged
+  const node = (development ? process.env.DSH_DESKTOP_NODE_BINARY : undefined)
+    ?? join(process.resourcesPath, 'runtime', 'node', process.platform === 'win32' ? 'node.exe' : 'node')
+  const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
+    ?? join(process.resourcesPath, 'runtime', 'pnpm', 'bin', 'pnpm.mjs')
+  const seed = (development ? process.env.DSH_DESKTOP_SEED_DIR : undefined) ?? join(process.resourcesPath, 'seed')
+  return { node, pnpm, seed }
+}
+
+function developmentProject(): string | undefined {
+  const configured = process.env.DSH_DESKTOP_DEV_PROJECT_DIR
+  if (configured === undefined || configured === '') return undefined
+  if (app.isPackaged) throw new Error('dsh desktop: development project override is unavailable in packaged applications')
+  return resolve(configured)
+}
+
+function developmentHostInspectPort(enabled: boolean): number | undefined {
+  const configured = process.env.DSH_DESKTOP_HOST_INSPECT_PORT
+  if (!enabled || configured === undefined || configured === '') return undefined
+  const port = Number(configured)
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
+    throw new Error('dsh desktop: DSH_DESKTOP_HOST_INSPECT_PORT must be an integer from 1 through 65535')
   }
+  return port
 }
 
-/** Create the native window, start dsh Web, and load its canonical loopback URL. */
-async function startApplication(): Promise<void> {
-  const logsDirectory = app.getPath('logs')
-  mkdirSync(logsDirectory, { recursive: true })
-  logPath = join(logsDirectory, 'backend.log')
-  logStream = createWriteStream(logPath, { flags: 'a' })
-  logStream.on('error', (error) => {
-    console.error(`desktop log: ${error.message}`)
-  })
-  installApplicationMenu()
-  mainWindow = createMainWindow()
-  await mainWindow.loadFile(fileURLToPath(new URL('../resources/startup.html', import.meta.url)))
-
-  const cliPath = resolveCliPath()
-  if (!existsSync(cliPath)) {
-    throw new Error(`The built dsh CLI was not found at ${cliPath}.`)
-  }
-  backend = new BackendSupervisor({
-    executable: process.execPath,
-    cliPath,
-    cwd: homedir(),
-    log: (text) => {
-      logStream?.write(text)
-    },
-    onUnexpectedExit: reportUnexpectedExit,
-  })
-  const backendUrl = await backend.start()
-  installNavigationPolicy(mainWindow, backendUrl)
-  await mainWindow.loadURL(backendUrl)
-  await initializeUpdates()
-}
-
-/** Install the standard macOS application menu and the native update command. */
-function installApplicationMenu(): void {
-  const template: MenuItemConstructorOptions[] = [
-    {
-      label: APPLICATION_NAME,
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        {
-          id: UPDATE_MENU_ITEM_ID,
-          label: 'Check for Updates…',
-          enabled: false,
-          click: () => {
-            void requestUpdateCheck?.()
-          },
-        },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
-    },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
-  ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
-}
-
-/** Select manual prerelease awareness or signed stable updates after startup. */
-async function initializeUpdates(): Promise<void> {
-  if (app.getVersion().includes('-')) {
-    await initializeManualUpdates()
-    return
-  }
-  initializeSignedUpdates()
-}
-
-/** Start signed stable-channel update checks. */
-function initializeSignedUpdates(): void {
-  updateDriver = new ElectronUpdateDriver((level, message) => {
-    logStream?.write(`[desktop update ${level}] ${message}\n`)
-  })
-  updateController = new DesktopUpdateController({
-    enabled: app.isPackaged && process.platform === 'darwin',
-    currentVersion: app.getVersion(),
-    driver: updateDriver,
-    presentation: createUpdatePresentation(),
-    restartAndInstall: async () => {
-      installUpdateOnQuit = true
-      await stopApplicationBackend()
-      updateDriver?.quitAndInstall()
-    },
-    installOnQuit: () => {
-      installUpdateOnQuit = true
-    },
-  })
-  updateController.start()
-  requestUpdateCheck = async () => {
-    await updateController?.check(true)
-  }
-}
-
-/** Start manual release awareness for a prerelease channel. */
-async function initializeManualUpdates(): Promise<void> {
-  const architecture = desktopArchitecture()
-  const enabled = app.isPackaged && process.platform === 'darwin' && architecture !== undefined
-  const selectedArchitecture = architecture ?? 'x64'
-  const presentation = createManualUpdatePresentation(selectedArchitecture)
-  manualUpdateController = new ManualUpdateController({
-    enabled,
-    currentVersion: app.getVersion(),
-    driver: new GitHubReleaseDriver({
-      architecture: selectedArchitecture,
-      currentVersion: app.getVersion(),
-      fetch: async (url, init) => net.fetch(url, init),
-    }),
-    store: new FileManualUpdatePreferencesStore(
-      join(app.getPath('userData'), 'manual-update-preferences.json'),
-      message => logStream?.write(`[desktop manual update] ${message}\n`),
-    ),
-    presentation,
-  })
-  await manualUpdateController.start()
-  requestUpdateCheck = async () => {
-    await manualUpdateController?.check(true)
-  }
-}
-
-/** Narrow Electron's process architecture to the macOS artifacts we publish. */
-function desktopArchitecture(): DesktopArchitecture | undefined {
-  if (process.arch === 'arm64' || process.arch === 'x64') return process.arch
-  return undefined
-}
-
-/** Map update state and decisions to macOS-native presentation. */
-function createUpdatePresentation(): DesktopUpdatePresentation {
-  return {
-    updateStatus: renderUpdateStatus,
-    chooseDownload: async info => chooseUpdateDownload(info),
-    chooseInstall: async info => chooseUpdateInstall(info),
-    showUpToDate: async (currentVersion) => {
-      await showMessageBox({
-        type: 'info',
-        title: 'DSH Desktop Is Up to Date',
-        message: `You’re using the latest version of DSH Desktop (${currentVersion}).`,
-        buttons: ['OK'],
-      })
-    },
-    showUnavailable: async () => {
-      await showMessageBox({
-        type: 'info',
-        title: 'Updates Are Unavailable',
-        message: 'Automatic updates are available in signed macOS releases of DSH Desktop.',
-        detail: 'Source builds and unpackaged development builds do not use the public update feed.',
-        buttons: ['OK'],
-      })
-    },
-    showBusy: async (status) => {
-      const action = status.kind === 'checking' ? 'checking for an update' : 'downloading the update'
-      await showMessageBox({
-        type: 'info',
-        title: 'Update in Progress',
-        message: `DSH Desktop is already ${action}.`,
-        buttons: ['OK'],
-      })
-    },
-    showError: async (message, interactive) => {
-      logStream?.write(`[desktop update error] ${message}\n`)
-      if (!interactive) return
-      await showMessageBox({
-        type: 'error',
-        title: 'Could Not Update DSH Desktop',
-        message: 'DSH Desktop could not complete the update operation.',
-        detail: `${message}\n\nYou can still download the latest signed release from GitHub.`,
-        buttons: ['Open Releases', 'OK'],
-        defaultId: 0,
-        cancelId: 1,
-      }).then(async (result) => {
-        if (result.response === 0) await openExternalPage(RELEASES_URL)
-      })
-    },
-    openReleaseNotes: async (version) => {
-      await openExternalPage(`${RELEASES_URL}/tag/desktop-v${encodeURIComponent(version)}`)
-    },
-  }
-}
-
-/** Map manual release awareness to native macOS presentation. */
-function createManualUpdatePresentation(architecture: DesktopArchitecture): ManualUpdatePresentation {
-  const chinese = app.getLocale().toLowerCase().startsWith('zh')
-  let notification: Notification | undefined
-  return {
-    updateStatus: renderManualUpdateStatus,
-    notifyAvailable: (info, openRelease) => {
-      if (!Notification.isSupported()) return
-      notification?.close()
-      notification = new Notification({
-        title: chinese ? `DSH Desktop ${info.version} 可用` : `DSH Desktop ${info.version} Is Available`,
-        body: chinese
-          ? `当前版本 ${app.getVersion()}。点击查看 Release，并下载 ${info.recommendedAssetName}。`
-          : `You have ${app.getVersion()}. Open the release and download ${info.recommendedAssetName}.`,
-        silent: true,
-      })
-      const currentNotification = notification
-      currentNotification.once('click', () => {
-        try {
-          openRelease()
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : String(error)
-          logStream?.write(`[desktop manual update] notification action failed: ${reason}\n`)
-        }
-      })
-      currentNotification.once('close', () => {
-        if (notification === currentNotification) notification = undefined
-      })
-      currentNotification.show()
-    },
-    chooseUpdate: async info => chooseManualUpdate(info, architecture, chinese),
-    openRelease: async info => openExternalPage(info.url),
-    showUpToDate: async (currentVersion) => {
-      await showMessageBox({
-        type: 'info',
-        title: chinese ? 'DSH Desktop 已是最新版' : 'DSH Desktop Is Up to Date',
-        message: chinese
-          ? `你正在使用最新版本 (${currentVersion})。`
-          : `You’re using the latest version of DSH Desktop (${currentVersion}).`,
-        buttons: [chinese ? '好' : 'OK'],
-      })
-    },
-    showNoRelease: async () => {
-      await showMessageBox({
-        type: 'info',
-        title: chinese ? '暂无公开版本' : 'No Public Release Yet',
-        message: chinese
-          ? 'DSH Desktop 目前没有可供下载的公开版本。'
-          : 'DSH Desktop does not have a public download yet.',
-        buttons: [chinese ? '好' : 'OK'],
-      })
-    },
-    showNewerBuild: async (currentVersion, latestVersion) => {
-      await showMessageBox({
-        type: 'info',
-        title: chinese ? '正在使用较新的开发版本' : 'You Have a Newer Development Build',
-        message: chinese
-          ? `当前版本 ${currentVersion} 比最新公开版本 ${latestVersion} 更新。`
-          : `Your ${currentVersion} build is newer than public release ${latestVersion}.`,
-        buttons: [chinese ? '好' : 'OK'],
-      })
-    },
-    showUnavailable: async () => {
-      await showMessageBox({
-        type: 'info',
-        title: chinese ? '无法检查更新' : 'Updates Are Unavailable',
-        message: chinese
-          ? '只有打包后的 macOS 预览版会检查公开 Release。'
-          : 'Only packaged macOS prereleases check public GitHub releases.',
-        buttons: [chinese ? '好' : 'OK'],
-      })
-    },
-    showBusy: async () => {
-      await showMessageBox({
-        type: 'info',
-        title: chinese ? '正在检查更新' : 'Checking for Updates',
-        message: chinese ? 'DSH Desktop 已经在检查公开版本。' : 'DSH Desktop is already checking public releases.',
-        buttons: [chinese ? '好' : 'OK'],
-      })
-    },
-    showError: async (message, interactive) => {
-      logStream?.write(`[desktop manual update error] ${message}\n`)
-      if (!interactive) return
-      const result = await showMessageBox({
-        type: 'error',
-        title: chinese ? '无法检查 DSH Desktop 更新' : 'Could Not Check for DSH Desktop Updates',
-        message: chinese ? '无法读取 GitHub Release。' : 'DSH Desktop could not read GitHub releases.',
-        detail: chinese
-          ? `${message}\n\n你仍然可以直接打开 Releases 页面。`
-          : `${message}\n\nYou can still open the Releases page directly.`,
-        buttons: [chinese ? '打开 Releases' : 'Open Releases', chinese ? '好' : 'OK'],
-        defaultId: 0,
-        cancelId: 1,
-      })
-      if (result.response === 0) await openExternalPage(RELEASES_URL)
-    },
-    dispose: () => {
-      notification?.close()
-      notification = undefined
-    },
-  }
-}
-
-/** Ask how one manually installed preview release should be handled. */
-async function chooseManualUpdate(
-  info: ManualDesktopReleaseInfo,
-  architecture: DesktopArchitecture,
-  chinese: boolean,
-): Promise<'release' | 'later' | 'skip'> {
-  const machine = architecture === 'arm64' ? 'Apple Silicon' : 'Intel'
-  const result = await showMessageBox({
-    type: 'info',
-    title: chinese ? '发现 DSH Desktop 新版本' : 'A DSH Desktop Update Is Available',
-    message: chinese ? `DSH Desktop ${info.version} 已发布。` : `DSH Desktop ${info.version} is available.`,
-    detail: chinese
-      ? `当前版本：${app.getVersion()}\n本机：${machine}\n推荐下载：${info.recommendedAssetName}\n\n当前预览版需要前往 GitHub 手动下载安装。`
-      : `Current: ${app.getVersion()}\nThis Mac: ${machine}\nRecommended: ${info.recommendedAssetName}\n\nThis preview requires a manual download and installation from GitHub.`,
-    buttons: chinese
-      ? ['前往 Release 下载', '明天提醒我', `跳过 ${info.version}`]
-      : ['Open Release', 'Remind Me Tomorrow', `Skip ${info.version}`],
-    defaultId: 0,
-    cancelId: 1,
-  })
-  if (result.response === 0) return 'release'
-  if (result.response === 2) return 'skip'
-  return 'later'
-}
-
-/** Open an update page without allowing shell failures to escape an event listener. */
-async function openExternalPage(url: string): Promise<void> {
-  try {
-    await shell.openExternal(url)
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
-    logStream?.write(`[desktop update error] could not open ${url}: ${reason}\n`)
-    await showMessageBox({
-      type: 'error',
-      title: 'Could Not Open the Release Page',
-      message: 'DSH Desktop could not open the release page in your browser.',
-      detail: `${reason}\n\n${url}`,
-      buttons: ['OK'],
-    })
-  }
-}
-
-/** Ask whether the available signed release should be downloaded. */
-async function chooseUpdateDownload(info: DesktopUpdateInfo): Promise<'download' | 'later' | 'notes'> {
-  const result = await showMessageBox({
-    type: 'info',
-    title: 'A DSH Desktop Update Is Available',
-    message: `DSH Desktop ${info.version} is available.`,
-    detail: `You’re currently using ${app.getVersion()}. The update includes its own tested DSH runtime.`,
-    buttons: ['Download Update', 'Later', 'View Release Notes'],
-    defaultId: 0,
-    cancelId: 1,
-  })
-  if (result.response === 0) return 'download'
-  if (result.response === 2) return 'notes'
-  return 'later'
-}
-
-/** Ask when the cached release should replace the running application. */
-async function chooseUpdateInstall(info: DesktopUpdateInfo): Promise<'restart' | 'on-quit' | 'later'> {
-  const result = await showMessageBox({
-    type: 'info',
-    title: 'DSH Desktop Is Ready to Update',
-    message: `DSH Desktop ${info.version} has been downloaded.`,
-    detail: 'Restarting closes the local DSH backend before installing. You can also keep working and install on your next normal quit.',
-    buttons: ['Restart and Install', 'Install on Quit', 'Later'],
-    defaultId: 0,
-    cancelId: 2,
-  })
-  if (result.response === 0) return 'restart'
-  if (result.response === 1) return 'on-quit'
-  return 'later'
-}
-
-/** Render current update state in the application menu, Dock, and window. */
-function renderUpdateStatus(status: DesktopUpdateStatus): void {
-  const menuItem = Menu.getApplicationMenu()?.getMenuItemById(UPDATE_MENU_ITEM_ID)
-  if (menuItem != null) {
-    menuItem.label = updateMenuLabel(status)
-    menuItem.enabled = status.kind !== 'checking' && status.kind !== 'downloading'
-  }
-  if (status.kind === 'checking') {
-    mainWindow?.setProgressBar(2, { mode: 'indeterminate' })
-  } else if (status.kind === 'downloading') {
-    mainWindow?.setProgressBar(status.percent / 100, { mode: 'normal' })
-  } else {
-    mainWindow?.setProgressBar(-1)
-  }
-  if (process.platform === 'darwin') app.dock?.setBadge(status.kind === 'downloaded' ? '↓' : '')
-}
-
-/** Render manual update state without implying that the application downloads code. */
-function renderManualUpdateStatus(status: ManualUpdateStatus): void {
-  const chinese = app.getLocale().toLowerCase().startsWith('zh')
-  const menuItem = Menu.getApplicationMenu()?.getMenuItemById(UPDATE_MENU_ITEM_ID)
-  if (menuItem != null) {
-    if (status.kind === 'checking') {
-      menuItem.label = chinese ? '正在检查更新…' : 'Checking for Updates…'
-    } else if (status.kind === 'available') {
-      menuItem.label = chinese ? `有新版本 ${status.version}…` : `Update ${status.version} Available…`
-    } else {
-      menuItem.label = chinese ? '检查更新…' : 'Check for Updates…'
-    }
-    menuItem.enabled = status.kind !== 'checking'
-  }
-  if (status.kind === 'checking') {
-    mainWindow?.setProgressBar(2, { mode: 'indeterminate' })
-  } else {
-    mainWindow?.setProgressBar(-1)
-  }
-  if (process.platform === 'darwin') {
-    app.dock?.setBadge(status.kind === 'available' && status.attention ? '1' : '')
-  }
-}
-
-/** Produce the action label for one update state. */
-function updateMenuLabel(status: DesktopUpdateStatus): string {
-  switch (status.kind) {
-    case 'checking':
-      return 'Checking for Updates…'
-    case 'available':
-      return `Download Update ${status.version}…`
-    case 'downloading':
-      return `Downloading Update ${status.version} (${Math.round(status.percent)}%)`
-    case 'downloaded':
-      return status.installOnQuit ? `Update ${status.version} Will Install on Quit` : `Restart to Install ${status.version}…`
-    case 'idle':
-    case 'error':
-      return 'Check for Updates…'
-  }
-}
-
-/** Use the application window as dialog parent when it is still available. */
-function showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue> {
-  return mainWindow === undefined ? dialog.showMessageBox(options) : dialog.showMessageBox(mainWindow, options)
-}
-
-/** Stop update scheduling, close the backend process tree, and finish log output. */
-function stopApplicationBackend(): Promise<void> {
-  if (backendStopped) return Promise.resolve()
-  cleanupPromise ??= (backend?.stop() ?? Promise.resolve()).finally(() => {
-    backendStopped = true
-    manualUpdateController?.dispose()
-    updateController?.dispose()
-    logStream?.end()
-  })
-  return cleanupPromise
-}
-
-/** Continue a normal quit or delegate a cached release to Squirrel.Mac. */
-function finishApplicationQuit(): void {
-  if (installUpdateOnQuit && updateDriver !== undefined) {
-    updateDriver.quitAndInstall()
-    return
-  }
-  app.quit()
-}
-
-/** Resolve the source-build or packaged CLI entry without changing dsh's data directory. */
-function resolveCliPath(): string {
-  const override = process.env.DSH_DESKTOP_CLI_PATH
-  if (override !== undefined && override !== '') return override
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'backend', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-  }
-  return fileURLToPath(new URL('../../cli/lib/bin.js', import.meta.url))
-}
-
-/** Create a sandboxed renderer with no Node or preload bridge. */
-function createMainWindow(): BrowserWindow {
+function createWindow(preload: string): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1_280,
+    width: 1280,
     height: 840,
-    minWidth: 900,
-    minHeight: 640,
-    backgroundColor: '#f6f8fb',
-    title: APPLICATION_NAME,
+    minWidth: 880,
+    minHeight: 600,
     show: false,
     webPreferences: {
-      contextIsolation: true,
+      preload,
       nodeIntegration: false,
+      contextIsolation: true,
       sandbox: true,
       webSecurity: true,
-      allowRunningInsecureContent: false,
     },
   })
-  window.once('ready-to-show', () => {
-    window.show()
-  })
-  window.on('closed', () => {
-    mainWindow = undefined
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.on('will-navigate', (event, url) => {
+    if (new URL(url).protocol !== `${SCHEME}:`) event.preventDefault()
   })
   return window
 }
 
-/** Keep app navigation on the backend origin and delegate safe external links to macOS. */
-function installNavigationPolicy(window: BrowserWindow, applicationUrl: string): void {
-  const openExternal = (candidate: string): void => {
-    const url = externalWebUrl(candidate)
-    if (url === undefined || isAllowedAppNavigation(url, applicationUrl)) return
-    void shell.openExternal(url).catch((error: unknown) => {
-      const reason = error instanceof Error ? error.message : String(error)
-      console.error(`desktop navigation: could not open ${url}: ${reason}`)
+function assertDesktopSender(event: IpcMainInvokeEvent, hostnames: readonly string[]): void {
+  const senderFrame = event.senderFrame
+  if (senderFrame === null) throw new Error('dsh desktop: rejected IPC without a sender frame')
+  const url = new URL(senderFrame.url)
+  if (url.protocol !== `${SCHEME}:` || !hostnames.includes(url.hostname)) {
+    throw new Error('dsh desktop: rejected IPC from an unowned renderer')
+  }
+}
+
+async function serveShellAsset(request: Request): Promise<Response> {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405 })
+  const root = resolve(app.getAppPath(), 'renderer')
+  const url = new URL(request.url)
+  let pathname: string
+  try {
+    pathname = decodeURIComponent(url.pathname)
+  } catch {
+    return new Response(null, { status: 400 })
+  }
+  const target = resolve(normalize(join(root, pathname)))
+  if (target !== root && !target.startsWith(root + sep)) return new Response(null, { status: 403 })
+  try {
+    const body = request.method === 'HEAD' ? null : await readFile(target)
+    return new Response(body, { headers: { 'content-type': MIME[extname(target)] ?? 'application/octet-stream' } })
+  } catch {
+    return new Response(null, { status: 404 })
+  }
+}
+
+async function main(): Promise<void> {
+  const resources = runtimeResources()
+  const paths = resolveDesktopPaths()
+  const development = developmentProject()
+  const activeProject = development ?? paths.profile
+  const hostInspectPort = developmentHostInspectPort(development !== undefined)
+  const manager = new DesktopProjectManager(paths, resources)
+  if (development === undefined) manager.recover()
+  let host: DesktopHostProcess | undefined
+  let mainWindow: BrowserWindow | undefined
+  let pluginWindow: BrowserWindow | undefined
+  let shellInstallerOwnsQuit = false
+  let updateState: DesktopUpdateState = { phase: 'idle' }
+  const locale = resolveDesktopLocale(app.getLocale())
+  const messages = locale.messages
+  const appPreload = fileURLToPath(new URL('./preload-app.cjs', import.meta.url))
+  const managementPreload = fileURLToPath(new URL('./preload.cjs', import.meta.url))
+
+  const publishUpdate = (state: DesktopUpdateState): DesktopUpdateState => {
+    updateState = state
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(DESKTOP_IPC.updatesState, state)
+    }
+    return state
+  }
+
+  const startHost = async (projectDir = activeProject): Promise<DesktopHostProcess> => {
+    const next = new DesktopHostProcess(resources.node, projectDir, hostInspectPort)
+    await next.start()
+    return next
+  }
+  const hooks: DesktopProjectHooks = {
+    healthCheck: async (projectDir) => {
+      const active = host
+      host = undefined
+      await active?.stop()
+      let healthFailure: unknown
+      let probe: DesktopHostProcess | undefined
+      try {
+        probe = await startHost(projectDir)
+        await probe.stop()
+      } catch (error) {
+        healthFailure = error
+        await probe?.stop().catch(() => undefined)
+      }
+      let restartFailure: unknown
+      if (active !== undefined) {
+        try {
+          host = await startHost()
+        } catch (error) {
+          restartFailure = error
+        }
+      }
+      if (healthFailure !== undefined && restartFailure !== undefined) {
+        throw new AggregateError([
+          errorOf(healthFailure, 'desktop project: staged health check failed'),
+          errorOf(restartFailure, 'desktop project: active backend restart failed'),
+        ], 'desktop project: staged health check and active backend restart failed')
+      }
+      if (healthFailure !== undefined) throw errorOf(healthFailure, 'desktop project: staged health check failed')
+      if (restartFailure !== undefined) throw errorOf(restartFailure, 'desktop project: active backend restart failed')
+    },
+    beforeActivate: async () => {
+      const active = host
+      host = undefined
+      await active?.stop()
+    },
+    afterActivate: async () => {
+      host = await startHost()
+    },
+  }
+
+  if (development === undefined) {
+    await manager.applyRelease(resources.seed, app.getVersion(), {
+      ...hooks,
+      beforeActivate: async () => {},
+      afterActivate: async () => {},
     })
   }
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    openExternal(url)
-    return { action: 'deny' }
-  })
-  window.webContents.on('will-navigate', (event, url) => {
-    if (isAllowedAppNavigation(url, applicationUrl)) return
-    event.preventDefault()
-    openExternal(url)
-  })
-}
+  host = await startHost()
 
-/** Report a backend exit that happened after the window received its ready URL. */
-function reportUnexpectedExit(exit: BackendExit): void {
-  const detail = exit.code === null ? `signal ${exit.signal ?? 'unknown'}` : `status ${String(exit.code)}`
-  dialog.showErrorBox(
-    `${APPLICATION_NAME} stopped`,
-    `The DSH backend exited unexpectedly (${detail}).${logLocationSuffix()}${diagnosticSuffix(exit.diagnostics)}`,
+  const updates = new DesktopUpdateCoordinator(
+    publishUpdate,
+    async () => {
+      shellInstallerOwnsQuit = true
+      const active = host
+      host = undefined
+      await active?.stop()
+    },
   )
-  app.quit()
+
+  protocol.handle(SCHEME, (request) => {
+    const url = new URL(request.url)
+    if (url.hostname === 'shell') return serveShellAsset(request)
+    if (url.hostname !== 'app') return Promise.resolve(new Response(null, { status: 404 }))
+    const active = host
+    if (active === undefined) return Promise.resolve(new Response('backend unavailable', { status: 503 }))
+    return active.fetch(request)
+  })
+
+  const mutate = async (event: IpcMainInvokeEvent, mutation: Parameters<DesktopProjectManager['mutate']>[0]): Promise<void> => {
+    assertDesktopSender(event, ['shell'])
+    if (development !== undefined) {
+      throw new Error('dsh desktop: plugin package changes require a packaged application')
+    }
+    await manager.mutate(mutation, hooks)
+    if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.webContents.reload()
+  }
+  ipcMain.handle(DESKTOP_IPC.localeGet, (event) => {
+    assertDesktopSender(event, ['shell'])
+    return locale
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsList, (event) => {
+    assertDesktopSender(event, ['shell'])
+    if (development !== undefined) return []
+    return manager.listPlugins()
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsAdd, (event, spec: unknown) => {
+    if (typeof spec !== 'string') throw new Error('dsh desktop: plugin spec must be a string')
+    return mutate(event, { type: 'plugin-add', spec })
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsRemove, (event, name: unknown) => {
+    if (typeof name !== 'string') throw new Error('dsh desktop: plugin name must be a string')
+    return mutate(event, { type: 'plugin-remove', name })
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsUpdate, (event, name: unknown, version: unknown) => {
+    if (typeof name !== 'string' || typeof version !== 'string') {
+      throw new Error('dsh desktop: plugin name and version must be strings')
+    }
+    return mutate(event, { type: 'plugin-update', name, version })
+  })
+  ipcMain.handle(DESKTOP_IPC.updatesCheck, async (event) => {
+    assertDesktopSender(event, ['shell'])
+    return updates.check()
+  })
+  ipcMain.handle(DESKTOP_IPC.updatesInstall, async (event) => {
+    assertDesktopSender(event, ['shell'])
+    await updates.install()
+  })
+
+  const checkAndPrompt = async (manual: boolean): Promise<void> => {
+    const state = await updates.check()
+    if (state.phase === 'error') {
+      if (manual) {
+        await dialog.showMessageBox({
+          type: 'error',
+          title: messages.updateCheckFailedTitle,
+          message: state.message ?? messages.unknownError,
+        })
+      }
+      return
+    }
+    if (state.phase !== 'available') {
+      if (manual) {
+        await dialog.showMessageBox({
+          type: 'info',
+          title: messages.updateCheckTitle,
+          message: state.message ?? messages.updateCurrent,
+        })
+      }
+      return
+    }
+    const result = await dialog.showMessageBox({
+      type: 'info',
+      title: messages.updateTitle,
+      message: messages.updateAvailable,
+      detail: formatDesktopMessage(messages.updateDetail, { version: state.version ?? '' }),
+      buttons: [messages.installAndRestart, messages.later],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    if (result.response !== 0) return
+    const installed = await updates.install()
+    if (installed.phase === 'error') {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: messages.updateFailedTitle,
+        message: installed.message ?? messages.unknownError,
+      })
+    }
+  }
+
+  const openPluginWindow = (): void => {
+    if (pluginWindow !== undefined && !pluginWindow.isDestroyed()) {
+      pluginWindow.focus()
+      return
+    }
+    pluginWindow = createWindow(managementPreload)
+    pluginWindow.setSize(900, 620)
+    pluginWindow.setTitle(messages.pluginWindowTitle)
+    pluginWindow.once('ready-to-show', () => { pluginWindow?.show() })
+    pluginWindow.once('closed', () => { pluginWindow = undefined })
+    void pluginWindow.loadURL(`${SCHEME}://shell/plugin-manager.html`)
+  }
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate([{
+    label: process.platform === 'darwin' ? app.name : messages.application,
+    submenu: [
+      {
+        label: development === undefined ? messages.pluginsMenu : messages.pluginsMenuPackagedOnly,
+        accelerator: 'CmdOrCtrl+,',
+        enabled: development === undefined,
+        click: openPluginWindow,
+      },
+      { label: messages.checkUpdatesMenu, click: () => { void checkAndPrompt(true) } },
+      { type: 'separator' },
+      { role: 'quit' },
+    ],
+  }]))
+
+  const createMainWindow = (): BrowserWindow => {
+    const window = createWindow(appPreload)
+    mainWindow = window
+    window.once('ready-to-show', () => { if (!window.isDestroyed()) window.show() })
+    window.on('closed', () => { if (mainWindow === window) mainWindow = undefined })
+    return window
+  }
+  focusPrimaryWindow = () => {
+    const window = mainWindow
+    if (window === undefined || window.isDestroyed()) {
+      const replacement = createMainWindow()
+      void replacement.loadURL(`${SCHEME}://app/index.html`)
+      return
+    }
+    if (window.isMinimized()) window.restore()
+    window.show()
+    window.focus()
+  }
+
+  mainWindow = createMainWindow()
+  await mainWindow.loadURL(`${SCHEME}://app/index.html`)
+  if (development !== undefined && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
+  publishUpdate(updateState)
+  setTimeout(() => { void checkAndPrompt(false) }, 10_000)
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) focusPrimaryWindow()
+  })
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+  app.on('before-quit', (event) => {
+    if (shellInstallerOwnsQuit) return
+    if (host === undefined) return
+    event.preventDefault()
+    const active = host
+    host = undefined
+    void active.stop().finally(() => { app.quit() })
+  })
 }
 
-/** Report an application startup failure and close the partially started backend. */
-function reportStartupFailure(error: unknown): void {
-  const reason = redactBackendDiagnostics(error instanceof Error ? error.message : String(error))
-  dialog.showErrorBox(`${APPLICATION_NAME} could not start`, `${reason}${logLocationSuffix()}`)
-  app.quit()
-}
+const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() })
 
-/** Describe the persistent desktop log when it has been initialized. */
-function logLocationSuffix(): string {
-  return logPath === undefined ? '' : `\n\nLog: ${logPath}`
-}
-
-/** Include bounded backend diagnostics when no log viewer is available. */
-function diagnosticSuffix(diagnostics: string): string {
-  return diagnostics === '' ? '' : `\n\nRecent backend output:\n${diagnostics}`
-}
+if (ownsDesktopInstance) void app.whenReady().then(main).catch(async (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(error)
+  const diagnosticFile = process.env.DSH_DESKTOP_DIAGNOSTIC_FILE
+  if (diagnosticFile !== undefined) {
+    await writeFile(diagnosticFile, `${error instanceof Error ? error.stack ?? message : message}\n`).catch(() => undefined)
+  }
+  dialog.showErrorBox(resolveDesktopLocale(app.getLocale()).messages.startupFailed, message)
+  app.exit(1)
+})

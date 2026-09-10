@@ -69,23 +69,35 @@ jobs:
         working-directory: candidate-source
         run: |
           pnpm run test:desktop
-          pnpm run build:desktop
+          pnpm run build:desktop-mint
           pnpm run typecheck
           pnpm run doc-sync
           git diff --exit-code
           pnpm run desktop:stage
           git diff --exit-code
-          pnpm exec electron-builder --config apps/desktop/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --config.extraMetadata.version="$VERSION" --mac dmg --"$ARCH" --publish never
+          pnpm exec electron-builder --config apps/desktop-mint/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --config.extraMetadata.version="$VERSION" --mac dmg --"$ARCH" --publish never
       - name: Verify mounted and copied isolated installation
         shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
-          dmgs=(candidate-source/apps/desktop/dist/*.dmg)
+          dmgs=(candidate-source/apps/desktop-mint/dist/*.dmg)
           test "${#dmgs[@]}" -eq 1
           cp "${dmgs[0]}" "$RUNNER_TEMP/bundle/"
           node --import tsx scripts/desktop-delivery/cli.ts smoke --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/bundle/candidate.json" --dmg "$RUNNER_TEMP/bundle/$(basename "${dmgs[0]}")" --arch "$ARCH" --desktop-version "$VERSION" --copy-install --out "$RUNNER_TEMP/bundle/native-$ARCH.json"
+      - name: Qualify changed-format migration through actual packaged lifecycles
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1])).persistedFormatsChanged === true ? 0 : 1)' candidate-source/.github/desktop-delivery/data-compatibility.json; then
+            exit 0
+          fi
+          baseline=$(node -e 'const x=JSON.parse(require("fs").readFileSync(process.argv[1]));const a=x.assets.filter(a=>a.name.endsWith("-"+process.env.ARCH+".dmg"));if(a.length!==1)throw Error("Missing baseline");console.log(a[0].name)' .github/desktop-delivery/legacy-baseline.json)
+          mkdir -p "$RUNNER_TEMP/migration-baseline"
+          curl --fail --location --retry 2 --output "$RUNNER_TEMP/migration-baseline/$baseline" "https://github.com/mintgao/dsh-desktop/releases/download/desktop-v0.1.2-alpha.3.unsigned.1/$baseline"
+          node --import tsx scripts/desktop-delivery/cli.ts qualify-migration --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --native "$RUNNER_TEMP/bundle/native-$ARCH.json" --baseline-dmg "$RUNNER_TEMP/migration-baseline/$baseline" --dmg "$RUNNER_TEMP/bundle/DSH-Desktop-Mint-$VERSION-$ARCH.dmg" --arch "$ARCH" --directory "$RUNNER_TEMP/bundle" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/migration-$ARCH.json"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: desktop-native-${{ matrix.arch }}
           path: ${{ runner.temp }}/bundle/*
@@ -124,7 +136,11 @@ jobs:
           path: ${{ runner.temp }}/bundle
       - name: Bind final manifest to committed source and all artifact bytes
         run: |
-          node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json,native-x64.json --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg,DSH-Desktop-Mint-$VERSION-x64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/manifest.json" --summary "$RUNNER_TEMP/manifest.md"
+          migration_args=()
+          if node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1])).persistedFormatsChanged === true ? 0 : 1)' candidate-source/.github/desktop-delivery/data-compatibility.json; then
+            migration_args=(--migration-reports migration-arm64.json,migration-x64.json)
+          fi
+          node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json,native-x64.json "${migration_args[@]}" --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg,DSH-Desktop-Mint-$VERSION-x64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/manifest.json" --summary "$RUNNER_TEMP/manifest.md"
           cat "$RUNNER_TEMP/manifest.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:

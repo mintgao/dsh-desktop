@@ -1,13 +1,81 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "catchUp": {
+    "schemaVersion": 1,
+    "from": {
+      "id": 379884041,
+      "tag": "dsh-v0.1.2-alpha.3",
+      "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+      "publishedAt": "2026-08-31T16:03:39Z"
+    },
+    "to": {
+      "id": 385585674,
+      "tag": "dsh-v0.1.5-alpha.2",
+      "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+      "publishedAt": "2026-09-09T14:23:10Z"
+    },
+    "releases": [
+      {
+        "id": 380633709,
+        "tag": "dsh-v0.1.2-alpha.4",
+        "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+        "publishedAt": "2026-09-01T15:45:07Z"
+      },
+      {
+        "id": 381145530,
+        "tag": "dsh-v0.1.2-alpha.5",
+        "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5",
+        "publishedAt": "2026-09-02T10:02:56Z"
+      },
+      {
+        "id": 381777538,
+        "tag": "dsh-v0.1.2-rc.1",
+        "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d",
+        "publishedAt": "2026-09-03T06:06:07Z"
+      },
+      {
+        "id": 382677748,
+        "tag": "dsh-v0.1.3-alpha.1",
+        "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215",
+        "publishedAt": "2026-09-04T11:34:32Z"
+      },
+      {
+        "id": 384129524,
+        "tag": "dsh-v0.1.3-alpha.2",
+        "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+        "publishedAt": "2026-09-07T13:59:29Z"
+      },
+      {
+        "id": 384887562,
+        "tag": "dsh-v0.1.5-alpha.1",
+        "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+        "publishedAt": "2026-09-08T16:16:04Z"
+      },
+      {
+        "id": 385585674,
+        "tag": "dsh-v0.1.5-alpha.2",
+        "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+        "publishedAt": "2026-09-09T14:23:10Z"
+      }
+    ],
+    "assessment": {
+      "path": ".github/desktop-delivery/catch-up-assessment.json",
+      "sha256": "e9c00b95ea9829109600e6f399b9b547819c3c00fe22f055beabac875155b524"
+    }
+  },
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "release": {
+    "id": 385585674,
+    "tag": "dsh-v0.1.5-alpha.2",
+    "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+    "publishedAt": "2026-09-09T14:23:10Z"
+  },
+  "predecessor": {
     "id": 379884041,
     "tag": "dsh-v0.1.2-alpha.3",
     "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
     "publishedAt": "2026-08-31T16:03:39Z"
   },
-  "predecessor": null,
   "observed": [
     {
       "id": 371725157,
@@ -50,10 +118,58 @@
       "tag": "dsh-v0.1.2-alpha.3",
       "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
       "publishedAt": "2026-08-31T16:03:39Z"
+    },
+    {
+      "id": 380633709,
+      "tag": "dsh-v0.1.2-alpha.4",
+      "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5",
+      "publishedAt": "2026-09-01T15:45:07Z"
+    },
+    {
+      "id": 381145530,
+      "tag": "dsh-v0.1.2-alpha.5",
+      "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5",
+      "publishedAt": "2026-09-02T10:02:56Z"
+    },
+    {
+      "id": 381777538,
+      "tag": "dsh-v0.1.2-rc.1",
+      "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d",
+      "publishedAt": "2026-09-03T06:06:07Z"
+    },
+    {
+      "id": 382677748,
+      "tag": "dsh-v0.1.3-alpha.1",
+      "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215",
+      "publishedAt": "2026-09-04T11:34:32Z"
+    },
+    {
+      "id": 384129524,
+      "tag": "dsh-v0.1.3-alpha.2",
+      "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9",
+      "publishedAt": "2026-09-07T13:59:29Z"
+    },
+    {
+      "id": 384887562,
+      "tag": "dsh-v0.1.5-alpha.1",
+      "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a",
+      "publishedAt": "2026-09-08T16:16:04Z"
+    },
+    {
+      "id": 385585674,
+      "tag": "dsh-v0.1.5-alpha.2",
+      "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901",
+      "publishedAt": "2026-09-09T14:23:10Z"
+    },
+    {
+      "id": 385978363,
+      "tag": "dsh-v0.1.5-rc.1",
+      "commit": "183f08e9c6dde7e36cd2318eaee70b0da08fb35e",
+      "publishedAt": "2026-09-10T03:09:00Z"
     }
   ],
   "adoptionSeed": {
-    "commit": "9151688fc815c6f250b2dbded80fc411cb85be2a",
-    "tree": "219870be19eda4cb2a61e3c409a30b3a3fcbe89c"
+    "commit": "396b379f6bb0b49cece2ca5ea9a4857857320ea9",
+    "tree": "b0c37d7c7233ffd38a27ee4d0c1c4270059e764f"
   }
 }

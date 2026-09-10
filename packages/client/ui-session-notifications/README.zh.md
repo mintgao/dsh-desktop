@@ -76,3 +76,5 @@ Host 端在共享用户设置文档中注册 `ui-session-notifications.mode`。�
 无。
 
 </details>
+
+本包不发布运行时不变量：除权威配置或会话列表输入外，本包没有可独立观察的可变关系。

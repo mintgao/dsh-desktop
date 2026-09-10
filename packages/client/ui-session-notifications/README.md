@@ -75,3 +75,5 @@ None; this package neither assembles nor sends a provider request.
 None.
 
 </details>
+
+No invariant companion is published: this package has no independently observable mutable relationship beyond its authoritative configuration or session-list input.

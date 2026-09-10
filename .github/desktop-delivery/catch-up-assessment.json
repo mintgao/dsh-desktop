@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 1,
+  "from": {
+    "id": 379884041,
+    "tag": "dsh-v0.1.2-alpha.3",
+    "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+    "publishedAt": "2026-08-31T16:03:39Z"
+  },
+  "to": {
+    "tag": "dsh-v0.1.5-alpha.2",
+    "id": 385585674,
+    "publishedAt": "2026-09-09T14:23:10Z",
+    "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901"
+  },
+  "releases": [
+    {
+      "tag": "dsh-v0.1.2-alpha.4",
+      "id": 380633709,
+      "publishedAt": "2026-09-01T15:45:07Z",
+      "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5"
+    },
+    {
+      "tag": "dsh-v0.1.2-alpha.5",
+      "id": 381145530,
+      "publishedAt": "2026-09-02T10:02:56Z",
+      "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5"
+    },
+    {
+      "tag": "dsh-v0.1.2-rc.1",
+      "id": 381777538,
+      "publishedAt": "2026-09-03T06:06:07Z",
+      "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d"
+    },
+    {
+      "tag": "dsh-v0.1.3-alpha.1",
+      "id": 382677748,
+      "publishedAt": "2026-09-04T11:34:32Z",
+      "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215"
+    },
+    {
+      "tag": "dsh-v0.1.3-alpha.2",
+      "id": 384129524,
+      "publishedAt": "2026-09-07T13:59:29Z",
+      "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9"
+    },
+    {
+      "tag": "dsh-v0.1.5-alpha.1",
+      "id": 384887562,
+      "publishedAt": "2026-09-08T16:16:04Z",
+      "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a"
+    },
+    {
+      "tag": "dsh-v0.1.5-alpha.2",
+      "id": 385585674,
+      "publishedAt": "2026-09-09T14:23:10Z",
+      "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901"
+    }
+  ],
+  "edges": [
+    {
+      "from": {
+        "id": 379884041,
+        "tag": "dsh-v0.1.2-alpha.3",
+        "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+        "publishedAt": "2026-08-31T16:03:39Z"
+      },
+      "to": {
+        "tag": "dsh-v0.1.2-alpha.4",
+        "id": 380633709,
+        "publishedAt": "2026-09-01T15:45:07Z",
+        "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5"
+      },
+      "status": "unverified",
+      "persistedFormatsChanged": true,
+      "compatibilityFindings": [
+        "Session format 0 to 0; projection cache 4 to 5.",
+        "Source declarations and scoped store changes are inventoried; no intermediate Desktop installation or runtime scenario is certified.",
+        "Changed persistence definitions: packages/session/session-projection-cache/src/spec.ts."
+      ],
+      "unsupportedDowngrades": [
+        "Do not open upgraded roots with an older runtime. Complete quiescent backup restoration is required."
+      ],
+      "evidenceReferences": [
+        {
+          "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+          "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+        }
+      ]
+    },
+    {
+      "from": {
+        "tag": "dsh-v0.1.2-alpha.4",
+        "id": 380633709,
+        "publishedAt": "2026-09-01T15:45:07Z",
+        "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5"
+      },
+      "to": {
+        "tag": "dsh-v0.1.2-alpha.5",
+        "id": 381145530,
+        "publishedAt": "2026-09-02T10:02:56Z",
+        "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5"
+      },
+      "status": "unverified",
+      "persistedFormatsChanged": true,
+      "compatibilityFindings": [
+        "Session format 0 to 0; projection cache 5 to 5.",
+        "Source declarations and scoped store changes are inventoried; no intermediate Desktop installation or runtime scenario is certified.",
+        "Changed persistence definitions: packages/session/session-projection-cache/src/spec.ts."
+      ],
+      "unsupportedDowngrades": [
+        "Do not open upgraded roots with an older runtime. Complete quiescent backup restoration is required."
+      ],
+      "evidenceReferences": [
+        {
+          "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+          "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+        }
+      ]
+    },
+    {
+      "from": {
+        "tag": "dsh-v0.1.2-alpha.5",
+        "id": 381145530,
+        "publishedAt": "2026-09-02T10:02:56Z",
+        "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5"
+      },
+      "to": {
+        "tag": "dsh-v0.1.2-rc.1",
+        "id": 381777538,
+        "publishedAt": "2026-09-03T06:06:07Z",
+        "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d"
+      },
+      "status": "unverified",
+      "persistedFormatsChanged": false,
+      "compatibilityFindings": [
+        "Session format 0 to 0; projection cache 5 to 5.",
+        "Source declarations and scoped store changes are inventoried; no intermediate Desktop installation or runtime scenario is certified."
+      ],
+      "unsupportedDowngrades": [
+        "Do not open upgraded roots with an older runtime. Complete quiescent backup restoration is required."
+      ],
+      "evidenceReferences": [
+        {
+          "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+          "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+        }
+      ]
+    },
+    {
+      "from": {
+        "tag": "dsh-v0.1.2-rc.1",
+        "id": 381777538,
+        "publishedAt": "2026-09-03T06:06:07Z",
+        "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d"
+      },
+      "to": {
+        "tag": "dsh-v0.1.3-alpha.1",
+        "id": 382677748,
+        "publishedAt": "2026-09-04T11:34:32Z",
+        "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215"
+      },
+      "status": "unverified",
+      "persistedFormatsChanged": true,
+      "compatibilityFindings": [
+        "Session format 0 to 2; projection cache 5 to 7.",
+        "Source declarations and scoped store changes are inventoried; no intermediate Desktop installation or runtime scenario is certified.",
+        "Changed persistence definitions: packages/attachment/attachment-local/src/file-store.ts, packages/attachment/attachment-local/src/store.ts, packages/session/session-projection-cache/src/spec.ts."
+      ],
+      "unsupportedDowngrades": [
+        "Do not open upgraded roots with an older runtime. Complete quiescent backup restoration is required."
+      ],
+      "evidenceReferences": [
+        {
+          "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+          "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+        }
+      ]
+    },
+    {
+      "from": {
+        "tag": "dsh-v0.1.3-alpha.1",
+        "id": 382677748,
+        "publishedAt": "2026-09-04T11:34:32Z",
+        "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215"
+      },
+      "to": {
+        "tag": "dsh-v0.1.3-alpha.2",
+        "id": 384129524,
+        "publishedAt": "2026-09-07T13:59:29Z",
+        "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9"
+      },
+      "status": "unverified",
+      "persistedFormatsChanged": false,
+      "compatibilityFindings": [
+        "Session format 2 to 2; projection cache 7 to 7.",
+        "Source declarations and scoped store changes are inventoried; no intermediate Desktop installation or runtime scenario is certified."
+      ],
+      "unsupportedDowngrades": [
+        "Do not open upgraded roots with an older runtime. Complete quiescent backup restoration is required."
+      ],
+      "evidenceReferences": [
+        {
+          "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+          "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+        }
+      ]
+    },
+    {
+      "from": {
+        "tag": "dsh-v0.1.3-alpha.2",
+        "id": 384129524,
+        "publishedAt": "2026-09-07T13:59:29Z",
+        "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9"
+      },
+      "to": {
+        "tag": "dsh-v0.1.5-alpha.1",
+        "id": 384887562,
+        "publishedAt": "2026-09-08T16:16:04Z",
+        "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a"
+      },
+      "status": "unverified",
+      "persistedFormatsChanged": true,
+      "compatibilityFindings": [
+        "Session format 2 to 3; projection cache 7 to 7.",
+        "Source declarations and scoped store changes are inventoried; no intermediate Desktop installation or runtime scenario is certified."
+      ],
+      "unsupportedDowngrades": [
+        "Do not open upgraded roots with an older runtime. Complete quiescent backup restoration is required."
+      ],
+      "evidenceReferences": [
+        {
+          "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+          "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+        }
+      ]
+    },
+    {
+      "from": {
+        "tag": "dsh-v0.1.5-alpha.1",
+        "id": 384887562,
+        "publishedAt": "2026-09-08T16:16:04Z",
+        "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a"
+      },
+      "to": {
+        "tag": "dsh-v0.1.5-alpha.2",
+        "id": 385585674,
+        "publishedAt": "2026-09-09T14:23:10Z",
+        "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901"
+      },
+      "status": "unverified",
+      "persistedFormatsChanged": false,
+      "compatibilityFindings": [
+        "Session format 3 to 3; projection cache 7 to 7.",
+        "Source declarations and scoped store changes are inventoried; no intermediate Desktop installation or runtime scenario is certified."
+      ],
+      "unsupportedDowngrades": [
+        "Do not open upgraded roots with an older runtime. Complete quiescent backup restoration is required."
+      ],
+      "evidenceReferences": [
+        {
+          "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+          "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+        }
+      ]
+    }
+  ],
+  "directUpgrade": {
+    "from": {
+      "id": 379884041,
+      "tag": "dsh-v0.1.2-alpha.3",
+      "commit": "dd6322d604e00eec1ba5e0c8541159906a21094a",
+      "publishedAt": "2026-08-31T16:03:39Z"
+    },
+    "to": {
+      "tag": "dsh-v0.1.5-alpha.2",
+      "id": 385585674,
+      "publishedAt": "2026-09-09T14:23:10Z",
+      "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901"
+    },
+    "status": "unverified",
+    "persistedFormatsChanged": true,
+    "compatibilityFindings": [
+      "The delivered baseline source is 67406fc6af451f7f68874cb31c2d0f3242c0c8ad; the target is b2e3b2a0125854567a4a5fcba75782e42fe84901.",
+      "Session V0 to V3 and projection-cache V4 to V7 require the fixed migration registry and both packaged architectures.",
+      "This immutable source assessment does not certify runtime scenarios. Complete candidate-bound reports independently establish publication qualification."
+    ],
+    "unsupportedDowngrades": [
+      "Automatic downgrade is unsupported; restore every stopped fixture data root from a verified complete backup before starting the exact baseline."
+    ],
+    "evidenceReferences": [
+      {
+        "path": ".github/desktop-delivery/catch-up-source-inventory.json",
+        "sha256": "03470257fb71fb6067a6ab8e129a941140bd83bd22bf433f7f7a61d06d51d67f"
+      }
+    ]
+  }
+}

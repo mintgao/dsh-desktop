@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-> This downstream checkout includes [DSH Desktop Mint](apps/desktop/README.md), an unofficial macOS distribution maintained by Mint. DeepSeek does not endorse, cooperate with, or authorize this distribution.
+> This downstream checkout includes [DSH Desktop Mint](apps/desktop-mint/README.md), an unofficial macOS distribution maintained by Mint. DeepSeek does not endorse, cooperate with, or authorize this distribution.
 
 DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
 

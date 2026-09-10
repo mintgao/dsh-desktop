@@ -1,12 +1,17 @@
 {
   "schemaVersion": 1,
-  "persistedFormatsChanged": false,
-  "assessment": "Compared with desktop-v0.1.2-alpha.3.unsigned.1, the reviewed candidate does not change DSH session, settings, credential or workspace persistence formats. Delivery source-lock metadata changes independently of user data. Native smoke uses temporary data and does not establish upgrade or downgrade compatibility for existing installations.",
+  "persistedFormatsChanged": true,
+  "assessment": "Compared with delivered desktop-v0.1.2-alpha.3.unsigned.1, the target changes session V0 to V3 and projection-cache V4 to V7, with additional attachment and store behavior changes. The immutable seven-release assessment remains unverified. Publication requires the fixed 56-scenario registry on both native architectures, exact candidate and runtime identities, and complete backup restoration evidence.",
   "evidenceReferences": [
-    "docs/work-items/20260908-desktop-reviewed-delivery/verification.md#data-compatibility"
+    ".github/desktop-delivery/catch-up-assessment.json",
+    "docs/decisions/20260910-desktop-mint-migration-registry.md"
   ],
   "unsupportedDowngrades": [
-    "No automatic downgrade or data restoration is verified.",
-    "This assessment does not cover adopting a later upstream commit; a new candidate requires a refreshed review."
-  ]
+    "Never start the baseline on upgraded data roots.",
+    "Stop every writer, retain upgraded roots separately, verify the complete backup inventory, restore into empty roots and then start the exact delivered baseline."
+  ],
+  "migrationPolicy": {
+    "path": ".github/desktop-delivery/migration-policy.json",
+    "sha256": "a1356a32bce0fbae700d10ff30c09cf24be5e7a20a89ee96dacaa36191979c04"
+  }
 }

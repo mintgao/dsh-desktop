@@ -8,6 +8,7 @@ import { candidate } from './candidate.ts'
 import { discover, githubReleases } from './discovery.ts'
 import { distribution, readJson, shadow, sourceLock, type Architecture } from './evidence.ts'
 import { reviewedCommand, reviewedSummary } from './reviewed-cli.ts'
+import { qualifyMigration } from './migration-qualifier.ts'
 import { smokeDmg } from './smoke.ts'
 
 /** Execute one command and write a local report, including explicit blockers on failure.
@@ -16,7 +17,7 @@ import { smokeDmg } from './smoke.ts'
  */
 export async function main(args: string[]): Promise<number> {
   const options: ParseArgsConfig['options'] = { apply: { type: 'boolean' }, 'copy-install': { type: 'boolean' } }
-  const parsed = parseArgs({ args, allowPositionals: true, strict: true, options: { ...options, ...Object.fromEntries(['config', 'lock', 'fixture', 'out', 'summary', 'root', 'expected-commit', 'candidate', 'dmg', 'smoke', 'arch', 'directory', 'reports', 'plan', 'digest', 'base', 'version', 'checkout', 'bundle', 'admin-evidence', 'baseline-output', 'migration-report', 'desktop-version', 'manifest', 'run-id', 'run-attempt', 'tag', 'operation', 'native', 'notes', 'compatibility', 'baseline', 'workflow-commit', 'lock-path', 'kind', 'run-url', 'legacy-ref', 'legacy-path', 'draft-id', 'bootstrap-context', 'target-tag', 'target-commit', 'assessment'].map(name => [name, { type: 'string' as const }])) } })
+  const parsed = parseArgs({ args, allowPositionals: true, strict: true, options: { ...options, ...Object.fromEntries(['config', 'lock', 'fixture', 'out', 'summary', 'root', 'expected-commit', 'candidate', 'dmg', 'smoke', 'arch', 'directory', 'reports', 'plan', 'digest', 'base', 'version', 'checkout', 'bundle', 'admin-evidence', 'baseline-output', 'baseline-dmg', 'migration-report', 'desktop-version', 'manifest', 'run-id', 'run-attempt', 'tag', 'operation', 'native', 'migration-reports', 'notes', 'compatibility', 'baseline', 'workflow-commit', 'lock-path', 'kind', 'run-url', 'legacy-ref', 'legacy-path', 'draft-id', 'bootstrap-context', 'target-tag', 'target-commit', 'assessment'].map(name => [name, { type: 'string' as const }])) } })
   const values: Record<string, string | boolean | undefined> = parsed.values
   const required = (name: string): string => {
     const value = values[name]
@@ -38,6 +39,9 @@ export async function main(args: string[]): Promise<number> {
       }
       case 'candidate': report = candidate(resolve(typeof values.root === 'string' ? values.root : '.'), configPath, required('lock'), required('expected-commit')); break
       case 'smoke': report = await smokeDmg(configPath, required('candidate'), required('dmg'), required('arch') as Architecture, { copyInstall: values['copy-install'] === true, ...(typeof values['desktop-version'] === 'string' ? { desktopVersion: values['desktop-version'] } : {}) }); break
+      case 'qualify-migration': report = await qualifyMigration({ root: required('root'), config: configPath, candidate: required('candidate'),
+        native: required('native'), baselineDmg: required('baseline-dmg'), targetDmg: required('dmg'), architecture: required('arch') as Architecture,
+        directory: required('directory'), workflowCommit: required('workflow-commit'), runId: Number(required('run-id')), runAttempt: Number(required('run-attempt')) }); break
       case 'artifact': report = artifact(configPath, required('candidate'), required('dmg'), required('smoke'), required('arch') as Architecture); break
       case 'combine': report = combine(configPath, required('candidate'), required('directory'), required('reports').split(',')); break
       default: report = await reviewedCommand(parsed.positionals[0] ?? '', parsed.values)

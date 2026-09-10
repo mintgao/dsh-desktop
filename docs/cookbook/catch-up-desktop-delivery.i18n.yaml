@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/cookbook/catch-up-desktop-delivery.md
-catch-up-desktop-delivery.md: 5c2ade72e87b1d519605bb034261589ad470bd74
-catch-up-desktop-delivery.zh.md: 912b16327bdde0cf9feb1ffa4b4d71d274659ca5
+catch-up-desktop-delivery.md: 7d721a5cc9e8679d739c742c88d9769e4897170e
+catch-up-desktop-delivery.zh.md: d72323a75d709a4378ba126a29eb72f9b1469a42

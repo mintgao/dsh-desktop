@@ -1,0 +1,6 @@
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: You are the legacy authored assistant. Preserve this complete persona.
+    complete: true
+    includeRuntimeContext: false

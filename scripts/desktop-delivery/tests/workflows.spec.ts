@@ -26,3 +26,10 @@ it('preserves bootstrap cancellation isolation and requires source checks and re
   expect(text).toContain(' release-bundle ')
   expect(text).toContain('desktop-mutation-bundle')
 })
+it('packages the Mint runtime and main process from the Mint native directory', () => {
+  const config = object(load(readFileSync('apps/desktop-mint/electron-builder.yml', 'utf8')))
+  expect(config.appId).toBe('io.github.mintgao.dsh-desktop')
+  expect(config.extraResources).toEqual([{ from: 'apps/desktop-mint', to: '.', filter: ['backend/**/*'] }])
+  expect(object(config.extraMetadata).main).toBe('apps/desktop-mint/lib/main.js')
+  expect(object(config.directories).output).toBe('apps/desktop-mint/dist')
+})

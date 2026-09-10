@@ -21,7 +21,7 @@ Desktop users are the downstream product audience; other DSH developers are the 
 - **Web UI:** `dsh web` starts the local browser application. A user configures a model, selects a workspace, creates durable sessions, submits tasks, reviews agent activity, and answers approval or clarification requests.
 - **CLI and Profiles:** the `dsh` launcher boots named plugin compositions, manages Profile-local plugins, dumps effective configuration, and supplies a one-shot headless mode.
 - **Programmatic APIs:** the SDK and ACP surfaces expose the same agent runtime to another process; each has a narrower interaction model than the Web UI.
-- **DSH Desktop Mint:** this checkout includes an unofficial macOS Electron shell maintained by Mint. It supervises the `desktop-mint` Profile and embeds the same Web application; it is not a separate Agent implementation or an official DeepSeek distribution. See [the desktop reference](../../apps/desktop/README.md).
+- **DSH Desktop Mint:** this checkout includes an unofficial macOS Electron shell maintained by Mint. It supervises the `desktop-mint` Profile and embeds the same Web application; it is not a separate Agent implementation or an official DeepSeek distribution. See [the desktop reference](../../apps/desktop-mint/README.md).
 
 ## Current capabilities
 
@@ -49,7 +49,7 @@ Desktop users are the downstream product audience; other DSH developers are the 
 
 ## Open questions
 
-- Which packaged desktop and upgrade scenarios constitute the release acceptance baseline on each supported Mac architecture?
+- Packaged upgrade acceptance is fixed by the [normative migration registry](../decisions/20260910-desktop-mint-migration-registry.md); execution remains required on each Mac architecture.
 - Is the long-term model strategy DeepSeek-first, provider-neutral, or a documented layering of both?
 - How should the repository reconcile the root developer-preview compatibility warning with package tables that label many APIs as stable product surfaces?
 - Which exact DSH versions have verified compatibility with independently distributed downstream plugins?

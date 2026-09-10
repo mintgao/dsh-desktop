@@ -35,3 +35,11 @@ Promotion planning, tag/draft preparation and publication independently validate
 ## Trusted rollout
 
 Install the tooling in a desktop-kind policy PR at the current upstream identity using the old trusted path. After owner merge places compatible tools on protected main, prepare the actual catch-up PR. This tooling prerequisite publishes no intermediate desktop release. Candidate tools and historical bootstrap exceptions cannot finalize a catch-up.
+
+## Changed-format qualification
+
+The [fixed migration registry](../decisions/20260910-desktop-mint-migration-registry.md) governs the delivered V0/cache V4 baseline to V3/cache V7 target. Preparation keeps the source assessment truthful and unverified. A merged source PR alone cannot authorize publication.
+
+The qualification workflow runs `qualify-migration` separately on disposable arm64 and x64 macOS runners after building and smoking the exact DMG. Its explicit arguments are `--root`, `--config`, `--candidate`, `--native`, `--baseline-dmg`, `--dmg`, `--arch`, `--directory`, `--workflow-commit`, `--run-id`, `--run-attempt` and `--out`. It authenticates the delivered DMG, exact clean source, complete profile inventory and packaged runtimes, executes backend and normal native scenarios, and retains per-scenario assertions and payload hashes. Missing native permission, containment, shell execution or scenario evidence fails the run.
+
+Aggregation requires both report paths through `--migration-reports`. Publication and restoration revalidate the retained reports and payloads after workflow artifacts expire. Withdrawal keeps its narrow ability to hide an exact damaged release. Successful synthetic fixtures can be cleaned after restoration and retained-upgraded inventory checks; referenced evidence payloads remain in the release bundle, and failed fixtures retain diagnostic data. Local backend receipts marked `qualification: false` never replace either architecture's production report.

@@ -1,0 +1,17 @@
+{
+  "reviewer": "classification_review",
+  "result": "approved-design-only",
+  "proposalFiles": [
+    {
+      "path": "phase-b-decision.md",
+      "sha256": "a661d1d9ef3567a14008708fd06584715780c1167e08f57bba409856fa447248"
+    },
+    {
+      "path": "phase-b-registry.md",
+      "sha256": "cf270a1bce62a9b3145d7ba9da3c0fb0f04163819c042159981f72538d2f5a2f"
+    }
+  ],
+  "precedence": "phase-b-registry.md replaces unresolved composition and scenario placeholders in phase-b-decision.md",
+  "implementationReady": false,
+  "remaining": "Persist accepted bilingual decision and PhaseB orchestrator gate before implementation; runtime qualification remains unexecuted"
+}

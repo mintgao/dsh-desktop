@@ -1,14 +1,30 @@
 import { defineConfig } from 'tsdown'
 
-/** Bundle the Electron main process while keeping host-managed runtimes external. */
-export default defineConfig({
-  entry: ['lib/types/main.js'],
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'node',
-  target: 'es2024',
-  deps: { neverBundle: ['electron', 'electron-updater'] },
-  fixedExtension: false,
-  dts: false,
-  clean: false,
-})
+export default defineConfig([
+  {
+    entry: ['lib/types/main.js'],
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+    deps: { neverBundle: ['electron'] },
+  },
+  {
+    // Sandboxed Electron preloads run as CommonJS even though the application package is ESM.
+    entry: {
+      preload: 'lib/types/preload.js',
+      'preload-app': 'lib/types/preload-app.js',
+    },
+    outDir: 'lib',
+    format: ['cjs'],
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+    deps: { neverBundle: ['electron'] },
+  },
+])

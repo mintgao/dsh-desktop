@@ -10,7 +10,9 @@ Status: implemented
 
 ## 决策
 
-`apps/desktop` 是由私有根 workspace 持有的 Electron 主进程，而不是另一个可发布的 npm workspace。它跨本地进程边界复用官方 Web 组合。本决策只替换 [GUI 分层与 RPC 协议](../../archived/architecture/2026-07-19-gui-layering-and-rpc-protocol.md)中假想的首个 IPC 载体选型；该说明里的客户端、Host、API Proxy 与插件分层仍是当前权威设计。
+[已接受的目标集成决策](../../../../docs/decisions/20260910-desktop-mint-target-integration.zh.md)将此 Mint 适配器保留在 `apps/desktop-mint`，同时独立保留上游 `apps/desktop` 与 `apps/desktop-host`。其迁移清单拥有现有数据的资格认定；此生命周期适配器不转换数据。
+
+`apps/desktop-mint` 是由私有根 workspace 持有的 Electron 主进程，而不是另一个可发布的 npm workspace。它跨本地进程边界复用官方 Web 组合。本决策只替换 [GUI 分层与 RPC 协议](../../archived/architecture/2026-07-19-gui-layering-and-rpc-protocol.md)中假想的首个 IPC 载体选型；该说明里的客户端、Host、API Proxy 与插件分层仍是当前权威设计。
 
 ### 进程与窗口生命周期
 
@@ -24,7 +26,7 @@ BrowserWindow 启用上下文隔离、renderer 沙箱与 Web 安全，不启用 
 
 ### 由源码构建的应用内运行时
 
-macOS 暂存流程先运行官方客户端构建，再从当前 checkout 打包两个发布族，读取打包后的 manifest，并选择从 `@deepseek-ai/dsh` 可达的本地 dependency、optional dependency 与 peer 闭包。npm 把这些 tarball 与外部依赖安装到 `apps/desktop/backend`。版本冒烟测试会运行已安装 CLI，递归链接检查则拒绝任何解析目标离开暂存根的符号链接。electron-builder 把这棵隔离目录复制为应用外部资源，而不是装入 asar；Electron 主 bundle 与静态启动页仍位于 asar 内。
+macOS 暂存流程先运行官方客户端构建，再从当前 checkout 打包两个发布族，读取打包后的 manifest，并选择从 `@deepseek-ai/dsh` 可达的本地 dependency、optional dependency 与 peer 闭包。npm 把这些 tarball 与外部依赖安装到 `apps/desktop-mint/backend`。版本冒烟测试会运行已安装 CLI，递归链接检查则拒绝任何解析目标离开暂存根的符号链接。electron-builder 把这棵隔离目录复制为应用外部资源，而不是装入 asar；Electron 主 bundle 与静态启动页仍位于 asar 内。
 
 本地目标是名为 DSH Desktop、带 Mint 浪花图标与 `io.github.mintgao.dsh-desktop` bundle 标识符的未签名 macOS arm64 和 x64 应用。它们适合源码构建与用户级安装。[Mint 桌面下游开发](../process/2026-08-24-mint-desktop-downstream-development.zh.md)持有 Developer ID 签名、hardened runtime、公证、原生架构产物与公开发布。[由用户控制的桌面版签名更新](2026-08-24-desktop-signed-auto-update.zh.md)持有更新源与安装行为。当前没有通用二进制。
 

@@ -21,7 +21,7 @@ DeepSeek Harness（`dsh`）是一个开源、处于开发者预览阶段的 codi
 - **Web UI：**`dsh web` 启动本地浏览器应用。用户可以配置模型、选择工作区、创建持久会话、提交任务、查看 agent 活动，并回答审批或澄清请求。
 - **CLI 与 Profile：**`dsh` 启动器会启动具名插件组合、管理 Profile 本地插件、输出最终生效的配置，并提供单次 headless 模式。
 - **编程接口：**SDK 与 ACP 界面把同一个 agent 运行时提供给其他进程；二者的交互模型都比 Web UI 更窄。
-- **DSH Desktop Mint：**当前检出包含由 Mint 维护的非官方 macOS Electron 外壳。它管理 `desktop-mint` Profile 并嵌入同一个 Web 应用；它既不是另一套 agent 实现，也不是 DeepSeek 官方发行版。参见[桌面端参考](../../apps/desktop/README.zh.md)。
+- **DSH Desktop Mint：**当前检出包含由 Mint 维护的非官方 macOS Electron 外壳。它管理 `desktop-mint` Profile 并嵌入同一个 Web 应用；它既不是另一套 agent 实现，也不是 DeepSeek 官方发行版。参见[桌面端参考](../../apps/desktop-mint/README.zh.md)。
 
 ## 当前能力
 
@@ -49,7 +49,7 @@ DeepSeek Harness（`dsh`）是一个开源、处于开发者预览阶段的 codi
 
 ## 待确认问题
 
-- 各受支持 Mac 架构上的哪些打包桌面与升级场景构成发布验收基线？
+- 打包升级验收由[规范迁移清单](../decisions/20260910-desktop-mint-migration-registry.zh.md)固定；仍须在每种 Mac 架构执行。
 - 长期模型策略是 DeepSeek 优先、提供方无关，还是有明确分层的二者结合？
 - 根文档允许破坏兼容性的开发者预览声明，与部分包表格把多项 API 标为稳定产品界面之间，应如何统一表述？
 - 独立分发的下游插件已经验证兼容哪些确切的 DSH 版本？

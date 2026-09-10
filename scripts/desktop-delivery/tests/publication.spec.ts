@@ -4,9 +4,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { selectRelease } from '../../../apps/desktop/src/github-releases.ts'
+import { selectRelease } from '../../../apps/desktop-mint/src/github-releases.ts'
 import { reviewedMutation } from '../reviewed-cli.ts'
 import { assessmentAsset } from '../catch-up.ts'
+import { MIGRATION_SCENARIOS } from '../migration-scenarios.ts'
 import { checkedManifest } from '../manifest.ts'
 import { catchUpEvidence, digest, object } from '../evidence.ts'
 import { deliveryConfig, operationPlan, type GitHub } from '../operations.ts'
@@ -17,9 +18,10 @@ const temporary: string[] = []
 afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }) })
 function directory(): string { const path = mkdtempSync(join(tmpdir(), 'delivery-payload-')); temporary.push(path); return path }
 function json(value: unknown): Buffer { return Buffer.from(`${JSON.stringify(value, null, 2)}\n`) }
-function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false) {
+function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false, migration = false) {
+  const policy = object(JSON.parse(readFileSync('.github/desktop-delivery/migration-policy.json', 'utf8')))
   const path = directory()
-  const upstream = { id: 1, tag: 'dsh-v0.1.0-alpha.1', commit: 'a'.repeat(40), publishedAt: '2026-01-01T00:00:00Z' }
+  const upstream = { id: 1, tag: 'dsh-v0.1.0-alpha.1', commit: migration ? String(policy.targetUpstream) : 'a'.repeat(40), publishedAt: '2026-01-01T00:00:00Z' }
   const earlier = Array.from({ length: 7 }, (_, index) => ({ id: index + 10, tag: `dsh-v0.0.9-alpha.${String(index)}`, commit: String(index + 2).repeat(40), publishedAt: `2025-12-${String(index + 20)}T00:00:00Z` }))
   const from = earlier[0]
   if (from === undefined) throw new Error('Fixture baseline missing')
@@ -45,13 +47,41 @@ function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false) {
     sha256: digest(bytes) } }
   const native = config.architectures.map((architecture) => {
     const dmg = file(`DSH-Desktop-Mint-${version}-${architecture}.dmg`, `DMG fixture ${architecture}`)
-    const evidence = file(`native-${architecture}.json`, json({ schemaVersion: 1, purpose: 'desktop-release-native-evidence', mode: 'unsigned-preview', qualificationEligible: true, candidateDigest: digest(json(candidate)), desktopVersion: version, architecture, dmgDigest: dmg.sha256, executableArchitectures: architecture === 'x64' ? 'x86_64' : architecture, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true, copiedInstallation: true, installationStopped: true, installationRemoved: true }))
+    const evidence = file(`native-${architecture}.json`, json({ schemaVersion: 1, purpose: 'desktop-release-native-evidence', mode: 'unsigned-preview', qualificationEligible: true, candidateDigest: digest(json(candidate)), desktopVersion: version, architecture, dmgDigest: dmg.sha256, packagedRuntimeDigest: 'e'.repeat(64), executableArchitectures: architecture === 'x64' ? 'x86_64' : architecture, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true, copiedInstallation: true, installationStopped: true, installationRemoved: true }))
     return { architecture, evidence, dmg }
   })
   const notes = 'Unsigned preview / 未签名预览\nNo automatic installation.\n'
-  const compatibility = { schemaVersion: 1, persistedFormatsChanged: false, assessment: 'Fixture data assessment', evidenceReferences: ['verification.md'], unsupportedDowngrades: ['Not tested'] }
+  const compatibility = { schemaVersion: 1, persistedFormatsChanged: migration, ...(migration ? { migrationPolicy: { path: '.github/desktop-delivery/migration-policy.json', sha256: digest(json(policy)) } } : {}), assessment: 'Fixture data assessment', evidenceReferences: ['verification.md'], unsupportedDowngrades: ['Not tested'] }
   const files = [...catchUpFiles.map(item => file(assessmentAsset(item.reference), item.bytes)), ...native.flatMap(item => [item.dmg, item.evidence]), file('candidate.json', json(candidate)), file('release-notes.md', notes), file('data-compatibility.json', json(compatibility)), file('predecessor.json', json(baseline)), file('SHA256SUMS.txt', native.map(item => `${item.dmg.sha256}  ${item.dmg.name}`).sort().join('\n') + '\n')]
   const manifest = { schemaVersion: catchUp ? 2 : 1, ...(catchUp ? { catchUp: range } : {}), purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id, desktopVersion: version, tag: `desktop-v${version}`, releaseKind: catchUp ? 'catch-up' : 'desktop', upstream, downstreamCommit: candidate.downstreamCommit, sourceLockDigest: candidate.sourceLockDigest, configDigest: candidate.configDigest, componentVersions: candidate.components, workflow: { path: '.github/workflows/desktop-delivery-qualify.yml', commit: '1'.repeat(40), runId: 10, attempt: 1 }, predecessor: { tag: baseline.desktopTag, digest: digest(json(baseline)), kind: baseline.purpose, upstream: baseline.upstream }, native, candidateDigest: digest(json(candidate)), releaseNotesDigest: digest(notes), dataCompatibilityDigest: digest(json(compatibility)), files }
+  if (migration) {
+    const put = (name: string, value: unknown) => { const entry = file(name, json(value)); files.push(entry); return entry }
+    put('migration-policy.json', policy)
+    const composition = file('migration-composition.json', JSON.stringify(object(policy.composition).files))
+    files.push(composition)
+    const reports = native.map((entry) => {
+      const architecture = entry.architecture
+      const fixtures = put(`migration-fixtures-${architecture}.json`, { parserFixture: true })
+      const backup = put(`migration-backup-${architecture}.json`, { parserFixture: true })
+      const delivered = object(policy.baseline)
+      const identity = { architecture, candidateDigest: manifest.candidateDigest, downstreamCommit: manifest.downstreamCommit,
+        sourceLockDigest: manifest.sourceLockDigest, dataCompatibilityDigest: manifest.dataCompatibilityDigest,
+        workflow: manifest.workflow }
+      const baseline = { upstream: delivered.upstream, sourceCommit: delivered.sourceCommit, desktopTag: delivered.desktopTag,
+        evidenceDigest: delivered.evidenceDigest, artifactDigest: object(object(delivered.artifacts)[architecture]).sha256 }
+      const target = { upstream: policy.targetUpstream, dmgDigest: entry.dmg.sha256, packagedRuntimeDigest: 'e'.repeat(64) }
+      const scenarios = MIGRATION_SCENARIOS.map(id => ({ id, status: 'passed', evidenceFiles: [put(`migration-${architecture}-${id}.json`, {
+        schemaVersion: 1, purpose: 'desktop-migration-scenario', id, status: 'passed', execution: 'packaged',
+        ...identity, baseline, target, assertions: ['Publication parser fixture only; never execution evidence'],
+      })] }))
+      return { architecture, evidence: put(`migration-${architecture}.json`, { schemaVersion: 1, purpose: 'desktop-data-migration-qualification',
+        ...identity, baseline, target, compositionDigest: composition.sha256, fixtureManifestDigest: fixtures.sha256,
+        backupManifestDigest: backup.sha256,
+        inputs: { composition, fixtures, backup }, scenarios }) }
+    })
+    Object.assign(manifest, { migration: { schemaVersion: 1, policyDigest: digest(json(policy)),
+      compositionDigest: composition.sha256, reports } })
+  }
   const manifestPath = join(path, 'manifest.json')
   writeFileSync(manifestPath, json(manifest))
   return { path, localConfig, manifestPath, manifest, lock, notes, compatibility, baseline, files, catchUpFiles }
@@ -142,7 +172,10 @@ function server(data: ReturnType<typeof fixture>) {
       if (asset !== undefined) return asset.bytes
     }
     if (relative.startsWith('/releases/1/assets')) return []
-    if (relative.startsWith('/releases/2/assets') && method === 'GET') return [...assets].map(([id, value]) => ({ id, name: value.name, size: value.bytes.length }))
+    if (relative.startsWith('/releases/2/assets') && method === 'GET') {
+      const page = Number(new URL(`https://example.invalid${relative}`).searchParams.get('page') ?? 1)
+      return [...assets].slice((page - 1) * 100, page * 100).map(([id, value]) => ({ id, name: value.name, size: value.bytes.length }))
+    }
     if (relative.startsWith('/releases/assets/')) { const asset = assets.get(Number(relative.split('/').at(-1))); if (asset === undefined) throw new Error('Fixture asset missing'); return asset.bytes }
     if (relative.startsWith('/releases/2/assets?') && method === 'POST') {
       const name = new URL(`https://example.invalid${relative}`).searchParams.get('name')
@@ -176,8 +209,8 @@ function server(data: ReturnType<typeof fixture>) {
     writes: () => writes }
 }
 
-it('publishes an exact existing draft, reconciles an interrupted upload, and restores after artifact expiry', async () => {
-  const data = fixture(); const remote = server(data)
+it.each([false, true])('publishes and restores exact payloads after artifact expiry (migration=%s)', async (migration) => {
+  const data = fixture(undefined, false, migration); const remote = server(data)
   const plan = await promotionPlan(data.localConfig, data.manifestPath, data.path, 'promote', { id: 20, attempt: 1, commit: '1'.repeat(40) }, remote.api)
   remote.setPlan(plan)
   expect((await mutateRelease(data.localConfig, plan, data.manifestPath, data.path, data.manifest.predecessor.digest, remote.api)).state).toBe('published-and-verified')

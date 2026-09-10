@@ -61,3 +61,5 @@ DeepSeek Harness 是一棵 Cordis 插件树，模型适配器、Agent 驱动器�
 - 运行时注册必须是可撤销的 effect，包拥有的 invariant 必须观察权威关系，随用户变化的选项必须进入经过校验的 Cordis 配置，而不是硬编码常量。
 - 最终生效的运行时取决于本地 Profile、home 补丁、设置、凭证和平台。应使用 `pnpm dsh --profile <name> --dump-config` 检查，而不是假设仓库模板正在生效。
 - 本次 onboarding 仅依据源码：没有调用真实模型、检查私有凭证，也没有证明当前机器能运行需要凭证的 e2e 组合。
+
+Mint 原生代码位于 `apps/desktop-mint`；上游 `apps/desktop` 与 `apps/desktop-host` 独立拥有外壳及运行时。Mint 使用普通 `desktop-mint` CLI Profile，而非上游保留的 `desktop` profile。[已接受集成决策](../decisions/20260910-desktop-mint-target-integration.zh.md)与[迁移清单](../decisions/20260910-desktop-mint-migration-registry.zh.md)绑定目标 `b2e3b2a0125854567a4a5fcba75782e42fe84901`；源码集成不构成打包升级资格认定。已发布会话世代采用上游冻结迁移阶段并保留前代；恢复需要完整备份及已交付基线运行时。

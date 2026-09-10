@@ -2,6 +2,8 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { checkedCompositionBytes } from './migration-composition.ts'
+import { migrationEvidence, migrationPolicy } from './migration-evidence.ts'
 import { assessmentAsset, assessmentFiles, gitEvidence } from './catch-up.ts'
 import { deliveryPredecessor, requireUnsignedVersion } from './lineage.ts'
 import { checkArchitecture } from './artifacts.ts'
@@ -20,6 +22,7 @@ export interface ManifestInput {
   directory: string
   candidatePath: string
   nativeNames: string[]
+  migrationNames?: string[]
   dmgNames: string[]
   version: string
   releaseKind: string
@@ -75,7 +78,7 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
   const compatibility = object(JSON.parse(compatibilityBytes.toString()) as unknown)
   if (compatibility.schemaVersion !== 1 || typeof compatibility.persistedFormatsChanged !== 'boolean' || !Array.isArray(compatibility.evidenceReferences) || compatibility.evidenceReferences.length === 0 || !Array.isArray(compatibility.unsupportedDowngrades) || compatibility.unsupportedDowngrades.length === 0) throw new Error('Missing data compatibility assessment')
   textField(compatibility.assessment)
-  if (compatibility.persistedFormatsChanged) throw new Error('Persisted format changes require separate migration qualification; this path is unconfigured')
+
   for (const reference of compatibility.evidenceReferences) committed(input.root, commit, string(string(reference).split('#')[0]))
   for (const limitation of compatibility.unsupportedDowngrades) textField(limitation)
   const predecessorBytes = readFileSync(input.predecessorPath)
@@ -86,19 +89,52 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
   if (!Number.isSafeInteger(input.run.id) || input.run.id < 1 || !Number.isSafeInteger(input.run.attempt) || input.run.attempt < 1) throw new Error('Missing qualification run identity')
   hex(input.run.commit, 40)
   const rangeFiles = lock.catchUp === undefined || lock.catchUp === null ? []
-    : assessmentFiles(lock.catchUp, config.sourceLockPath, path => gitEvidence(input.root, commit, path), true)
+    : assessmentFiles(
+      lock.catchUp, config.sourceLockPath, path => gitEvidence(input.root, commit, path), ! compatibility.persistedFormatsChanged,
+    )
   for (const item of rangeFiles) writeFileSync(join(input.directory, assessmentAsset(item.reference)), item.bytes)
   const checksums = native.map(item => `${item.dmg.sha256}  ${item.dmg.name}`).sort().join('\n') + '\n'
   for (const [name, bytes] of [['release-notes.md', notes], ['data-compatibility.json', compatibilityBytes], ['SHA256SUMS.txt', Buffer.from(checksums)], ['candidate.json', readFileSync(input.candidatePath)], ['predecessor.json', predecessorBytes]] as const) writeFileSync(join(input.directory, name), bytes)
-  return {
+  const migrationFiles: ReleaseFile[] = []
+  let migration: Record<string, unknown> | undefined
+  if (compatibility.persistedFormatsChanged) {
+    if (input.migrationNames?.length !== config.architectures.length || new Set(input.migrationNames).size !== input.migrationNames.length) throw new Error('Changed formats require both explicit migration reports')
+    const reference = object(compatibility.migrationPolicy)
+    const bytes = committed(input.root, commit, string(reference.path))
+    if (digest(bytes) !== hex(reference.sha256)) throw new Error('Committed migration policy digest mismatch')
+    const policy = migrationPolicy(JSON.parse(bytes.toString()) as unknown)
+    writeFileSync(join(input.directory, 'migration-policy.json'), bytes)
+    migrationFiles.push(file(input.directory, 'migration-policy.json'))
+    const composition = object(policy.composition)
+    if (!Array.isArray(composition.files)) throw new Error('Missing composition source inventory')
+    const expectedComposition = checkedCompositionBytes(input.root, composition.files, path => committed(input.root, commit, path))
+    const compositionDigest = digest(expectedComposition)
+    const reports = input.migrationNames.map((name) => {
+      const record = object(readJson(assetPath(input.directory, name)))
+      migrationFiles.push(file(input.directory, name))
+      const inputs = Object.values(object(record.inputs))
+      if (!Array.isArray(record.scenarios)) throw new Error('Missing migration scenarios')
+      for (const value of [...inputs, ...record.scenarios.flatMap((value) => {
+        const scenario = object(value)
+        if (!Array.isArray(scenario.evidenceFiles)) throw new Error('Missing migration evidence files')
+        return scenario.evidenceFiles as unknown[]
+      })]) migrationFiles.push(file(input.directory, string(object(value).name)))
+      return { architecture: record.architecture, evidence: file(input.directory, name) }
+    })
+    migration = { schemaVersion: 1, policyDigest: digest(bytes), compositionDigest, reports }
+  } else if (input.migrationNames !== undefined && input.migrationNames.length > 0) throw new Error('Unexpected migration reports for unchanged formats')
+  const result = {
     schemaVersion: 2, catchUp: lock.catchUp ?? null, purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id,
     releaseKind: input.releaseKind, ...(input.releaseKind === 'replacement' ? { supersedes: { tag: prior.tag, manifestDigest: digest(predecessorBytes) } } : {}), desktopVersion: input.version, tag: `desktop-v${input.version}`, upstream: lock.release, downstreamCommit: commit, sourceLockDigest: candidate.record.sourceLockDigest, configDigest: candidate.record.configDigest, componentVersions: candidate.record.components,
     workflow: { path: '.github/workflows/desktop-delivery-qualify.yml', commit: input.run.commit, runId: input.run.id, attempt: input.run.attempt },
     predecessor: input.releaseKind === 'replacement' ? predecessor : { ...predecessor, digest: digest(predecessorBytes) },
-    native, candidateDigest: candidate.digest, releaseNotesDigest: digest(notes), dataCompatibilityDigest: digest(compatibilityBytes),
-    files: [...rangeFiles.map(item => file(input.directory, assessmentAsset(item.reference))), ...native.flatMap(item => [item.dmg, item.evidence]), ...['release-notes.md', 'data-compatibility.json', 'SHA256SUMS.txt', 'candidate.json', 'predecessor.json'].map(name => file(input.directory, name))],
+    native, ...(migration === undefined ? {} : { migration }), candidateDigest: candidate.digest,
+    releaseNotesDigest: digest(notes), dataCompatibilityDigest: digest(compatibilityBytes),
+    files: [...new Map(migrationFiles.map(file => [file.name, file])).values(), ...rangeFiles.map(item => file(input.directory, assessmentAsset(item.reference))), ...native.flatMap(item => [item.dmg, item.evidence]), ...['release-notes.md', 'data-compatibility.json', 'SHA256SUMS.txt', 'candidate.json', 'predecessor.json'].map(name => file(input.directory, name))],
     nextAction: 'Review these exact manifest bytes before starting the protected publication operation.',
   }
+  migrationEvidence(result, name => readFileSync(assetPath(input.directory, name)))
+  return result
 }
 
 /** Validate a final manifest and rehash every local payload file.
@@ -144,12 +180,12 @@ export function checkedManifest(config: DeliveryConfig,
   const checksum = manifest.native.map(object).map(entry => object(entry.dmg)).map(dmg => `${string(dmg.sha256)}  ${string(dmg.name)}`).sort().join('\n') + '\n'
   if (readFileSync(assetPath(directory, 'SHA256SUMS.txt'), 'utf8') !== checksum) throw new Error('Checksum convenience file differs from approved DMGs')
   const compatibility = object(readJson(assetPath(directory, 'data-compatibility.json')))
-  if (compatibility.schemaVersion !== 1 || compatibility.persistedFormatsChanged !== false
+  if (compatibility.schemaVersion !== 1 || typeof compatibility.persistedFormatsChanged !== 'boolean'
     || !Array.isArray(compatibility.evidenceReferences)
     || compatibility.evidenceReferences.length === 0 || !Array.isArray(compatibility.unsupportedDowngrades) || compatibility.unsupportedDowngrades.length === 0) throw new Error('Compatibility assessment requires separate migration qualification')
   textField(compatibility.assessment)
   if (range !== null) {
-    const rangeFiles = assessmentFiles(range, config.sourceLockPath, path => readFileSync(assetPath(directory, assessmentAsset({ path, sha256: '' }))), true)
+    const rangeFiles = assessmentFiles(range, config.sourceLockPath, path => readFileSync(assetPath(directory, assessmentAsset({ path, sha256: '' }))), ! compatibility.persistedFormatsChanged)
     for (const item of rangeFiles) if (!names.has(assessmentAsset(item.reference))) throw new Error('Missing catch-up assessment asset')
     const expected = new Set(rangeFiles.map(item => assessmentAsset(item.reference)))
     if ([...names].some(name => name.startsWith('catch-up-') && !expected.has(name))) throw new Error('Unexpected catch-up assessment asset')
@@ -171,6 +207,7 @@ export function checkedManifest(config: DeliveryConfig,
     checkArchitecture(string(native.executableArchitectures), arch)
     for (const key of ['bootstrap', 'backendHttp', 'backendStopped', 'mountedReadOnly', 'detached', 'copiedInstallation', 'installationStopped', 'installationRemoved']) if (native[key] !== true) throw new Error('Native qualification check failed')
   }
+  migrationEvidence(manifest, name => readFileSync(assetPath(directory, name)))
   return { manifest, digest: digest(readFileSync(path)), files }
 }
 

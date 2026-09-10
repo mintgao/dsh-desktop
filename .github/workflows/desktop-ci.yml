@@ -56,7 +56,7 @@ jobs:
         run: pnpm run test:desktop
 
       - name: Build desktop main process
-        run: pnpm run build:desktop
+        run: pnpm run build:desktop-mint
 
       - name: Check TypeScript projects
         run: pnpm run typecheck
@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
+          app_path="$(find apps/desktop-mint/dist -type d -name 'DSH Desktop.app' -print -quit)"
           test -n "$app_path"
           "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke
 

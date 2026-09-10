@@ -10,6 +10,11 @@
     "docs/context/design-system.md",
     ".github/desktop-delivery/source-lock.json",
     "scripts/desktop-delivery/adoption.ts",
-    "docs/decisions/20260908-desktop-reviewed-delivery.md"
+    "docs/decisions/20260908-desktop-reviewed-delivery.md",
+    "apps/desktop-mint/README.md",
+    "apps/desktop/README.md",
+    "docs/session-format-status.md",
+    "docs/decisions/20260910-desktop-mint-target-integration.md",
+    "docs/decisions/20260910-desktop-mint-migration-registry.md"
   ]
 }

@@ -1,134 +1,180 @@
-# DSH Desktop Mint
+# DeepSeek Harness Desktop
 
 English | [中文](README.zh.md)
 
-DSH Desktop Mint is an unofficial Electron shell for the existing `dsh web` application, maintained by Mint. It does not define another Agent composition or Web client: it supervises the built `@deepseek-ai/dsh` CLI, waits for its canonical loopback readiness line, and loads that URL in a native macOS window.
+The desktop application is an Electron shell around the dsh Web UI. It opens no listening port: a bundled upstream Node.js child boots the installed dsh project, versioned framed byte pipes carry Fetch requests and streaming responses without an outer Base64 envelope, Node IPC carries lifecycle control, and `dsh-app://` serves the matching client assets.
 
-The name, Mint wave icon, repository identity, and release metadata distinguish this application from an official DeepSeek product. DeepSeek does not endorse, cooperate with, or authorize this distribution.
+## Key technical decisions
 
-![DSH Desktop Mint application icon](build/icon.png)
+| Decision | Why | Direct consequence |
+|---|---|---|
+| Release identity | The shell API, Web client, backend, and plugin graph are qualified as one combination; independent versions would create untested combinations and ambiguous update availability. | Electron and `@deepseek-ai/dsh` always have the same exact version. A dsh upgrade is a Desktop release, even when the shell code is unchanged. |
+| Runtime | Electron's Node.js carries Electron patches, fuses, ABI, and lifecycle constraints, while system runtimes and package-manager state are uncontrolled. | dsh runs under the bundled upstream Node.js and every package operation uses the bundled pnpm. Electron's Node.js, system Node.js, system pnpm, and user package-manager configuration are outside the execution path. |
+| Package sources | The exact dsh source build must be packageable before npm publication and install offline; plugins must remain ordinary user-selected npm packages. | The signed application carries locally packed first-party dsh packages and an offline seed store. Desktop plugins remain ordinary npm dependencies resolved from the fixed Desktop registry. |
+| Seed transport | Apple notarization inspects code inside archives; shipping every pnpm store file separately would also make the application signature inventory tens of thousands of cache entries, while one compressed archive would amplify small package changes. | macOS packaging signs every Mach-O CAS object, rewrites its pnpm hashes, and proves another offline install before assigning store files to 16 deterministic uncompressed tar shards. The outer installer compresses them, and differential updates can reuse unchanged shards. |
+| State ownership | Sharing executable dependency graphs would let CLI and Desktop change each other's dsh, Cordis, plugin, or native-module versions, while two desktop processes could race on the same profile. | Electron acquires its process-lifetime single-instance lock before any profile access and exclusively owns `$DSH_HOME/profiles/desktop` plus its package-manager state. CLI and Desktop share supported product data under `$DSH_HOME`, but never executable packages, plugin activation, lockfiles, or `node_modules`. |
+| Transport | A listening Web service adds port ownership, authentication, CORS, and exposure concerns; Electron and upstream Node.js also need an explicit cross-process protocol. | The application opens no Web port. `dsh-app://` carries Web assets and Fetch traffic; framed byte pipes carry bounded request and response chunks with backpressure, while Node IPC carries only child lifecycle control. |
+| Activation | Dependency resolution, lifecycle scripts, native modules, and plugin startup can fail, and a process can stop during directory replacement. | Release and plugin changes install in staging, boot a complete backend health check, and replace the active profile only after success; a journal and one rollback profile cover interrupted replacement. |
+| Updates | Independent shell and dsh updates would recreate version splits, while unchanged shell blocks should not require a complete transfer. | The Electron shell, matching dsh seed, Node.js, and pnpm form one signed update unit. Platform update artifacts may reuse unchanged blocks, but runtime version selection never splits from the Desktop release. |
 
-## Run from source
+The [Electron packaging and update Agent Note](../../.agents/notes/implemented/architecture/2026-08-25-electron-desktop-packaging-and-updates.md) owns the rationale, alternatives, security constraints, and release qualification requirements behind these decisions.
 
-Install the repository dependencies, then run:
+## Installation ownership
+
+Electron owns the reserved profile at `$DSH_HOME/profiles/desktop`. Its manifest lists the built-in and installed plugin bundles in `dsh.profile.bundles`, while its `node_modules` contains the exact `@deepseek-ai/dsh` release, its matching private `@deepseek-ai/dsh-desktop-host`, and every desktop plugin. Keeping the Electron-only process entry and overlay in a private app package prevents Desktop implementation from becoming part of the public CLI package. The CLI cannot boot or mutate this profile. Electron always invokes its bundled Node.js and pnpm with the store at `$DSH_HOME/desktop/pnpm/store`; it never uses system pnpm or the caller's npm/pnpm configuration.
+
+The main dsh renderer receives only the desktop protocol marker. The separate plugin window receives structured list, install, remove, update, and update-check operations; neither renderer receives filesystem access, raw Electron IPC, a shell, or arbitrary pnpm arguments.
+
+Electron chooses typed English or Chinese shell copy from its application locale and falls back to English. Menus, native dialogs, and the plugin-management renderer use the same locale payload; the repository Client UI i18n gate checks these desktop sources.
+
+### Seed installation
+
+The packaged seed is an installation kit, not a ready-to-run `node_modules` tree. Packaging creates the lockfile, materializes the production graph online with lifecycle scripts disabled, deletes `node_modules` and every temporary pnpm cache, config, and state directory, and proves one complete installation offline from the final store alone with the private Desktop Host entry and overlay present. A macOS build stages every Mach-O object from pnpm's content-addressed store, Developer ID signs at most four independent copies concurrently, and updates the affected SHA-512 index records only after all signers succeed. Another offline install proves the rewritten store before sharding; preparation then extracts the final archives and verifies every embedded signature. The signed seed retains the release identity, local first-party tarballs and their descriptor, project metadata, lockfile, integrity inventory, and pnpm store content required to repeat that installation on the user's machine.
+
+| Seed content | Writable destination or use |
+|---|---|
+| `integrity.json` and `desktop-packages.json` | Verify every inventoried seed file, local tarball hash, and the bound dsh and Desktop Host versions before package state changes. |
+| `store-archives.json` and `store-archives/*.tar` | Validate the deterministic uncompressed shards, extract them into a unique Desktop staging directory, replace matching immutable store files, and transactionally merge pnpm's versioned SQLite package index into `$DSH_HOME/desktop/pnpm/store` without removing packages already downloaded for Desktop plugins. |
+| Project metadata and `desktop-packages/` | Copy into a unique `$DSH_HOME/desktop/staging/<transaction-id>/profile` project. |
+| Lockfile and local package mappings | Drive the bundled pnpm installation without resolving a packaged core name from npm. |
+
+Startup installs or reconciles the seed as one serialized transaction:
+
+1. Recover an interrupted activation journal, verify the complete seed inventory and local package set, and require the seed version to equal Electron's application version.
+2. If the active profile already contains that release plus the matching dsh and Desktop Host versions, verify its local package set and reuse it without reinstalling.
+3. Otherwise validate every archive entry, extract all store shards into a temporary Desktop-owned staging directory, merge the package files and SQLite package-index records into the private store, create a staging profile, and run `pnpm install --offline --frozen-lockfile --trust-lockfile` through the bundled Node.js and pnpm. Seed records replace matching index keys while plugin-only records remain available.
+4. During an Electron upgrade, read every plugin name and exact version from the old active profile and add those versions to staging with `--offline` from existing Desktop pnpm state. A first installation has no plugin-restore step.
+5. Stop the active backend, boot and stop the complete staged backend as a health check, then restart the active backend before activation. This serialization prevents two desktop backends from sharing `$DSH_HOME`; installation or plugin incompatibility before activation deletes staging and leaves the active profile unchanged.
+6. Persist each next activation phase before its directory move, move the active profile to `$DSH_HOME/desktop/rollback/profile`, and move staging into `$DSH_HOME/profiles/desktop`. Recovery combines the journal with the actual profile, rollback, and staging directories, so interruption in either write-to-move gap restores or retains a complete profile.
+
+GUI plugin mutations use the same staging, health-check, activation, and rollback path after installing registry packages into the shared Desktop pnpm store.
+
+The process-lifetime Electron lock is the primary desktop owner. The transaction lock is depth defense: it records Electron while preparing local state, records the spawned pnpm worker while that worker can still write, and returns ownership to Electron after the worker exits. A later process cannot treat a live orphaned worker as a stale transaction.
+
+## Develop
+
+`dev:desktop` builds the current Host, client bundles, Web frontend, and Electron shell, projects the built CLI and private Desktop Host packages with their workspace dependencies into a disposable desktop npm project, and launches Electron without downloading the packaged Node.js runtime or resolving dsh from npm:
 
 ```sh
-pnpm run desktop:start
+pnpm run dev:desktop
 ```
 
-The command builds the repository and Electron main process before opening the window. A Finder-style launch has no invoking project directory, so the backend starts in the user's home directory; select or add the intended workspace in the Web UI. DSH data, settings, credentials, profiles, and sessions continue to use the ordinary DSH home, `~/.dsh` by default.
+Development Harness state defaults to `apps/desktop/.desktop-build/development/home`, the disposable npm project lives at `apps/desktop/.desktop-build/development/project`, and Electron browser data lives at `apps/desktop/.desktop-build/development/electron-user-data`. Sessions, settings, credentials, package links, and browser data therefore stay out of the user's normal Harness home. An explicit `DSH_HOME` replaces only the development Harness home. Renderer DevTools opens automatically; Main, Renderer, and dsh Host debugging listen on ports 9229, 9222, and 9230. `DSH_DESKTOP_MAIN_INSPECT_PORT`, `DSH_DESKTOP_RENDERER_DEBUG_PORT`, and `DSH_DESKTOP_HOST_INSPECT_PORT` replace those ports, while `DSH_DESKTOP_OPEN_DEVTOOLS=0` keeps the detached Renderer tools closed.
 
-## Build a local macOS application
-
-Build an unsigned Apple Silicon application from the current source tree:
+After an explicit build, `start:desktop` reconstructs the disposable project and launches the existing artifacts without building again:
 
 ```sh
-pnpm run desktop:app:mac
+pnpm run start:desktop
 ```
 
-Build the Intel application with `pnpm run desktop:app:mac:x64`. Replace `app` with `dmg` in either command to create a local DMG. The default Apple Silicon result is `apps/desktop/dist/mac-arm64/DSH Desktop.app`; electron-builder may use `mac/DSH Desktop.app` for an Intel result.
+Workspace development runs the current CLI and private Desktop Host packages under the invoking Node.js and disables desktop package mutations. Its explicitly linked disposable profile is the only mode allowed to resolve bundles outside its own directory. Use an unpacked application to exercise the bundled Node.js, bundled pnpm, release seed, plugin installation, staging, and rollback paths.
 
-Each command runs the official client build, packs the current local DSH and vendored packages, installs the selected runtime closure in an isolated resource directory, rejects links that escape that directory, and invokes electron-builder. An unpublished local backend change is therefore included instead of being replaced by the same version from npm.
+## Package
 
-Local commands disable signing-identity discovery and do not publish a Release. Electron 43 cannot deliver macOS notifications from unsigned or ad-hoc-signed applications, so local output and the pre-certificate public preview cannot validate task notifications or another native capability that depends on stable application identity. Use a Developer ID-signed and notarized artifact for those acceptance tests. Install a local Apple Silicon build for the current user with:
+The normal packaging path is one complete command. It performs release preparation before creating the host platform's installers and update metadata. Every target requires a reverse-DNS `DSH_DESKTOP_APP_ID`. macOS targets additionally require the electron-builder certificate qualifier in `DSH_DESKTOP_MACOS_SIGNING_IDENTITY`, its 10-character Apple Team ID in `DSH_DESKTOP_MACOS_TEAM_ID`, and one complete notarytool credential strategy. The App Store Connect API-key strategy uses these variables:
 
 ```sh
-ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desktop.app"
+export DSH_DESKTOP_APP_ID='<reverse-DNS application ID>'
+export DSH_DESKTOP_MACOS_SIGNING_IDENTITY='<certificate name without the Developer ID Application prefix>'
+export DSH_DESKTOP_MACOS_TEAM_ID='<10-character Apple Team ID>'
+export APPLE_API_KEY='<absolute path to the .p8 file>'
+export APPLE_API_KEY_ID='<App Store Connect API Key ID>'
+export APPLE_API_ISSUER='<App Store Connect issuer UUID>'
 ```
 
-## Runtime behavior
+`prepare:desktop` is not a prerequisite:
 
-The Electron main process runs its own executable in Node mode with the packaged CLI and `dsh --profile desktop-mint --no-open --port 0`. That Profile composes `dsh-base`, the shared Web Bundle, and the Mint product Bundle before its user patch. The shell accepts the canonical loopback root readiness URL, including its single authentication token, and preserves that URL for the window. Backend diagnostics and startup errors redact query values. The startup page remains visible until that line arrives; its Mint ocean scene moves the whale, water, bubbles, and progress current on separate timelines, while reduced-motion preference produces a static whale and progress state. Startup failure or an unexpected backend exit produces a native error dialog. Closing the last window stops the backend with `SIGTERM`, then uses `SIGKILL` after a bounded grace period if required. A second application launch focuses the existing window.
+```sh
+pnpm run package:desktop
+```
 
-The backend log is `~/Library/Logs/DSH Desktop/backend.log`. External HTTP and HTTPS links open in the system browser. Same-origin application navigation stays inside the DSH window; new windows and all other schemes are denied.
+Release automation uses fixed target commands so runtime preparation, seed installation, and electron-builder receive the same platform and architecture:
 
-A Developer ID-signed public application lets the Web client send a native macOS notification after a top-level task and all of its subagents stop running. The default **Background only** mode avoids duplicating foreground status; **Settings > General > Task completion notifications** also offers **Off** and **Always**. Clicking the notification opens that task and focuses the existing window. Notification permission remains under macOS control; unsigned local builds cannot deliver this notification.
+```sh
+pnpm run package:desktop:mac:arm64
+pnpm run package:desktop:mac:x64
+pnpm run package:desktop:win:x64
+```
+
+The macOS arm64 command requires Apple Silicon. The macOS x64 command runs on Intel macOS or Apple Silicon with Rosetta. The Windows x64 command requires Windows x64. Linux is not a supported Desktop release target.
+
+Each target owns its packed package inputs, prepared runtime, package set, seed, pnpm preparation state, unpacked application, update metadata, and final artifacts under `apps/desktop/.desktop-build/targets/<target>/`. The Node.js archive cache remains shared under `.desktop-build/downloads` because every archive name includes its version, platform, and architecture and is verified before extraction. A target build never consumes another target's mutable preparation state.
+
+### Upload updates
+
+`DSH_DESKTOP_AUTO_UPDATE_ENV` selects `test` or `production` for both the URL embedded during packaging and the later COS upload; an absent value selects `test`. Test packaging requires its HTTPS origin in `DOWNLOAD_TEST_ORIGIN`, while the production origin remains `https://download.deepseek.com`. Upload additionally requires the selected deployment's COS bucket in `DOWNLOAD_TEST_COS_BUCKET` or `DOWNLOAD_PROD_COS_BUCKET`. The target path is `_/harness/desktop/stable/<target>/`, where `target` is `mac-arm64`, `mac-x64`, or `win-x64`.
+
+The update destination and upload credentials follow the selected deployment:
+
+| Environment | Public origin | COS bucket | COS credentials |
+|---|---|---|---|
+| `test` or unset | `DOWNLOAD_TEST_ORIGIN` | `DOWNLOAD_TEST_COS_BUCKET` | `DOWNLOAD_TEST_COS_SECRET_ID`, `DOWNLOAD_TEST_COS_SECRET_KEY` |
+| `production` | `https://download.deepseek.com` | `DOWNLOAD_PROD_COS_BUCKET` | `DOWNLOAD_PROD_COS_SECRET_ID`, `DOWNLOAD_PROD_COS_SECRET_KEY` |
+
+Package and upload one target under the same environment. For example, the default test deployment uses:
+
+```sh
+export DOWNLOAD_TEST_ORIGIN='https://desktop-updates.example.com'
+pnpm run package:desktop:mac:arm64
+
+export DOWNLOAD_TEST_COS_BUCKET='<test COS bucket>'
+export DOWNLOAD_TEST_COS_SECRET_ID='<test COS SecretId>'
+export DOWNLOAD_TEST_COS_SECRET_KEY='<test COS SecretKey>'
+pnpm run upload:mac:arm64
+```
+
+Set `DSH_DESKTOP_AUTO_UPDATE_ENV=production` before packaging, then provide `DOWNLOAD_PROD_COS_BUCKET` and the production credential pair before running `upload:mac:arm64`, `upload:mac:x64`, or `upload:win:x64`. Packaging does not require a COS bucket or credentials. It explicitly disables electron-builder publishing, strips all four COS credential fields from its subprocesses, and writes a target completion record only after electron-builder and every signing or notarization hook succeeds. Upload requires that record to match the selected environment, target, public URL, and current dsh version; it also requires the root dsh version, Desktop version, channel metadata version, artifact names, sizes, and SHA-512 values to agree before it reads the selected COS credential pair. It uploads only that target's immutable versioned artifacts, uploads the version-derived channel metadata last with `no-cache`, and never deletes historical objects. Stable releases use `latest-mac.yml` or `latest.yml`; a prerelease such as `alpha` uses `alpha-mac.yml` or `alpha.yml`, matching electron-builder's emitted filename.
+
+The macOS configuration uses the required release environment instead of accepting whichever certificate appears first in a keychain. It rejects empty values, a malformed Team ID, a signing identity that includes electron-builder's unsupported `Developer ID Application:` prefix, and incomplete notarization credentials. macOS packaging requires the configured identity and its private key. Seed preparation applies that identity, a secure timestamp, and hardened runtime to every embedded Mach-O file; after signing the application, a deep strict check rejects any other leaf authority or Team ID before artifact creation. Electron-builder notarizes and staples the application before packaging and signs the DMG. The DMG artifact-completion hook then notarizes and staples it before requiring its exact identity, ticket, and Gatekeeper acceptance; only after the hook succeeds can electron-builder publish the file. The private key can come from the login keychain or electron-builder's standard `CSC_LINK` input; ambient `CSC_NAME` and certificate discovery order do not select the release owner. Notary credentials may instead use electron-builder's complete Apple ID or keychain-profile strategy. The two macOS identity variables are also required when repeating the application check manually with `pnpm --dir apps/desktop run verify:mac-signature -- <path-to-app>`.
+
+### Windows EV signing
+
+Windows release packaging requires `DSH_DESKTOP_WINDOWS_CER_FILE` to identify the public GlobalSign EV leaf certificate, `DSH_DESKTOP_WINDOWS_SIGNTOOL` to identify the SafeNet-compatible SignTool executable, `DSH_DESKTOP_WINDOWS_KEY_CONTAINER` to identify the matching private-key container, and `DSH_DESKTOP_WINDOWS_TOKEN_PIN` to contain the SafeNet Token Password. The certificate file remains outside source control, and the matching private key stays on the USB token. Set the four inputs before running the fixed Windows target:
+
+```powershell
+$env:DSH_DESKTOP_WINDOWS_CER_FILE = 'C:\path\to\server.cer'
+$env:DSH_DESKTOP_WINDOWS_SIGNTOOL = 'C:\path\to\the\validated\signtool.exe'
+$env:DSH_DESKTOP_WINDOWS_KEY_CONTAINER = '<SafeNet private-key container name>'
+$env:DSH_DESKTOP_WINDOWS_TOKEN_PIN = '<SafeNet Token Password>'
+pnpm run package:desktop:win:x64
+```
+
+Insert and unlock the token before packaging. The electron-builder hook passes each artifact to the CRLF `scripts/windows-sign.cmd`, which invokes the configured SignTool once with `/f`, SafeNet `/kc "[{{PIN}}]=container"`, `/csp "eToken Base Cryptographic Provider"`, a SHA-256 file digest, and a DigiCert SHA-256 RFC 3161 timestamp. The hook never substitutes electron-builder's bundled SignTool and never retries a failed signing request. Windows packaging fails instead of emitting unsigned artifacts when the SignTool, certificate, container, PIN, token, or signature is unavailable.
+
+The PIN cannot contain `]`, a quote, or a line break because those characters delimit the SafeNet `/kc` value or its CMD argument. The CMD disables delayed expansion so a PIN containing `!` reaches SafeNet unchanged. Packaging withholds every `DSH_DESKTOP_WINDOWS_*` field from build and seed-preparation subprocesses, gives electron-builder only the four configured inputs, gives the signing CMD only the validated signing fields in an otherwise scrubbed environment, clears those fields before SignTool starts, and redacts SignTool diagnostics. SafeNet still requires the PIN in the SignTool process command line. Inject it as an ephemeral secret only on a controlled self-hosted Windows runner with the physical token attached; never commit it, put it in `.env`, or persist it as a Windows user or system environment variable.
+
+Create a runnable application directory instead of an installer by using the matching `:dir` command, such as:
+
+```sh
+pnpm run package:desktop:dir
+pnpm run package:desktop:mac:arm64:dir
+```
+
+To inspect or troubleshoot the prepared host-target resources without invoking electron-builder, stop the same pipeline after preparation:
+
+```sh
+pnpm run prepare:desktop
+```
+
+This diagnostic command is an alternative stopping point, not the first half of a two-command build. A later `package:desktop*` command repeats the official build and preparation so it cannot consume stale dsh packages, runtime files, or seed content.
+
+Every package command performs the official repository build, packs the dsh and vendored package families, locally packs the private Desktop Host package, and packs the Landlock entry before preparing release resources. `prepare:packages` selects the union of the first-party production closures rooted at `@deepseek-ai/dsh` and `@deepseek-ai/dsh-desktop-host`, verifies that the private Host tarball contains `lib/index.js` and `config/desktop.cordis.patch.yml`, copies the selected tarballs into the seed input, and records their sizes and SHA-512 integrity. The Host package is never published to npm; its `files` manifest contains only that runtime entry and overlay. Public package tarballs remain the official `pnpm pack` outputs governed by each package's publication manifest, so Desktop adds no second filter, retains published declarations such as `lib/types`, and neither strips nor adds source maps independently. Registry packages likewise retain their published package bytes in pnpm's content-addressed store. The dsh release bump updates both private Desktop manifests together with the root and publishable workspaces; packaging also requires the root dsh package, Desktop Host package, and Electron package to have the same version. Neither dsh nor the private Host needs to be published to npm before the Desktop application is built. `prepare:runtime` downloads Node.js 24.17.0 from the official Node.js release service, verifies its SHA-256 entry before extraction, and executes the prepared target binary on a compatible build host to verify its reported version. It copies the pnpm version declared by the desktop package and records both runtime versions in the release seed. `prepare:seed` runs that target Node.js and bundled pnpm, so platform- and CPU-filtered optional dependencies make the pnpm store and seed target-specific. It generates local core-package mappings, disables the global virtual store, materializes external production dependencies from npm without lifecycle scripts, deletes `node_modules` and all temporary pnpm cache, config, and state, proves the complete graph installs offline with the private Host entry and overlay, performs the macOS rewrite when applicable, proves the rewritten store with another offline installation, removes temporary pnpm project registrations, and replaces the loose store with 16 deterministic uncompressed tar shards. It extracts those final shards and verifies every embedded macOS signature before inventory generation. Later GUI plugin operations retain the local core mappings while resolving plugin packages and their external dependencies from the fixed Desktop npm registry. `electron-builder` emits each target's platform artifacts under `apps/desktop/.desktop-build/targets/<target>/artifacts`; a later version keeps differently named immutable installers and blockmaps while replacing that target's unpacked application, diagnostics, completion record, and channel metadata.
+
+An unpacked artifact contains four independent size contributors: Electron, the offline seed store shards and local dsh tarballs, the upstream Node.js and pnpm runtime, and the small shell application. The shards are uncompressed so the outer DMG, ZIP, or NSIS compressor and differential updater can operate on stable ranges. Filesystem size is not installer download size, so measure both separately. First packaged startup also extracts the seed store into `$DSH_HOME/desktop/pnpm/store` before installing the writable profile, so release qualification must measure both application and Harness-home disk use.
 
 ## Updates
 
-A packaged prerelease such as `0.2.0-preview.1` checks public `mintgao/dsh-desktop` GitHub Releases thirty seconds after startup and every six hours thereafter. It uses an anonymous conditional request, selects the greatest semantic desktop version that contains a DMG for the running Mac architecture, and never downloads code. **DSH Desktop > Check for Updates…** runs the same check on demand.
+A packaged application checks its target-specific release stream ten seconds after the main window opens; the localized **Check for Updates…** menu item triggers the same check manually. An available release opens one native confirmation dialog. Accepting it waits for an in-flight check, downloads and verifies the signed Desktop release, stops the dsh child, and hands installation plus restart to electron-updater. The next launch reconciles the version-bound seed before reopening the product window.
 
-The first background discovery for a version creates an attention badge and, from a signed application, one native notification. An unsigned preview still exposes the menu and manual check but may not receive the macOS banner. Choosing the notification or **Open Release** opens the exact validated release page and names the recommended arm64 or x64 DMG. **Remind Me Tomorrow** defers one reminder for 24 hours, while **Skip this version** suppresses that version without hiding a later release. These choices and the GitHub ETag live in the application user-data directory; no GitHub credential is stored. Background failures go only to the desktop log, while a manual failure offers the public Releases page.
+Electron-builder always emits generic-provider channel metadata for the deployment selected by `DSH_DESKTOP_AUTO_UPDATE_ENV`. NSIS differential packages and the macOS ZIP target allow electron-updater to reuse unchanged blocks; the manually installed DMG is notarized without a blockmap because it is not a macOS updater payload. The seed and shell still form one signed Desktop release. macOS signing and notarization credentials use electron-builder's standard environment; Windows EV signing uses the public certificate, validated SignTool, SafeNet container, and runner PIN described above. The required Desktop release environment selects the application and platform signature identities that the build verifies.
 
-Prerelease versions use manual installation. Before signing activation their DMGs are unsigned, macOS may require an explicit **Open Anyway** action, and identity-dependent native features are unavailable. Signed prereleases retain the same manual replacement path after activation. The user quits DSH Desktop and replaces the application from the downloaded DMG; settings, credentials, workspaces, and sessions remain in the ordinary DSH home and are not replaced. A preview client can discover a later preview or the first signed stable release through this same manual path. Once that stable application is installed, subsequent updates use the automatic channel described below.
+## Low-level development overrides
 
-A signed stable application checks the public stable update feed ten seconds after startup and every six hours thereafter. An available version is never downloaded silently. The native dialog offers **Download Update**, **Later**, or **View Release Notes**; the application menu, Dock, and window show download state. After signature-verified download, the user chooses **Restart and Install**, **Install on Quit**, or **Later**. An immediate installation first stops the local DSH backend, and no update forces the application to restart. Source and unpackaged development builds keep the menu command available but explain that public update checks are unavailable.
+`DSH_DESKTOP_NODE_BINARY`, `DSH_DESKTOP_PNPM_ENTRY`, `DSH_DESKTOP_SEED_DIR`, and `DSH_DESKTOP_DEV_PROJECT_DIR` select explicit resources for an unpackaged Electron process. Packaged applications ignore these variables and resolve signed resources from `process.resourcesPath`.
 
-Each desktop update replaces the complete application, including its tested DSH runtime. Every published upstream Harness release enters the downstream queue automatically. After the exact upstream tag merges and the desktop, build, type, documentation, and source-drift checks pass, the workflow publishes either the default unsigned small-group Pre-release or, after explicit activation, the corresponding signed desktop Release. Publication only makes the version discoverable; preview replacement and stable download or installation remain under user control.
+## Known limitations
 
-## Security and local data
-
-The renderer is sandboxed with context isolation, Web security, and no Node integration or preload bridge. The backend binds a random loopback port, and the shell never enables a LAN host. The application identifier is `io.github.mintgao.dsh-desktop`.
-
-Credentials and sessions remain under the user's normal environment and DSH home; the desktop shell does not copy them into the application bundle. Follow the root [security policy](../../SECURITY.md) for private vulnerability reporting and supported release artifacts.
-
-## GitHub development
-
-The [shadow delivery guide](../../docs/cookbook/desktop-delivery-shadow.md) covers read-only discovery and unsigned package evidence without production publication.
-
-The root [contributor guide](../../CONTRIBUTING.md) defines remotes, branches, cross-device synchronization, dependencies, secrets, upstream updates, and pull requests. `main` stays release-ready, and each device installs its own dependency tree rather than copying architecture-specific output.
-
-[`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) runs desktop tests, the desktop build, repository type checking, and documentation checks on pull requests and `main`. Its manual package smoke uses native GitHub macOS runners for both arm64 and x64 and loads the packaged Electron main process through the shipped executable before accepting either bundle. Official DeepSeek Harness workflows retain repository guards and do not allocate their organization-specific jobs in this downstream repository.
-
-## Reviewed desktop delivery
-
-The [reviewed delivery decision](../../docs/decisions/20260908-desktop-reviewed-delivery.md) separates maintainer approval from native qualification and publication. Desktop-only fixes and DSH adoption both produce one desktop version for users. The shared tooling accepts explicit distribution configuration; its operational workflows require protected `main` and native macOS runners.
-
-The replacement is initially inactive. The [rollout prerequisites](../../docs/work-items/20260908-desktop-reviewed-delivery/rollout.md) identify required GitHub controls and the first-merge activation order. The [verification record](../../docs/work-items/20260908-desktop-reviewed-delivery/verification.md) distinguishes executed local evidence from remote acceptance. Signed publication remains unconfigured in this replacement.
-
-## Unsigned preview and signed releases
-
-These retained release procedures belong to the legacy workflows and apply while those workflows remain active. The reviewed delivery decision owns replacement activation.
-
-The repository starts in `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview`. Until the maintainer explicitly confirms Apple Developer readiness and changes that repository variable to `signed`, automated adoption maps `dsh-vX.Y.Z` to `desktop-vX.Y.Z-unsigned.1` and appends `.unsigned.1` to an existing upstream prerelease suffix. The release workflow builds native arm64 and x64 DMGs without discovering a signing identity, verifies that they do not carry a Developer ID Application identity, and publishes them as GitHub Pre-releases with DMGs and SHA-256 checksums only. These artifacts are for personal and small-group manual installation; they never enter the stable updater feed and cannot validate identity-dependent native features.
-
-After the maintainer explicitly confirms that Apple Developer enrollment and release credentials are ready, set `DESKTOP_RELEASE_SIGNING_MODE=signed`. Future automated versions then mirror the adopted Harness Release exactly: `dsh-vX.Y.Z[-suffix]` becomes `desktop-vX.Y.Z[-suffix]`. A prerelease suffix selects signed manual preview DMGs; a stable version additionally publishes signed update ZIPs, blockmaps, combined update metadata, and Latest status. Signed mode requires these encrypted GitHub Actions secrets:
-
-- `MACOS_CERTIFICATE_P12_BASE64` and `MACOS_CERTIFICATE_PASSWORD` for the Developer ID Application certificate.
-- `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` for App Store Connect notarization.
-
-No tag or publication action is required for an ordinary upstream Release. The [transactional adoption control plane](../../.github/upstream-adoption/README.md) queues it on a protected state ref, qualifies the exact candidate and both native architectures before tag creation, atomically advances `main`, the desktop tag, and state, then verifies the public Release before advancing the queue. Unchanged deterministic blockers are successful no-ops and update one Issue only when the phase or fingerprint changes.
-
-For an exceptional desktop-only prerelease, create a tag after those credentials are configured:
-
-```sh
-git switch main
-git pull --ff-only origin main
-git tag -s desktop-v0.2.0-preview.1 -m "DSH Desktop Mint 0.2.0 preview 1"
-git push origin desktop-v0.2.0-preview.1
-```
-
-The tag push does not publish by itself. Manually run `Validate and qualify upstream candidate` with that tag, wait for its successful run ID, then run `Publish qualified DSH Desktop bundle` with the same tag and validation run ID. Both workflows re-derive the tag commit and receipt provenance; the publication remains a draft.
-
-In signed mode, qualification first verifies the current owner-authenticated release policy without exposing Apple credentials to the candidate. A separate signing job then forces signing, submits both preview architectures for notarization, verifies their Developer ID identities and stapled tickets, and creates the two DMGs and their SHA-256 checksums. An automated run publishes the GitHub prerelease and records the embedded Harness tag, upstream commit, and desktop source commit. A manual tag creates the same signed artifacts as a draft. Public preview releases become visible to preview clients but never enter `electron-updater`'s stable feed.
-
-For an exceptional desktop-only stable release, create the stable tag after the same credential and artifact checks pass:
-
-```sh
-git switch main
-git pull --ff-only origin main
-git tag -s desktop-v0.1.0 -m "DSH Desktop Mint 0.1.0"
-git push origin desktop-v0.1.0
-```
-
-For a stable tag, [`desktop-release.yml`](../../.github/workflows/desktop-release.yml) additionally uploads both architecture ZIPs and blockmaps plus one combined `latest-mac.yml` beside the signed DMGs and SHA-256 checksums. Automatic upstream runs publish the Release as Latest; manual tag runs leave it as a draft that installed clients cannot see.
-
-## Withdraw and restore a release
-
-These commands operate the retained legacy withdrawal workflow. The reviewed delivery decision owns replacement recovery.
-
-Dispatch [`desktop-release-withdraw.yml`](../../.github/workflows/desktop-release-withdraw.yml) from GitHub Actions, or run:
-
-```sh
-gh workflow run desktop-release-withdraw.yml \
-  -f release_tag=desktop-vX.Y.Z \
-  -f reason='Describe the observed problem'
-```
-
-Withdrawal converts the public Release back to a draft without deleting its immutable tag or assets. For a stable release, the workflow also marks the newest remaining public stable release as Latest. It opens or updates a `Desktop release withdrawn: ...` issue containing each withdrawal reason and run, the fallback version, restoration command, and the explicit handoff fact that installed applications are not remotely downgraded. Reinstall an earlier DMG manually when an already-installed copy must roll back. To restore a retained release, publish its draft with `gh release edit desktop-vX.Y.Z --repo mintgao/dsh-desktop --draft=false`; add `--latest` for a stable release.
-
-## Development ownership
-
-[`src/backend.ts`](src/backend.ts) owns readiness parsing and bounded process shutdown. [`src/navigation.ts`](src/navigation.ts) is the pure URL policy. [`src/updates.ts`](src/updates.ts) owns signed update decisions, while [`src/electron-updates.ts`](src/electron-updates.ts) adapts the signed transport. [`src/manual-updates.ts`](src/manual-updates.ts) owns prerelease reminders, [`src/github-releases.ts`](src/github-releases.ts) validates the public Release API, and [`src/manual-update-preferences.ts`](src/manual-update-preferences.ts) stores those choices atomically. [`src/main.ts`](src/main.ts) selects the channel from the application version and owns native presentation. [`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) stages the source-built runtime closure; [`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) validates and combines signed per-architecture metadata; [`electron-builder.yml`](electron-builder.yml) owns the macOS bundle layout and public feed identity. Run `pnpm run test:desktop` for the focused desktop tests.
-
-The runtime decision and alternatives are recorded in [Electron desktop shell](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.md). The update lifecycles are recorded in [Manual preview release awareness](../../.agents/notes/implemented/feature/2026-08-24-desktop-manual-preview-updates.md) and [User-controlled signed desktop updates](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.md). The repository model is recorded in [Mint desktop downstream development](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.md), [Pre-certificate unsigned desktop previews](../../.agents/notes/implemented/process/2026-08-27-pre-certificate-unsigned-desktop-previews.md) owns the default trust stage, and [Automatic upstream desktop releases](../../.agents/notes/implemented/process/2026-08-27-automatic-upstream-desktop-releases.md) owns adoption, publication, withdrawal, and cross-Agent records.
+- The Web "Open In..." action is disabled in Desktop because its host plugin requires HTTP routes; Desktop does not provide a `webServer`.
+- Release signing, notarization, update hosting, and previous-version installed-artifact qualification require the production release environment.
+- Desktop plugins with dependency lifecycle scripts are rejected unless their package appears in the desktop project's reviewed `allowBuilds` policy.
+- The desktop shell shares sessions, settings, credentials, workspaces, and storage under `$DSH_HOME` with CLI dsh, while executable packages, plugin activation, lockfiles, and package-manager state remain separate.

@@ -449,7 +449,7 @@ function walkSchemaExpr(
     const inner = unwrapExpr(call.expression.expression)
     if (ts.isCallExpression(inner)) collectValuePaths(inner, base)
   }
-  const visit = (e: ts.Expression): void => {
+  const visit = (e: ts.Expression, transformed = false): void => {
     const call = unwrapExpr(e)
     if (!ts.isCallExpression(call) || !ts.isPropertyAccessExpression(call.expression)) {
       violations.push(`${where}: schema expression is not a statically walkable schemastery call.`)
@@ -468,6 +468,10 @@ function walkSchemaExpr(
       }
       return
     }
+    if (method === 'transform' && call.arguments[0]) {
+      visit(call.arguments[0], true)
+      return
+    }
     if (method === 'intersect' && call.arguments[0] && ts.isArrayLiteralExpression(call.arguments[0])) {
       for (const el of call.arguments[0].elements) {
         const part = unwrapExpr(el)
@@ -475,7 +479,7 @@ function walkSchemaExpr(
           const imp = ctx.imports.get(part.expression.text)
           if (imp && !imp.specifier.startsWith('.')) { composes.push(imp.specifier); continue }
         }
-        if (ts.isCallExpression(part)) { visit(part); continue }
+        if (ts.isCallExpression(part)) { visit(part, transformed); continue }
         violations.push(`${where}: intersect element '${part.getText(ctx.sf)}' is neither a workspace plugin's Config nor an inline schema call.`)
       }
       return
@@ -485,14 +489,15 @@ function walkSchemaExpr(
     if (method === 'union' && call.arguments[0] && ts.isArrayLiteralExpression(call.arguments[0])) {
       for (const el of call.arguments[0].elements) {
         const part = unwrapExpr(el)
-        if (ts.isCallExpression(part)) { visit(part); continue }
+        if (ts.isCallExpression(part)) { visit(part, transformed); continue }
+        if (transformed) violations.push(`${where}: transformed union element '${part.getText(ctx.sf)}' is not an inline schema call.`)
       }
       return
     }
     // A chained refinement (`z.object({…}).default(…)` etc.): the keys live on
     // the call the chain hangs off — keep unwrapping toward it.
     const base = unwrapExpr(call.expression.expression)
-    if (ts.isCallExpression(base)) { visit(base); return }
+    if (ts.isCallExpression(base)) { visit(base, transformed); return }
     violations.push(`${where}: schema call '${method}' is not object/intersect and hangs off no walkable base call.`)
   }
   visit(expr)
@@ -515,6 +520,44 @@ function findSchemaExpr(ctx: FileCtx, pluginClass: ts.ClassDeclaration | null): 
     if (member.initializer) return member.initializer
   }
   return null
+}
+
+/** Select an explicitly annotated transformed schema's caller input; other schemas keep the apply parameter. */
+function transformedInputType(ctx: FileCtx, violations: string[]): string | null | undefined {
+  for (const statement of ctx.sf.statements) {
+    if (!ts.isVariableStatement(statement)
+      || !statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) continue
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== 'Config' || !declaration.initializer) continue
+      const expression = unwrapExpr(declaration.initializer)
+      if (!ts.isCallExpression(expression) || !ts.isPropertyAccessExpression(expression.expression)
+        || expression.expression.name.text !== 'transform') return undefined
+      if (!(statement.declarationList.flags & ts.NodeFlags.Const)) {
+        violations.push(`${ctx.rel}: transformed Config must be an exported const declaration.`)
+        return null
+      }
+      const owner = expression.expression.expression
+      const binding = ts.isIdentifier(owner) ? ctx.imports.get(owner.text) : undefined
+      if (binding?.specifier !== '@deepseek-ai/schemastery') {
+        violations.push(`${ctx.rel}: transformed Config must use an imported Schemastery binding.`)
+        return null
+      }
+      const annotation = declaration.type
+      if (!annotation || !ts.isTypeReferenceNode(annotation) || !ts.isIdentifier(annotation.typeName)
+        || ctx.imports.get(annotation.typeName.text)?.specifier !== '@deepseek-ai/schemastery'
+        || annotation.typeArguments?.length !== 2) {
+        violations.push(`${ctx.rel}: transformed Config requires an explicit Schemastery<Input, Output> annotation.`)
+        return null
+      }
+      const input = annotation.typeArguments[0]
+      if (input === undefined || !ts.isTypeReferenceNode(input) || !ts.isIdentifier(input.typeName) || input.typeArguments?.length) {
+        violations.push(`${ctx.rel}: transformed Config input must be a plain package-owned type name.`)
+        return null
+      }
+      return input.typeName.text
+    }
+  }
+  return undefined
 }
 
 /** Read an `inject` service-key list: `export const inject = […]` in the entry
@@ -658,7 +701,9 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
       violations.push(`${pkg}: config parameter type (${pointer(entryRel, ctx.sf, configParam)}) is not a plain type-name reference; declare a named config type.`)
       continue
     }
-    const typeName = configParam.type.typeName.text
+    const transformed = transformedInputType(ctx, violations)
+    if (transformed === null) continue
+    const typeName = transformed ?? configParam.type.typeName.text
     entry.configTypeName = typeName
     const pastes: Paste[] = []
     const refs = new Map<string, TypeRef>()
