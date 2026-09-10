@@ -107,7 +107,7 @@ jobs:
       - run: pnpm run desktop:stage
       - run: git diff --exit-code
       - name: Build unsigned DMG without publication
-        run: pnpm exec electron-builder --config apps/desktop/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --mac dmg --${{ matrix.arch }} --publish never
+        run: pnpm exec electron-builder --config apps/desktop-mint/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --mac dmg --${{ matrix.arch }} --publish never
       - name: Qualify the mounted DMG payload
         shell: bash
         env:
@@ -115,7 +115,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          dmgs=(apps/desktop/dist/*.dmg)
+          dmgs=(apps/desktop-mint/dist/*.dmg)
           test "${#dmgs[@]}" -eq 1
           cp "${dmgs[0]}" "$RUNNER_TEMP/shadow/"
           dmg="$RUNNER_TEMP/shadow/$(basename "${dmgs[0]}")"

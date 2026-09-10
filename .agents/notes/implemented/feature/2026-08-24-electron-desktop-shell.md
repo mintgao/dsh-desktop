@@ -10,7 +10,9 @@ English | [中文](2026-08-24-electron-desktop-shell.zh.md)
 
 ## Decision
 
-`apps/desktop` is a private, root-workspace-owned Electron main process rather than another publishable npm workspace. It reuses the official Web composition across a local process boundary. This decision replaces only the hypothetical first-use IPC carrier in [GUI layering and RPC protocol](../../archived/architecture/2026-07-19-gui-layering-and-rpc-protocol.md); the client, Host, API Proxy, and plugin layering in that note remains authoritative.
+The [Accepted target integration decision](../../../../docs/decisions/20260910-desktop-mint-target-integration.md) keeps this Mint adapter in `apps/desktop-mint` while preserving upstream `apps/desktop` and `apps/desktop-host` separately. Its migration registry owns qualification of existing data; this lifecycle adapter performs no data conversion.
+
+`apps/desktop-mint` is a private, root-workspace-owned Electron main process rather than another publishable npm workspace. It reuses the official Web composition across a local process boundary. This decision replaces only the hypothetical first-use IPC carrier in [GUI layering and RPC protocol](../../archived/architecture/2026-07-19-gui-layering-and-rpc-protocol.md); the client, Host, API Proxy, and plugin layering in that note remains authoritative.
 
 ### Process and window lifecycle
 
@@ -24,7 +26,7 @@ While the supervisor waits for readiness, the asar-owned startup page presents t
 
 ### Source-built packaged runtime
 
-The macOS stage runs the official client build, packs both release families from the current checkout, reads the packed manifests, and selects the local dependency, optional-dependency, and peer closure reachable from `@deepseek-ai/dsh`. npm installs those tarballs and external dependencies into `apps/desktop/backend`. A version smoke check drives the installed CLI, and a recursive link check rejects any symlink whose resolved destination leaves that staging root. electron-builder copies this isolated tree as an external application resource rather than packing it into asar; the Electron main bundle and static startup page stay in asar.
+The macOS stage runs the official client build, packs both release families from the current checkout, reads the packed manifests, and selects the local dependency, optional-dependency, and peer closure reachable from `@deepseek-ai/dsh`. npm installs those tarballs and external dependencies into `apps/desktop-mint/backend`. A version smoke check drives the installed CLI, and a recursive link check rejects any symlink whose resolved destination leaves that staging root. electron-builder copies this isolated tree as an external application resource rather than packing it into asar; the Electron main bundle and static startup page stay in asar.
 
 The local targets are unsigned macOS arm64 and x64 applications named DSH Desktop with the Mint wave icon and the `io.github.mintgao.dsh-desktop` bundle identifier. They are suitable for source builds and user-level installation. [Mint desktop downstream development](../process/2026-08-24-mint-desktop-downstream-development.md) owns Developer ID signing, hardened runtime, notarization, native-architecture artifacts, and public publication. [User-controlled signed desktop updates](2026-08-24-desktop-signed-auto-update.md) owns update-feed and installation behavior. Universal binaries are not present.
 

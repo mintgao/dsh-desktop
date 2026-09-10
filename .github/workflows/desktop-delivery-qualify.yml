@@ -69,19 +69,19 @@ jobs:
         working-directory: candidate-source
         run: |
           pnpm run test:desktop
-          pnpm run build:desktop
+          pnpm run build:desktop-mint
           pnpm run typecheck
           pnpm run doc-sync
           git diff --exit-code
           pnpm run desktop:stage
           git diff --exit-code
-          pnpm exec electron-builder --config apps/desktop/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --config.extraMetadata.version="$VERSION" --mac dmg --"$ARCH" --publish never
+          pnpm exec electron-builder --config apps/desktop-mint/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --config.extraMetadata.version="$VERSION" --mac dmg --"$ARCH" --publish never
       - name: Verify mounted and copied isolated installation
         shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
-          dmgs=(candidate-source/apps/desktop/dist/*.dmg)
+          dmgs=(candidate-source/apps/desktop-mint/dist/*.dmg)
           test "${#dmgs[@]}" -eq 1
           cp "${dmgs[0]}" "$RUNNER_TEMP/bundle/"
           node --import tsx scripts/desktop-delivery/cli.ts smoke --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/bundle/candidate.json" --dmg "$RUNNER_TEMP/bundle/$(basename "${dmgs[0]}")" --arch "$ARCH" --desktop-version "$VERSION" --copy-install --out "$RUNNER_TEMP/bundle/native-$ARCH.json"

@@ -18,7 +18,7 @@ In `unsigned-preview`, automatic upstream adoption does not require Apple Secret
 
 In `signed`, the existing signed-release rules apply. Upstream versions map exactly to desktop versions; signed prereleases remain manual previews, and a signed stable version may publish the automatic-update assets and become Latest. The workflow then requires all five Apple Secrets, forces signing and notarization, and validates the Developer ID identity and stapled ticket. The transition affects future tags only; immutable unsigned tags and their provenance remain unchanged.
 
-The root [`AGENTS.md`](../../../../AGENTS.md) carries the standing order. The [desktop application reference](../../../../apps/desktop/README.md) owns operator procedure and limitations. [Automatic upstream desktop releases](2026-08-27-automatic-upstream-desktop-releases.md) owns queueing, adoption, publication, withdrawal, and handoff records. [Public desktop signing](2026-08-25-signed-public-desktop-releases.md) remains the authority for signed-mode identity and acceptance requirements; this decision is its explicit pre-certificate exception.
+The root [`AGENTS.md`](../../../../AGENTS.md) carries the standing order. The [desktop application reference](../../../../apps/desktop-mint/README.md) owns operator procedure and limitations. [Automatic upstream desktop releases](2026-08-27-automatic-upstream-desktop-releases.md) owns queueing, adoption, publication, withdrawal, and handoff records. [Public desktop signing](2026-08-25-signed-public-desktop-releases.md) remains the authority for signed-mode identity and acceptance requirements; this decision is its explicit pre-certificate exception.
 
 ## Alternatives considered
 

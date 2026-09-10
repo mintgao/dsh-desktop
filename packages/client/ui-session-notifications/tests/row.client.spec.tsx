@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { WorkspaceSnapshot } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { TaskNotificationRow, type TaskNotificationRowProps } from '../src/client/TaskNotificationRow.tsx'
@@ -24,6 +25,9 @@ function emptyWorkspaces() {
   }))
 }
 
+// This settings row reads no resource address.
+const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
+
 function mount(initial: TaskNotificationState) {
   const state = createSnapshotStore(initial)
   const setMode = vi.fn((mode: TaskNotificationState['mode']) => {
@@ -31,6 +35,8 @@ function mount(initial: TaskNotificationState) {
   })
   const requestPermission = vi.fn()
   const props: TaskNotificationRowProps = {
+    usePanelInfo: selector => selector({ activePanelId: null }),
+    useResource,
     useSessions: emptySessions(),
     useSessionPendingInteraction: bindSnapshotSelector(
       createSnapshotStore<SessionPendingInteractionSnapshot>(new Map()),

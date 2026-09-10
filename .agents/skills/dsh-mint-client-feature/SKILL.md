@@ -5,7 +5,7 @@ description: Use when designing, implementing, reviewing, or releasing a DSH Des
 
 # DSH Desktop Mint feature placement
 
-Keep DSH Desktop Mint an opinionated distribution over the DSH plugin harness, not a forked Agent runtime or a second client framework. Read the [product-layer decision](../../notes/implemented/architecture/2026-08-25-downstream-client-product-layer.md) and the [desktop product reference](../../../apps/desktop/README.md) before changing product composition or native behavior.
+Keep DSH Desktop Mint an opinionated distribution over the DSH plugin harness, not a forked Agent runtime or a second client framework. Read the [product-layer decision](../../notes/implemented/architecture/2026-08-25-downstream-client-product-layer.md) and the [desktop product reference](../../../apps/desktop-mint/README.md) before changing product composition or native behavior.
 
 ## Classify the feature
 

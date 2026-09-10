@@ -26,14 +26,14 @@ Build an unsigned Apple Silicon application from the current source tree:
 pnpm run desktop:app:mac
 ```
 
-Build the Intel application with `pnpm run desktop:app:mac:x64`. Replace `app` with `dmg` in either command to create a local DMG. The default Apple Silicon result is `apps/desktop/dist/mac-arm64/DSH Desktop.app`; electron-builder may use `mac/DSH Desktop.app` for an Intel result.
+Build the Intel application with `pnpm run desktop:app:mac:x64`. Replace `app` with `dmg` in either command to create a local DMG. The default Apple Silicon result is `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`; electron-builder may use `mac/DSH Desktop.app` for an Intel result.
 
 Each command runs the official client build, packs the current local DSH and vendored packages, installs the selected runtime closure in an isolated resource directory, rejects links that escape that directory, and invokes electron-builder. An unpublished local backend change is therefore included instead of being replaced by the same version from npm.
 
 Local commands disable signing-identity discovery and do not publish a Release. Electron 43 cannot deliver macOS notifications from unsigned or ad-hoc-signed applications, so local output and the pre-certificate public preview cannot validate task notifications or another native capability that depends on stable application identity. Use a Developer ID-signed and notarized artifact for those acceptance tests. Install a local Apple Silicon build for the current user with:
 
 ```sh
-ditto "apps/desktop/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desktop.app"
+ditto "apps/desktop-mint/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH Desktop.app"
 ```
 
 ## Runtime behavior

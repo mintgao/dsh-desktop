@@ -18,7 +18,7 @@ DSH Desktop 在维护者尚无 Apple Developer 证书期间是个人与小范围
 
 在 `signed` 阶段，已有的签名发布规则生效。上游版本与桌面版本准确对应；签名预发布版仍为手工预览版，签名稳定版可以发布自动更新产物并成为 Latest。此时工作流会要求全部五项 Apple Secret，强制签名与公证，并验证 Developer ID 身份和已装订票据。阶段切换只影响后续标签；不可变的未签名标签及其来源记录保持不变。
 
-根目录 [`AGENTS.md`](../../../../AGENTS.md) 持有常驻规则，[桌面应用参考](../../../../apps/desktop/README.zh.md)持有操作者流程与限制，[自动引入上游并发布桌面版](2026-08-27-automatic-upstream-desktop-releases.zh.md)持有排队、引入、发布、撤回与交接记录。[公开桌面版签名](2026-08-25-signed-public-desktop-releases.zh.md)仍然持有签名模式的身份与验收要求；本决策是它在申请证书前的显式例外。
+根目录 [`AGENTS.md`](../../../../AGENTS.md) 持有常驻规则，[桌面应用参考](../../../../apps/desktop-mint/README.zh.md)持有操作者流程与限制，[自动引入上游并发布桌面版](2026-08-27-automatic-upstream-desktop-releases.zh.md)持有排队、引入、发布、撤回与交接记录。[公开桌面版签名](2026-08-25-signed-public-desktop-releases.zh.md)仍然持有签名模式的身份与验收要求；本决策是它在申请证书前的显式例外。
 
 ## 考虑过的备选方案
 

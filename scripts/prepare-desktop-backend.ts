@@ -109,14 +109,19 @@ function verifyContainedLinks(root: string, directory: string): void {
 /** Pack the source tree and install its runtime closure into the Electron resource directory. */
 async function main(): Promise<void> {
   const root = resolve(import.meta.dirname, '..')
-  const target = join(root, 'apps', 'desktop', 'backend')
+  const target = join(root, 'apps', 'desktop-mint', 'backend')
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'dsh-desktop-pack-'))
   try {
     const dshPacks = join(temporaryRoot, 'dsh')
     const vendorPacks = join(temporaryRoot, 'vendor')
+    const nativePacks = join(temporaryRoot, 'native')
     packFamily(root, 'dsh', dshPacks)
     packFamily(root, 'vendor', vendorPacks)
-    const selected = runtimeClosure(packedPackages([dshPacks, vendorPacks]))
+    capture(process.execPath, [join(root, 'native/system/scripts/pack-release.mjs'), nativePacks, '--current-platform-only'], { cwd: root, env: process.env })
+    const selected = runtimeClosure(packedPackages([dshPacks, vendorPacks, nativePacks]))
+    for (const required of ['@deepseek-ai/dsh-desktop-mint', '@deepseek-ai/dsh-client-ui-session-notifications', '@deepseek-ai/node-addon-system', `@deepseek-ai/node-addon-system-${process.platform}-${process.arch}`]) {
+      if (!selected.some(packed => packed.name === required)) throw new Error(`desktop stage: source-built runtime closure omits ${required}`)
+    }
     const dshPackage = selected.find(packed => packed.name === '@deepseek-ai/dsh')
     if (dshPackage === undefined) throw new Error('desktop stage: dsh CLI was absent from its runtime closure')
 

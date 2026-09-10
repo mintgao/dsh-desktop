@@ -167,7 +167,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run verify-package-dependencies
       - run: pnpm run test:desktop
-      - run: pnpm run build:desktop
+      - run: pnpm run build:desktop-mint
       - run: pnpm run typecheck
       - run: pnpm run doc-sync
       - run: pnpm exec vitest run scripts/desktop-workflows.spec.ts scripts/upstream-adoption/state.spec.ts
@@ -204,7 +204,7 @@ jobs:
           target=dir
           if [[ "${{ needs.prepare.outputs.mode }}" == unsigned-preview ]]; then target=dmg; fi
           pnpm exec electron-builder \
-            --config apps/desktop/electron-builder.yml \
+            --config apps/desktop-mint/electron-builder.yml \
             --config.extraMetadata.version=${{ needs.prepare.outputs.version }} \
             --config.mac.notarize=false \
             --mac "$target" \
@@ -212,7 +212,7 @@ jobs:
             --publish never
       - name: Smoke candidate before any secret-bearing job
         run: |
-          app_path="$(find apps/desktop/dist -type d -name 'DSH Desktop.app' -print -quit)"
+          app_path="$(find apps/desktop-mint/dist -type d -name 'DSH Desktop.app' -print -quit)"
           test -n "$app_path"
           "$app_path/Contents/MacOS/DSH Desktop" --dsh-package-smoke
           if [[ "${{ needs.prepare.outputs.mode }}" == unsigned-preview ]]; then
@@ -240,7 +240,7 @@ jobs:
         with:
           name: candidate-${{ matrix.arch }}
           path: |
-            apps/desktop/dist/*.dmg
+            apps/desktop-mint/dist/*.dmg
             ${{ runner.temp }}/unsigned-app-${{ matrix.arch }}.tar.gz
             ${{ runner.temp }}/unsigned-app-${{ matrix.arch }}.manifest.json
           if-no-files-found: error
@@ -340,7 +340,7 @@ jobs:
           identity="$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
           test -n "$identity"
           app="$RUNNER_TEMP/payload/DSH Desktop.app"
-          entitlements=apps/desktop/build/entitlements.mac.plist
+          entitlements=apps/desktop-mint/build/entitlements.mac.plist
           plutil -lint "$entitlements"
           codesign --force --deep --options runtime --timestamp --entitlements "$entitlements" --sign "$identity" --keychain "$keychain" "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
@@ -398,25 +398,25 @@ jobs:
           app="$RUNNER_TEMP/signed-app/DSH Desktop.app"
           codesign --verify --deep --strict --verbose=2 "$app"
           pnpm exec electron-builder \
-            --config apps/desktop/electron-builder.yml \
+            --config apps/desktop-mint/electron-builder.yml \
             --config.extraMetadata.version=${{ needs.prepare.outputs.version }} \
             --config.mac.identity=null \
             --prepackaged "$app" \
             --mac zip \
             --${{ matrix.arch }} \
             --publish never
-          test -s "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip"
-          test -s "apps/desktop/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
-          test -s apps/desktop/dist/latest-mac.yml
-          mv apps/desktop/dist/latest-mac.yml "apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml"
+          test -s "apps/desktop-mint/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip"
+          test -s "apps/desktop-mint/dist/DSH-Desktop-Mint-${{ needs.prepare.outputs.version }}-${{ matrix.arch }}.zip.blockmap"
+          test -s apps/desktop-mint/dist/latest-mac.yml
+          mv apps/desktop-mint/dist/latest-mac.yml "apps/desktop-mint/dist/latest-mac-${{ matrix.arch }}.yml"
       - uses: actions/upload-artifact@v4
         with:
           name: signed-stable-${{ matrix.arch }}
           path: |
             ${{ runner.temp }}/signed-payload/*.dmg
-            apps/desktop/dist/*.zip
-            apps/desktop/dist/*.blockmap
-            apps/desktop/dist/latest-mac-${{ matrix.arch }}.yml
+            apps/desktop-mint/dist/*.zip
+            apps/desktop-mint/dist/*.blockmap
+            apps/desktop-mint/dist/latest-mac-${{ matrix.arch }}.yml
           if-no-files-found: error
           retention-days: 30
 

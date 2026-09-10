@@ -37,13 +37,12 @@ kind: "package-bundle"
 <details>
 <summary>实现细节——点击展开</summary>
 
-该 Bundle 只持有一个静态 patch，不包含运行时粘合代码。包入口与不变式伴生插件用于普通 bundle 打包和诊断；patch 是完整的产品选择表层。
+该 Bundle 只持有一个静态 patch，不包含运行时粘合代码。包入口用于普通 bundle 打包；patch 是完整的产品选择表层。
 
 | 文件 | 职责 |
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | Mint 持有的功能选择与产品默认值 |
 | [`src/index.ts`](src/index.ts) | Bundle 包入口 |
-| [`src/invariant.ts`](src/invariant.ts) | 静态组合的不变式伴生插件 |
 | [`tests/desktop-mint.spec.ts`](tests/desktop-mint.spec.ts) | 精确 patch 与包依赖检查 |
 
 </details>
@@ -83,3 +82,5 @@ kind: "package-bundle"
 无。
 
 </details>
+
+本包不发布运行时不变量：除权威配置或会话列表输入外，本包没有可独立观察的可变关系。

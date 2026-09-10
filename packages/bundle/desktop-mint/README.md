@@ -37,13 +37,12 @@ Run `dsh --profile desktop-mint` through the desktop application. The Profile co
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The Bundle owns one static patch and no runtime glue. Its package entry and invariant companion exist for ordinary bundle packaging and diagnostics; the patch is the complete product-selection surface.
+The Bundle owns one static patch and no runtime glue. Its package entry supports ordinary bundle packaging; the patch is the complete product-selection surface.
 
 | File | Role |
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | Mint-owned feature selection and product defaults |
 | [`src/index.ts`](src/index.ts) | Bundle package entry |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion for the static composition |
 | [`tests/desktop-mint.spec.ts`](tests/desktop-mint.spec.ts) | Exact patch and package-dependency checks |
 
 </details>
@@ -82,3 +81,5 @@ None; the selected notification plugin neither assembles nor sends a provider re
 None.
 
 </details>
+
+No invariant companion is published: this package has no independently observable mutable relationship beyond its authoritative configuration or session-list input.
