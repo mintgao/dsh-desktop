@@ -493,7 +493,7 @@ describe('session-query exact reads', () => {
       expect(() => Session.create(child.id, expected.events, child.header, child.inheritedEventCount)).toThrow('seed must equal')
       const cold = await liveContext()
       try {
-        TestPersistence.reset([{ meta: child.header, events: expected.events, inheritedEventCount: child.inheritedEventCount }])
+        TestPersistence.reset([{ meta: child.header, events: [...expected.events], inheritedEventCount: child.inheritedEventCount }])
         await cold.plugin(TestPersistence)
         const stored = JSON.stringify([...TestPersistence.entries])
         const create = vi.fn()
