@@ -1,0 +1,44 @@
+[
+  {
+    "tag": "dsh-v0.1.2-alpha.4",
+    "id": 380633709,
+    "publishedAt": "2026-09-01T15:45:07Z",
+    "commit": "4e84901e6471b79ec0338099867ebb4606d12bb5"
+  },
+  {
+    "tag": "dsh-v0.1.2-alpha.5",
+    "id": 381145530,
+    "publishedAt": "2026-09-02T10:02:56Z",
+    "commit": "db6bdc3576c2d4e7c965e8e3ed0c2a731eed87f5"
+  },
+  {
+    "tag": "dsh-v0.1.2-rc.1",
+    "id": 381777538,
+    "publishedAt": "2026-09-03T06:06:07Z",
+    "commit": "a66e4702047846cdaa10c66c9d3df3951f5ea70d"
+  },
+  {
+    "tag": "dsh-v0.1.3-alpha.1",
+    "id": 382677748,
+    "publishedAt": "2026-09-04T11:34:32Z",
+    "commit": "d347e703908d0406b7a7ef80e3a0e594d86b2215"
+  },
+  {
+    "tag": "dsh-v0.1.3-alpha.2",
+    "id": 384129524,
+    "publishedAt": "2026-09-07T13:59:29Z",
+    "commit": "82a5fd61a7cf5c293cec4bdff68f455398d685e9"
+  },
+  {
+    "tag": "dsh-v0.1.5-alpha.1",
+    "id": 384887562,
+    "publishedAt": "2026-09-08T16:16:04Z",
+    "commit": "5dda764ed3aa172535a7967b06ff95d9cbfe536a"
+  },
+  {
+    "tag": "dsh-v0.1.5-alpha.2",
+    "id": 385585674,
+    "publishedAt": "2026-09-09T14:23:10Z",
+    "commit": "b2e3b2a0125854567a4a5fcba75782e42fe84901"
+  }
+]

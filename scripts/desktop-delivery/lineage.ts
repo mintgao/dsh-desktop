@@ -14,6 +14,8 @@ export function deliveryPredecessor(kind: string, lock: SourceLock, prior: Recor
     const ordered = [...lock.observed].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt) || a.id - b.id)
     const index = ordered.findIndex(value => sameRelease(value, lock.release))
     if (index < 1 || !sameRelease(release(ordered[index - 1]), previous) || lock.predecessor === null || !sameRelease(lock.predecessor, previous)) throw new Error('Delivery skips the immediate upstream predecessor')
+  } else if (kind === 'catch-up') {
+    if (lock.catchUp === undefined || lock.catchUp === null || lock.predecessor === null || !sameRelease(lock.catchUp.from, previous) || !sameRelease(lock.predecessor, previous)) throw new Error('Catch-up delivery baseline differs from reviewed range')
   } else if (kind === 'desktop' || kind === 'replacement') {
     if (!sameRelease(lock.release, previous)) throw new Error('Same-upstream delivery changed upstream identity')
   } else throw new Error('Unknown desktop release kind')

@@ -16,7 +16,7 @@ import { smokeDmg } from './smoke.ts'
  */
 export async function main(args: string[]): Promise<number> {
   const options: ParseArgsConfig['options'] = { apply: { type: 'boolean' }, 'copy-install': { type: 'boolean' } }
-  const parsed = parseArgs({ args, allowPositionals: true, strict: true, options: { ...options, ...Object.fromEntries(['config', 'lock', 'fixture', 'out', 'summary', 'root', 'expected-commit', 'candidate', 'dmg', 'smoke', 'arch', 'directory', 'reports', 'plan', 'digest', 'base', 'version', 'checkout', 'bundle', 'admin-evidence', 'baseline-output', 'migration-report', 'desktop-version', 'manifest', 'run-id', 'run-attempt', 'tag', 'operation', 'native', 'notes', 'compatibility', 'baseline', 'workflow-commit', 'lock-path', 'kind', 'run-url', 'legacy-ref', 'legacy-path', 'draft-id', 'bootstrap-context'].map(name => [name, { type: 'string' as const }])) } })
+  const parsed = parseArgs({ args, allowPositionals: true, strict: true, options: { ...options, ...Object.fromEntries(['config', 'lock', 'fixture', 'out', 'summary', 'root', 'expected-commit', 'candidate', 'dmg', 'smoke', 'arch', 'directory', 'reports', 'plan', 'digest', 'base', 'version', 'checkout', 'bundle', 'admin-evidence', 'baseline-output', 'migration-report', 'desktop-version', 'manifest', 'run-id', 'run-attempt', 'tag', 'operation', 'native', 'notes', 'compatibility', 'baseline', 'workflow-commit', 'lock-path', 'kind', 'run-url', 'legacy-ref', 'legacy-path', 'draft-id', 'bootstrap-context', 'target-tag', 'target-commit', 'assessment'].map(name => [name, { type: 'string' as const }])) } })
   const values: Record<string, string | boolean | undefined> = parsed.values
   const required = (name: string): string => {
     const value = values[name]

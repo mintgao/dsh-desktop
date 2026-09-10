@@ -22,7 +22,10 @@ import { legacyBaseline, migrationPreflight, requireActivation } from './migrati
  * @returns Local operation result.
  */
 export async function reviewedCommand(operation: string, values: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const required = (name: string): string => string(values[name])
+  const required = (name: string): string => {
+    if (values[name] === undefined) throw new Error(`Missing --${name}`)
+    return string(values[name])
+  }
   const config = deliveryConfig(required('config'))
   const api = github(process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN)
   const root = resolve(typeof values.root === 'string' ? values.root : '.')
@@ -47,7 +50,7 @@ export async function reviewedCommand(operation: string, values: Record<string, 
     }
     return report
   }
-  if (operation === 'adoption-plan') return adoptionPlan(config, root, required('lock'), typeof values.fixture === 'string' ? readJson(values.fixture) : { complete: true, releases: await githubReleases(config) }, required('base'), required('version'), api, required('kind'), typeof values.baseline === 'string' ? object(readJson(values.baseline)) : undefined)
+  if (operation === 'adoption-plan') return adoptionPlan(config, root, required('lock'), typeof values.fixture === 'string' ? readJson(values.fixture) : { complete: true, releases: await githubReleases(config) }, required('base'), required('version'), api, required('kind'), typeof values.baseline === 'string' ? object(readJson(values.baseline)) : undefined, values.kind === 'catch-up' ? { tag: required('target-tag'), commit: required('target-commit'), assessment: required('assessment') } : undefined)
   if (operation === 'adoption-prepare') {
     const plan = approvedPlan(required('plan'), required('digest'), operation, config)
     return prepareAdoption(config, root, plan, required('checkout'), (cwd, environment) => {

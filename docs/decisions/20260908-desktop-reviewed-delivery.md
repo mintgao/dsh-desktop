@@ -60,9 +60,10 @@ Use source-lock Git history and manifest predecessor links, not a completion led
 
 ### Upstream order and desktop delivery order
 
-Every manifest declares `releaseKind: upstream | desktop | replacement`:
+Every manifest declares `releaseKind: upstream | catch-up | desktop | replacement`:
 
 - `upstream`: its upstream identity is the immediate adopted successor of the last verified delivery's upstream identity. The source lock's upstream predecessor matches that previous upstream identity. No intermediate upstream adoption may be skipped.
+- `catch-up`: the [catch-up decision](20260910-desktop-catch-up-delivery.md) defines an explicit reviewed interval and direct baseline-to-target qualification; ordinary upstream semantics remain immediate-successor.
 - `desktop`: its upstream identity equals the last verified delivery's upstream identity. Preserve the source lock's upstream predecessor; the delivery predecessor is the last verified desktop manifest or reviewed legacy baseline. This permits desktop-only fixes and separately qualified rebuilds without inventing an upstream adoption. Discovery of a newer upstream does not prevent this delivery.
 - `replacement`: its upstream identity equals the withdrawn delivery it replaces. Include `supersedes: { tag, manifestDigest }`; its delivery predecessor is the withdrawn delivery's preceding verified delivery. Preserve the source lock's upstream predecessor. Retain the withdrawn manifest unchanged.
 

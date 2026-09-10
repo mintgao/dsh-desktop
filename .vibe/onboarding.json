@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "updated_at": "2026-09-10",
+  "evidence": [
+    "README.md",
+    "package.json",
+    "docs/context/product.md",
+    "docs/context/architecture.md",
+    "docs/context/design-system.md",
+    ".github/desktop-delivery/source-lock.json",
+    "scripts/desktop-delivery/adoption.ts",
+    "docs/decisions/20260908-desktop-reviewed-delivery.md"
+  ]
+}
