@@ -126,14 +126,16 @@ async function shellSettings(ctx, stage, prior) {
   assert.equal(pwdSpec.workdir, expected.cwd)
   assert.equal(pwdSpec.timeoutMs, expected.timeoutMs)
   assert.equal(pwdSpec.stdoutMaxBytes, expected.maxOutputBytes)
+  const cwdSpec = ctx.shell.resolve({ command: 'pwd', stdoutMaxBytes: Buffer.byteLength(`${expected.cwd}\n`) })
   let pwd
-  try { pwd = await ctx.shell.run(pwdSpec) }
+  try { pwd = await ctx.shell.run(cwdSpec) }
   catch (error) {
     if (process.env.DSH_MIGRATION_CONFINED_DEVELOPMENT !== '1' || error.name !== 'SandboxUnavailableError'
       || !String(error).includes('sandbox_apply: Operation not permitted')) throw error
-    return { status: 'blocked', settings, pwdSpec, reason: String(error), scope: 'harness confinement prevents nested product sandbox; no shell behavior qualified' }
+    return { status: 'blocked', settings, pwdSpec, cwdSpec, reason: String(error), scope: 'harness confinement prevents nested product sandbox; no shell behavior qualified' }
   }
   assert.equal(pwd.exitCode, 0)
+  assert.equal(pwd.stdout.truncated, false)
   assert.equal(pwd.stdout.text.trim(), expected.cwd)
   assert.notEqual(pwd.sandbox.mode, 'danger-full-access')
   assert.equal(pwd.sandbox.denied, false)
@@ -154,7 +156,7 @@ async function shellSettings(ctx, stage, prior) {
   await assert.rejects(ctx.settings.update('shell', { timeoutMs: 0 }))
   await assert.rejects(ctx.settings.update('shell', { graceMs: Number.MAX_SAFE_INTEGER }))
   assert.deepEqual(readFileSync(path), before)
-  return { settings, pwdSpec, pwd, capped, success, output, invalidPreserved: sha256(before) }
+  return { settings, pwdSpec, cwdSpec, pwd, capped, success, output, invalidPreserved: sha256(before) }
 }
 
 async function loopExecution(ctx, stage) {
