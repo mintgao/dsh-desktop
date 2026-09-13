@@ -26,7 +26,7 @@ pnpm run desktop:start
 pnpm run desktop:app:mac
 ```
 
-使用 `pnpm run desktop:app:mac:x64` 构建 Intel 应用。将任一命令中的 `app` 替换为 `dmg` 即可生成本地 DMG。默认的 Apple Silicon 结果位于 `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`；Intel 结果可能位于 electron-builder 使用的 `mac/DSH Desktop.app`。
+Mint 仅支持 Apple Silicon；[架构决策](../../docs/decisions/20260913-mint-arm64-scope.zh.md)将 Intel 支持延后。将命令中的 `app` 替换为 `dmg` 即可生成本地 DMG。默认结果位于 `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`。
 
 每条命令都会执行官方客户端构建，打包当前本地 DSH 与 vendored 包，向隔离的资源目录安装选定运行时闭包，拒绝逃逸该目录的链接，再调用 electron-builder。因此，尚未发布的本地后端变更会进入应用，而不会被 npm 上的同版本替换。
 
@@ -68,7 +68,7 @@ renderer（渲染进程）启用沙箱、上下文隔离与 Web 安全，不启�
 
 根目录[贡献指南](../../CONTRIBUTING.zh.md)规定 remote、分支、跨设备同步、依赖、密钥、上游更新与 Pull Request 的处理方式。`main` 始终保持可发布，每台设备都独立安装依赖树，不复制与架构有关的产物。
 
-[`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) 会在 Pull Request 与 `main` 上运行桌面测试、桌面构建、仓库类型检查和文档检查。手动打包冒烟测试会分别使用 GitHub 原生的 arm64 与 x64 macOS runner，并在接受任一应用 bundle 前通过发布的可执行文件加载打包后的 Electron 主进程。DeepSeek Harness 官方工作流保留仓库保护条件，不会在这个下游仓库分配其组织专用任务。
+[`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) 会在 Pull Request 与 `main` 上运行桌面测试、桌面构建、仓库类型检查和文档检查。手动打包冒烟测试会使用 GitHub 原生的 arm64 macOS runner，并在接受应用 bundle 前通过发布的可执行文件加载打包后的 Electron 主进程。DeepSeek Harness 官方工作流保留仓库保护条件，不会在这个下游仓库分配其组织专用任务。
 
 ## 经审查的桌面交付
 
@@ -80,7 +80,7 @@ renderer（渲染进程）启用沙箱、上下文隔离与 Web 安全，不启�
 
 以下保留发布步骤属于旧工作流，在这些工作流仍启用时适用。经审查交付决策规定替代机制的启用。
 
-仓库初始使用 `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview`。在维护者明确确认 Apple Developer 已准备就绪并把该仓库变量改为 `signed` 前，自动引入会把 `dsh-vX.Y.Z` 映射为 `desktop-vX.Y.Z-unsigned.1`，已有上游预发布后缀则追加 `.unsigned.1`。发布工作流会在不发现签名身份的前提下构建原生 arm64、x64 DMG，验证它们不带 Developer ID Application 身份，再与 SHA-256 校验和一起发布为 GitHub Pre-release。这些产物只供个人与小范围手工安装，不会进入稳定更新源，也不能验证依赖应用身份的原生功能。
+仓库初始使用 `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview`。在维护者明确确认 Apple Developer 已准备就绪并把该仓库变量改为 `signed` 前，自动引入会把 `dsh-vX.Y.Z` 映射为 `desktop-vX.Y.Z-unsigned.1`，已有上游预发布后缀则追加 `.unsigned.1`。发布工作流会在不发现签名身份的前提下构建原生 arm64 DMG，验证它们不带 Developer ID Application 身份，再与 SHA-256 校验和一起发布为 GitHub Pre-release。这些产物只供个人与小范围手工安装，不会进入稳定更新源，也不能验证依赖应用身份的原生功能。
 
 维护者明确确认 Apple Developer 资格与发布凭据已经就绪后，把 `DESKTOP_RELEASE_SIGNING_MODE` 设为 `signed`。后续自动版本会恢复与所引入 Harness Release 的准确对应：`dsh-vX.Y.Z[-suffix]` 映射为 `desktop-vX.Y.Z[-suffix]`。预发布后缀选择经过签名的手工预览 DMG；稳定版本还会发布经过签名的更新 ZIP、blockmap、合并更新元数据与 Latest 状态。签名模式要求以下加密 GitHub Actions Secrets：
 

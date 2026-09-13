@@ -13,12 +13,14 @@ import { catchUpEvidence, digest, object } from '../evidence.ts'
 import { deliveryConfig, operationPlan, type GitHub } from '../operations.ts'
 import { mutateRelease, promotionPlan, retainedBundle, preparePublication } from '../publication.ts'
 
-const config = deliveryConfig(resolve('.github/desktop-delivery/mint.json'))
+const mintConfig = deliveryConfig(resolve('.github/desktop-delivery/mint.json'))
+// Historical publication fixtures retain their original two-architecture policy.
+const config = { ...mintConfig, architectures: ['arm64', 'x64'] as ('arm64' | 'x64')[] }
 const temporary: string[] = []
 afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }) })
 function directory(): string { const path = mkdtempSync(join(tmpdir(), 'delivery-payload-')); temporary.push(path); return path }
 function json(value: unknown): Buffer { return Buffer.from(`${JSON.stringify(value, null, 2)}\n`) }
-function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false, migration = false) {
+function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false, migration = false, architectures = config.architectures) {
   const policy = object(JSON.parse(readFileSync('.github/desktop-delivery/migration-policy.json', 'utf8')))
   const path = directory()
   const upstream = { id: 1, tag: 'dsh-v0.1.0-alpha.1', commit: migration ? String(policy.targetUpstream) : 'a'.repeat(40), publishedAt: '2026-01-01T00:00:00Z' }
@@ -36,7 +38,7 @@ function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false, migratio
   const lock = { schemaVersion: catchUp ? 3 : 2, ...(catchUp ? { catchUp: range } : {}), upstreamRepository: config.upstreamRepository, release: upstream, predecessor: catchUp ? from : null, observed: catchUp ? [...earlier, upstream] : [upstream], adoptionSeed: { commit: 'b'.repeat(40), tree: 'c'.repeat(40) } }
   const candidate = { purpose: 'desktop-delivery-shadow', kind: 'candidate', qualificationEligible: true, sourceDifference: { status: '' }, downstreamCommit: 'd'.repeat(40), sourceLockDigest: digest(json(lock)), configDigest: 'e'.repeat(64), upstream, components: { dsh: '0.1.0-alpha.1' } }
   const baseline = { schemaVersion: 1, purpose: 'desktop-legacy-baseline', repository: config.repository, repositoryId: config.repositoryId, upstream: catchUp ? from : upstream, desktopTag: 'desktop-v1.2.3-alpha.1.unsigned.1', sourceCommit: 'f'.repeat(40), releaseId: 1, assets: [] }
-  const localConfig = { ...config, baselinePath: join(path, 'baseline.json') }
+  const localConfig = { ...config, architectures, baselinePath: join(path, 'baseline.json') }
   writeFileSync(localConfig.baselinePath, json(baseline))
   const file = (name: string,
     content: Uint8Array | string) => { writeFileSync(join(path,
@@ -45,7 +47,7 @@ function fixture(version = '1.2.3-alpha.1.unsigned.2', catchUp = false, migratio
     name)); return { name,
     size: bytes.length,
     sha256: digest(bytes) } }
-  const native = config.architectures.map((architecture) => {
+  const native = architectures.map((architecture) => {
     const dmg = file(`DSH-Desktop-Mint-${version}-${architecture}.dmg`, `DMG fixture ${architecture}`)
     const evidence = file(`native-${architecture}.json`, json({ schemaVersion: 1, purpose: 'desktop-release-native-evidence', mode: 'unsigned-preview', qualificationEligible: true, candidateDigest: digest(json(candidate)), desktopVersion: version, architecture, dmgDigest: dmg.sha256, packagedRuntimeDigest: 'e'.repeat(64), executableArchitectures: architecture === 'x64' ? 'x86_64' : architecture, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true, copiedInstallation: true, installationStopped: true, installationRemoved: true }))
     return { architecture, evidence, dmg }
@@ -369,4 +371,18 @@ it('blocks changed live ranges after approval and rejects missing or altered ret
   if (rangeFile === undefined) throw new Error('Missing fixture assessment')
   writeFileSync(join(data.path, assessmentAsset(rangeFile.reference)), 'tampered')
   expect(() => checkedManifest(data.localConfig, data.manifestPath, data.path)).toThrow('file changed')
+})
+
+it('accepts only the configured arm64 publication evidence and refuses historical two-architecture restoration', () => {
+  const data = fixture(undefined, false, false, mintConfig.architectures)
+  expect(mintConfig.architectures).toEqual(['arm64'])
+  expect(() => checkedManifest(data.localConfig, data.manifestPath, data.path)).not.toThrow()
+  const original = [...data.manifest.native]
+  for (const native of [[], [...original, ...original], original.map(item => ({ ...item, architecture: 'x64' }))]) {
+    writeFileSync(data.manifestPath, json({ ...data.manifest, native }))
+    expect(() => checkedManifest(data.localConfig, data.manifestPath, data.path)).toThrow()
+  }
+  const historical = fixture()
+  expect(() => checkedManifest({ ...historical.localConfig, architectures: ['arm64'] }, historical.manifestPath, historical.path)).toThrow('Missing native qualification assets')
+  expect(() => checkedManifest(historical.localConfig, historical.manifestPath, historical.path)).not.toThrow()
 })

@@ -1,0 +1,20 @@
+{
+  "status": "owner-approved",
+  "approvedAt": "2026-09-13T04:18:45.473251+00:00",
+  "supportedArchitectures": [
+    "arm64"
+  ],
+  "deferredArchitectures": [
+    "x64"
+  ],
+  "scope": "All future DSH Desktop Mint builds, qualification and release offerings; Intel compatibility deferred",
+  "reason": "Owner has no Intel Mac and does not need Intel distribution for current users",
+  "history": "Preserve published releases, exact historical artifact descriptors and generic DSH architecture support",
+  "acceptance": "Real current A-to-B update and recovery still required for arm64; x64 is not a current release prerequisite",
+  "ownerInstruction": "整个项目都不需要提供 Intel 版本的 Mac 版本；扩大兼容性放到后面",
+  "supersedes": [
+    "verification-method-proposal.json both-architecture requirement",
+    "forward-b-technical-draft.json x64 scenarios",
+    "Intel host prerequisite in forward-native-capability decision for current Mint deliveries"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "outcome": "decision-required",
+  "triggerEvidence": [
+    "native acceptance method",
+    "evidence provenance",
+    "replacement and recovery"
+  ],
+  "decisionOwner": "/root/verification_method_decision",
+  "governingDecision": "verification-method-proposal.json",
+  "reviewMode": "sequential-perspective",
+  "reviewResult": "approved",
+  "reviewEvidence": "verification-method-review.json",
+  "materialProductDecisions": "forward-baseline-scope.json; owner agreed reassessment in current task",
+  "openBlockers": [
+    "Accepted method decision and review",
+    "Inspectable native Intel environment unestablished",
+    "Full-B implementation and evidence trust decisions unresolved"
+  ],
+  "gate": "blocked",
+  "gateOwner": "/root",
+  "confirmedAt": "none",
+  "confirmationBasis": "none",
+  "readinessHistory": "Method documentation only; historical probe evidence and full-B blockers preserved",
+  "capabilityLimitation": "Independent reviewer dispatch and existing-agent followup both refused: agent thread limit reached"
+}

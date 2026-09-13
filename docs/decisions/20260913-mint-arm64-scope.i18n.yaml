@@ -1,6 +1,6 @@
 # Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write apps/desktop-mint/README.md
-README.md: 61ddda2cecb5ade75b9a29930e16bdde2388a148
-README.zh.md: 996bdc774ffb2af5f4ab178eae67c8669d9f8655
+#   pnpm run verify-translation-pairing --write docs/decisions/20260913-mint-arm64-scope.md
+20260913-mint-arm64-scope.md: 389862813c18e00c1bfdd424f10215bbe8c3e82b
+20260913-mint-arm64-scope.zh.md: d5e81d46c18dba96278b9eceb146e2ac38cdd010

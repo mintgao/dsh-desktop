@@ -6,7 +6,8 @@ permissions:
   actions: read
 jobs:
   native-capability:
-    if: github.ref == 'refs/heads/main'
+    # Intel support is deferred by the Mint architecture decision.
+    if: ${{ false }}
     runs-on: macos-15-intel
     timeout-minutes: 15
     steps:

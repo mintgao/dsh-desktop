@@ -33,5 +33,9 @@
     "publicExposure": "Existing clients may discover preview before public end-to-end acceptance; state A-based compatibility scope",
     "authority": "User ok following explicit staged-publication question",
     "exactPayloadAuthorization": "pending"
-  }
+  },
+  "architectureScope": "architecture-scope.json",
+  "supportedArchitectures": [
+    "arm64"
+  ]
 }

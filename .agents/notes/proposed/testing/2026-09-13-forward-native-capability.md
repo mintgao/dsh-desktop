@@ -23,3 +23,5 @@ The pinned architecture and package open normally, expose rendered content, quit
 ## Risks
 
 Hosted Accessibility may be unavailable. Failure stops dependent qualification without granting permissions or substituting injected observations. A successful capability result still leaves actual update and public-delivery acceptance unverified.
+
+Current Mint deliveries follow the [Apple Silicon architecture decision](../../../../docs/decisions/20260913-mint-arm64-scope.md). Intel capability is not their prerequisite; retained probe tooling does not expand supported architectures. Generic tooling and exact historical evidence remain useful for future compatibility work.

@@ -79,8 +79,6 @@ jobs:
         include:
           - arch: arm64
             runner: macos-15
-          - arch: x64
-            runner: macos-15-intel
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       DSH_TELEMETRY_DISABLED: '1'
@@ -151,8 +149,8 @@ jobs:
           pattern: shadow-*
           path: ${{ runner.temp }}/shadow
           merge-multiple: true
-      - name: Require both architectures and rehash their evidence
-        run: pnpm run desktop:delivery combine --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/shadow/candidate.json" --directory "$RUNNER_TEMP/shadow" --reports artifact-arm64.json,artifact-x64.json --out "$RUNNER_TEMP/combined.json" --summary "$RUNNER_TEMP/combined.md"
+      - name: Require the configured architecture and rehash its evidence
+        run: pnpm run desktop:delivery combine --config .github/desktop-delivery/mint.json --candidate "$RUNNER_TEMP/shadow/candidate.json" --directory "$RUNNER_TEMP/shadow" --reports artifact-arm64.json --out "$RUNNER_TEMP/combined.json" --summary "$RUNNER_TEMP/combined.md"
       - name: Report combined outcome
         if: always()
         run: test ! -f "$RUNNER_TEMP/combined.md" || cat "$RUNNER_TEMP/combined.md" >> "$GITHUB_STEP_SUMMARY"

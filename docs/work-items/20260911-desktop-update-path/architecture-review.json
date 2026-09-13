@@ -1,0 +1,15 @@
+{
+  "reviewMode": "sequential-perspective",
+  "reviewer": "/root critical technical-review perspective",
+  "author": "/root/verification_method_decision",
+  "result": "approved",
+  "capabilityLimitation": "Independent reviewer followup refused by host: agent thread limit reached",
+  "decision": "../../decisions/20260913-mint-arm64-scope.md",
+  "basis": [
+    "Owner explicitly defers x64",
+    "Exact configuration/workflow scope retains generic validators and history",
+    "Activation stale receipts fail closed; no production cutover claim",
+    "Historical restore limitation explicit; not bypassed",
+    "Local implementation distinguished from unresolved full-B acceptance"
+  ]
+}

@@ -68,6 +68,7 @@ it('runtime validates pinned attestations without requesting Administration perm
       return visible
     } }
     await requireActivation(localConfig, activationPath, reportPath, runtime)
+    await expect(requireActivation({ ...localConfig, architectures: ['x64'] }, activationPath, reportPath, runtime)).rejects.toThrow('Activation distribution configuration changed')
     drift = true
     await expect(requireActivation(localConfig, activationPath, reportPath, runtime)).rejects.toThrow('Live activation controls blocked')
     const failed: GitHub = { request: () => Promise.reject(new Error('403')) }

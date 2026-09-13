@@ -194,6 +194,7 @@ it('accepts stable-base and prerelease-base unsigned SemVer while rejecting disg
   for (const version of ['0.1.2', '0.1.2+unsigned.1', '0.1.2-alpha_bad.unsigned.1', '0.1.2-unsigned.01']) expect(() =>{  requireUnsignedVersion(version) }).toThrow('signed-mode-unconfigured')
 })
 
+// Two CLI children each have a 30-second deadline; Git preparation and cleanup share the outer budget.
 it('runs actual CLI preparation with an isolated fixture checkout and preserves explicit version failures', async () => {
   const fixture = repository()
   for (const path of ['packages/cli/main', 'vendor/fixture', 'scripts']) mkdirSync(join(fixture.root, path), { recursive: true })
@@ -209,6 +210,8 @@ it('runs actual CLI preparation with an isolated fixture checkout and preserves 
   const output = temporary(); const planPath = join(output, 'plan.json'); store(planPath, plan)
   const command = (checkout: string) => spawnSync(process.execPath, ['--import', 'tsx', resolve('scripts/desktop-delivery/cli.ts'), 'adoption-prepare', '--config', configPath, '--root', fixture.root, '--plan', planPath, '--digest', digest(readFileSync(planPath)), '--checkout', checkout, '--out', join(output, 'result.json')], { encoding: 'utf8', timeout: 30_000 })
   const result = command(join(output, 'checkout'))
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
   expect(result.stderr || result.stdout).not.toContain('ERR_PNPM')
   expect(result.status, result.stdout + result.stderr).toBe(0)
   const prepared = object(JSON.parse(readFileSync(join(output, 'result.json'), 'utf8')) as unknown)
@@ -217,9 +220,11 @@ it('runs actual CLI preparation with an isolated fixture checkout and preserves 
   mkdirSync(join(output, 'checkout', 'packages/cli/mismatch'), { recursive: true })
   store(join(output, 'checkout', 'packages/cli/mismatch/package.json'), { name: '@deepseek-ai/mismatch', version: '0.0.0' })
   const mismatch = command(join(output, 'checkout'))
+  expect(mismatch.error).toBeUndefined()
+  expect(mismatch.signal).toBeNull()
   expect(mismatch.status).toBe(1)
   expect(mismatch.stdout).toContain('dsh release members must share one version')
-})
+}, 90_000)
 
 it('deduplicates authoritative closed notices on later pages and ignores copied human markers', async () => {
   const second = { ...config, id: 'another-desktop' }

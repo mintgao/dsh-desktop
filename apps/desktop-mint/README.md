@@ -26,7 +26,7 @@ Build an unsigned Apple Silicon application from the current source tree:
 pnpm run desktop:app:mac
 ```
 
-Build the Intel application with `pnpm run desktop:app:mac:x64`. Replace `app` with `dmg` in either command to create a local DMG. The default Apple Silicon result is `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`; electron-builder may use `mac/DSH Desktop.app` for an Intel result.
+Mint supports Apple Silicon only; Intel support is deferred under the [architecture decision](../../docs/decisions/20260913-mint-arm64-scope.md). Replace `app` with `dmg` to create a local DMG. The default result is `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`.
 
 Each command runs the official client build, packs the current local DSH and vendored packages, installs the selected runtime closure in an isolated resource directory, rejects links that escape that directory, and invokes electron-builder. An unpublished local backend change is therefore included instead of being replaced by the same version from npm.
 
@@ -68,7 +68,7 @@ The [shadow delivery guide](../../docs/cookbook/desktop-delivery-shadow.md) cove
 
 The root [contributor guide](../../CONTRIBUTING.md) defines remotes, branches, cross-device synchronization, dependencies, secrets, upstream updates, and pull requests. `main` stays release-ready, and each device installs its own dependency tree rather than copying architecture-specific output.
 
-[`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) runs desktop tests, the desktop build, repository type checking, and documentation checks on pull requests and `main`. Its manual package smoke uses native GitHub macOS runners for both arm64 and x64 and loads the packaged Electron main process through the shipped executable before accepting either bundle. Official DeepSeek Harness workflows retain repository guards and do not allocate their organization-specific jobs in this downstream repository.
+[`desktop-ci.yml`](../../.github/workflows/desktop-ci.yml) runs desktop tests, the desktop build, repository type checking, and documentation checks on pull requests and `main`. Its manual package smoke uses native GitHub macOS runners for arm64 and loads the packaged Electron main process through the shipped executable before accepting the bundle. Official DeepSeek Harness workflows retain repository guards and do not allocate their organization-specific jobs in this downstream repository.
 
 ## Reviewed desktop delivery
 
@@ -80,7 +80,7 @@ The replacement is initially inactive. The [rollout prerequisites](../../docs/wo
 
 These retained release procedures belong to the legacy workflows and apply while those workflows remain active. The reviewed delivery decision owns replacement activation.
 
-The repository starts in `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview`. Until the maintainer explicitly confirms Apple Developer readiness and changes that repository variable to `signed`, automated adoption maps `dsh-vX.Y.Z` to `desktop-vX.Y.Z-unsigned.1` and appends `.unsigned.1` to an existing upstream prerelease suffix. The release workflow builds native arm64 and x64 DMGs without discovering a signing identity, verifies that they do not carry a Developer ID Application identity, and publishes them as GitHub Pre-releases with DMGs and SHA-256 checksums only. These artifacts are for personal and small-group manual installation; they never enter the stable updater feed and cannot validate identity-dependent native features.
+The repository starts in `DESKTOP_RELEASE_SIGNING_MODE=unsigned-preview`. Until the maintainer explicitly confirms Apple Developer readiness and changes that repository variable to `signed`, automated adoption maps `dsh-vX.Y.Z` to `desktop-vX.Y.Z-unsigned.1` and appends `.unsigned.1` to an existing upstream prerelease suffix. The release workflow builds native arm64 DMGs without discovering a signing identity, verifies that they do not carry a Developer ID Application identity, and publishes them as GitHub Pre-releases with DMGs and SHA-256 checksums only. These artifacts are for personal and small-group manual installation; they never enter the stable updater feed and cannot validate identity-dependent native features.
 
 After the maintainer explicitly confirms that Apple Developer enrollment and release credentials are ready, set `DESKTOP_RELEASE_SIGNING_MODE=signed`. Future automated versions then mirror the adopted Harness Release exactly: `dsh-vX.Y.Z[-suffix]` becomes `desktop-vX.Y.Z[-suffix]`. A prerelease suffix selects signed manual preview DMGs; a stable version additionally publishes signed update ZIPs, blockmaps, combined update metadata, and Latest status. Signed mode requires these encrypted GitHub Actions secrets:
 

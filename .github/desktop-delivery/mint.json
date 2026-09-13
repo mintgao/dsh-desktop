@@ -3,8 +3,7 @@
   "upstreamRepository": "deepseek-ai/deepseek-harness",
   "tagPrefix": "dsh-v",
   "architectures": [
-    "arm64",
-    "x64"
+    "arm64"
   ],
   "application": "DSH Desktop",
   "repository": "mintgao/dsh-desktop",

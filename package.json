@@ -186,10 +186,8 @@
     "desktop:stage": "npm run build:official && npm run build:desktop-mint && npm run desktop:prepare",
     "desktop:app:mac": "npm run desktop:app:mac:arm64",
     "desktop:app:mac:arm64": "npm run desktop:stage && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/desktop-mint/electron-builder.yml --mac dir --arm64",
-    "desktop:app:mac:x64": "npm run desktop:stage && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/desktop-mint/electron-builder.yml --mac dir --x64",
     "desktop:dmg:mac": "npm run desktop:dmg:mac:arm64",
     "desktop:dmg:mac:arm64": "npm run desktop:stage && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/desktop-mint/electron-builder.yml --mac dmg --arm64",
-    "desktop:dmg:mac:x64": "npm run desktop:stage && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config apps/desktop-mint/electron-builder.yml --mac dmg --x64",
     "postinstall": "node scripts/install-lefthook.mjs",
     "build:desktop-mint": "tsc -b apps/desktop-mint && tsdown --config apps/desktop-mint/tsdown.config.ts",
     "test:desktop": "vitest run apps/desktop-mint/tests"
