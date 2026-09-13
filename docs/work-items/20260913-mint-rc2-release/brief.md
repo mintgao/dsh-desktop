@@ -55,3 +55,7 @@ The isolated worktree has the older Vibe installation without the newer readines
 ## Evidence and recovery
 
 Reuse [accepted local assembly evidence](../20260913-desktop-versioned-assembly/verification.md) only where source and artifact identities remain unchanged. New release metadata and public artifacts require their own checks. Never infer publication from a successful build or infer usable recovery from hashes alone.
+
+## Release configuration binding
+
+The qualified candidate is `be4fb7f15508d0101e0a16ccbdff6730116af81c`, run `34764279121`; exact CI artifact upgrade acceptance passed. The stricter assembly configuration invalidates the prior activation configuration digest. A fresh production preflight returned `controls-verified` without blockers. Independent review approves refreshing only the live-control report and its activation digests, with existing baseline, protections and permissions retained. Only administrator identity fields are retained from the raw account response. The qualified application remains unchanged; a new mutation plan must run from the refreshed protected main. Verify the updated activation through the production validator before commit. No runtime or permission change requires another application build.
