@@ -1,4 +1,6 @@
 /** Native capability tests observe refusal, ordinary quit and cleanup independently. */
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { readFileSync } from 'node:fs'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { expect, it, vi } from 'vitest'
@@ -155,4 +157,76 @@ it('keeps launch completion unknown when successful open cannot observe a unique
   expect(result.firstFailure).toBe('initial-launch:refused')
   expect(result.cleanup).toMatchObject({ stopped: false, launchCompletionUnknown: true })
   expect(state.live).toEqual([])
+})
+
+it.each(['missing', 'replaced'] as const)('retains a fresh %s expected process observation', async (identity) => {
+  const state = fixture()
+  state.driver.preflight = async () => {
+    if (identity === 'missing') state.live.length = 0
+    else state.live[0]!.executable = '/unrelated/secret-token'
+    return 'identity'
+  }
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toEqual({ operation: 'process-identity', category: `process-${identity}`,
+    mainPresence: { freshness: 'fresh', count: 0, expectedPid: 101, expectedIdentity: identity } })
+  expect(JSON.stringify(result)).not.toContain('secret-token')
+})
+it('retains unknown inventory presence when the first inventory fails', async () => {
+  const state = fixture()
+  state.driver.processes = async () => probeProcesses('secret-token')
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toEqual({ operation: 'process-inventory', category: 'process-inventory-error', mainPresence: { freshness: 'unknown' } })
+  expect(JSON.stringify(result)).not.toContain('secret-token')
+})
+it('marks the prior process observation stale when a later inventory fails', async () => {
+  const state = fixture()
+  const processes = state.driver.processes.bind(state.driver)
+  state.driver.preflight = async () => {
+    state.driver.processes = async (signal) => { state.driver.processes = processes; signal.throwIfAborted(); return probeProcesses('secret-token') }
+    return 'identity'
+  }
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toMatchObject({ operation: 'process-inventory', category: 'process-inventory-error',
+    mainPresence: { freshness: 'stale', count: 1, expectedPid: 101, expectedIdentity: 'present' } })
+})
+it('excludes unexpected observer output and preserves its details through failed cleanup', async () => {
+  const state = fixture()
+  state.driver.rendered = async () => 'secret-token'
+  state.driver.stop = async () => { throw new Error('cleanup-secret') }
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toMatchObject({ operation: 'accessibility-rendered', category: 'unexpected-output', mainPresence: { freshness: 'stale' } })
+  expect(result.firstFailure).toBe('initial-rendered-window:refused')
+  expect(JSON.stringify(result)).not.toMatch(/secret-token|cleanup-secret/u)
+})
+it('records an actual subprocess exit without its message or captured output', async () => {
+  const state = fixture()
+  state.driver.rendered = async () => (await promisify(execFile)(process.execPath,
+    ['-e', 'process.stdout.write("secret-token"); process.stderr.write("private-key"); process.exit(7)'], { env: {}, timeout: 5000 })).stdout
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toMatchObject({ operation: 'accessibility-rendered', category: 'subprocess-error', subprocess: { exitCode: 7 }, mainPresence: { freshness: 'stale' } })
+  expect(JSON.stringify(result)).not.toMatch(/secret-token|private-key/u)
+})
+it.skipIf(process.platform === 'win32')('records an actual execFile timeout and completed subprocess termination', async () => {
+  const state = fixture()
+  state.driver.rendered = async () => (await promisify(execFile)(process.execPath,
+    ['-e', 'setInterval(() => {}, 1000)'], { env: {}, timeout: 50 })).stdout
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toMatchObject({ operation: 'accessibility-rendered', category: 'subprocess-timeout', subprocess: { signal: 'SIGTERM', timeout: true } })
+  expect(result.cleanup.stopped).toBe(true)
+})
+
+it('does not label subprocess buffer exhaustion as a timeout', async () => {
+  const state = fixture()
+  state.driver.rendered = async () => (await promisify(execFile)(process.execPath,
+    ['-e', 'process.stdout.write("secret-token".repeat(1000))'], { env: {}, maxBuffer: 16, timeout: 5000 })).stdout
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toMatchObject({ category: 'subprocess-error', subprocess: { timeout: 'unknown' } })
+  expect(JSON.stringify(result)).not.toContain('secret-token')
+})
+it('does not label subprocess signal cancellation as its own timeout', async () => {
+  const state = fixture()
+  state.driver.rendered = async () => (await promisify(execFile)(process.execPath,
+    ['-e', 'setInterval(() => {}, 1000)'], { env: {}, signal: AbortSignal.abort(), timeout: 5000 })).stdout
+  const result = await runForwardProbe(app, state.driver)
+  expect(result.failureDetails).toMatchObject({ category: 'subprocess-error', subprocess: { timeout: 'unknown' } })
 })

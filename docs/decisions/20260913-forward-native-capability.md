@@ -20,6 +20,8 @@ One experiment has a 120-second deadline with 30 seconds reserved for cleanup. V
 
 Preserve the first failure and terminate only identity-verified owned processes. Record artifact identities, launch mode, declared roots, observations and cleanup with purpose desktop-forward-native-capability and qualificationEligible false. Export no profiles, credentials or raw logs. A failed probe stops full-policy work. A rejected or timed-out launch with unresolved completion leaves cleanup uncertain even after an empty process inventory. Retain both application and data roots, preserve the first failure and record that final disposable-runner teardown supplies containment; do not claim all processes stopped.
 
+Failure receipts retain only a fixed operation/category, observable numeric subprocess exit or allowlisted signal/timeout status, and the last main-process inventory with explicit freshness. Diagnostic failures preserve the first failure and never export exception messages or subprocess output.
+
 ## Verification
 
 Focused tests cover pinned input refusal, process identity, deadlines, observation failure and cleanup. Exact outbound authorization and authenticated x64 inputs remain execution prerequisites. The independent review approves only this probe design.

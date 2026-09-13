@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/decisions/20260913-forward-native-capability.md
-20260913-forward-native-capability.md: 8d3caae9537cf6eb9af2015967d8965880928204
-20260913-forward-native-capability.zh.md: a66b018eac4179bf459b17ed55c40a1ea14ca77c
+20260913-forward-native-capability.md: c01a3302be5616198ca7d9b9366cd69fd0282f7d
+20260913-forward-native-capability.zh.md: 74e7368b3a7f8f1e4a3eac70b2031f4330ab34ad
