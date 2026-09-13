@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-13-observed-forward-delivery.md
-2026-09-13-observed-forward-delivery.md: f702868f89c51dab7f5c6d4de1a3f70451e37f11
-2026-09-13-observed-forward-delivery.zh.md: e9ead64864e89963e6865330b015545ce829bf12
+2026-09-13-observed-forward-delivery.md: f5032b6dc50c8dfa6b4ba22f8e5bf8081ca9cfe9
+2026-09-13-observed-forward-delivery.zh.md: 0ca9ae5a6b343cf9c60130f874848544944286aa

@@ -14,6 +14,8 @@ The [Accepted decision](../../../../docs/decisions/20260913-observed-forward-del
 
 The build archive has a fixed CI-owned file set. The manifest and local observation are derived only after that build, retained by the existing mutation bundle and bound by the approved plan. Protected-environment approval explicitly accepts the exact limited local observation and authorizes the named operation. Hashes establish bytes, not personal observation. Restoration reaffirms the original record; withdrawal remains possible without observation payloads. Public delivery stays pending in frozen qualification and has separate manifest-bound acceptance.
 
+A public schema-3 final manifest can be the predecessor of a later catch-up. The baseline reader accepts numeric final-manifest schemas 1/2/3 while retaining public-tip, exact downloaded metadata and tag identity checks. A build receipt or shadow report cannot establish a delivered predecessor.
+
 ## Alternatives considered
 
 Treating native smoke as GUI acceptance would certify unobserved actions. Requiring a hosted GUI runner adds an unavailable execution prerequisite without improving local witness attribution. Adding an installer or generic recovery service changes product behavior and ownership beyond this release procedure. Reusing historical migration reports for a different A-to-B baseline confuses source history with observed installation recovery.

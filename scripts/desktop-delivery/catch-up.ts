@@ -213,7 +213,7 @@ export async function verifyCatchUpBaseline(config: DeliveryConfig, prior: Recor
     const bytes = await api.request('DOWNLOAD', `/repos/${config.repository}/releases/assets/${String(manifest[0]?.id)}`)
     if (!(bytes instanceof Uint8Array)) throw new Error('Catch-up baseline download failed')
     expected = object(JSON.parse(Buffer.from(bytes).toString()) as unknown)
-    if (![1, 2].includes(Number(expected.schemaVersion)) || expected.mode !== 'unsigned-preview' || expected.distribution !== config.id) throw new Error('Invalid delivered baseline manifest')
+    if ((expected.schemaVersion !== 1 && expected.schemaVersion !== 2 && expected.schemaVersion !== 3) || expected.mode !== 'unsigned-preview' || expected.distribution !== config.id) throw new Error('Invalid delivered baseline manifest')
   } else throw new Error('Unknown catch-up delivery baseline')
   if (Array.isArray(prior.unresolvedAdoption) && prior.unresolvedAdoption.length > 0) throw new Error('Unresolved delivery baseline adoption')
   if (JSON.stringify(expected) !== JSON.stringify(prior)) throw new Error('Catch-up baseline differs from verified delivery evidence')
