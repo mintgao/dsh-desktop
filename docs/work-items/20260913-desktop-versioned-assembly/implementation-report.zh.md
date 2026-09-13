@@ -41,3 +41,9 @@ QA 负责 AC-1 至 AC-7，对不变候选恰好运行一次完整 `./bin/vibe ve
 [QA 报告](verification.zh.md) 保留 `024eaa1` 的事实记录。RD 通过等待完整初始化操作，修正了打包 smoke 的同步失败处理，包括 CLI 覆盖和内嵌凭据检查。持久化的 `test:desktop:packaged` fixture 使用隔离的原生路径执行编译后的应用，要求正常初始化在 30 秒内以 0 退出、非法覆盖以 1 退出。真实的 `test:desktop:assembly` fixture 现在会在源码 CI 和原生 qualification 暂存后执行，并采用环境变量允许列表。交付 fixture 显式提供必需的组装输入；版本不匹配 fixture 包含两个 Mint 清单，继续证明不一致的官方版本会被拒绝。
 
 原样聚焦复跑的 catch-up 来源用例在 2.56 秒内通过，未修改超时或可靠性实现。修正后的交付、工作流和组装测试共 25 项全部通过；已有桌面工作流测试共 14 项全部通过。改动文件 oxlint、Host 类型检查、最终 `npm run desktop:stage`、真实组装 fixture、未签名 arm64 目录打包，以及编译后打包应用的正反例 fixture 均通过。沙盒 IPC、回环监听、DNS 和 Electron SIGABRT 失败均以原命令提升到主机权限重试。Node 为 v22.22.3。精确产物一节标识此次重建后的修正应用。RD 未重复完整默认矩阵；QA 需要验证变化后的候选，包括同时篡改内容与凭据，以及最终文档同步。
+
+## 隔离安装测试夹具修正
+
+独立调查将整组测试中的 CLI 超时定位到 `pnpm install`，当时两项源码检查均未开始。私有回环 registry 实验证明，锁定的本地链接测试夹具会请求 pnpm 更新信息并等待响应；在夹具自己的 `pnpm-workspace.yaml` 中设置 `updateNotifier: false` 后，安装完成且没有 registry 请求。证据保留于 `/private/tmp/dsh-operations-aggregate-3077ec3/phase-findings.md` 及其配对本地实验结果。整组失败当时的精确远程网络状况仍未观察到。
+
+修正仅添加该夹具配置及说明。真实 CLI 执行、版本拒绝、凭据隔离和全部超时保持不变。实际 CLI 用例在 2.27 秒内通过。应用源码、运行时输入和打包产物摘要保持不变。宿主以 `agent thread limit reached` 拒绝恢复 RD 和创建替代专家，因此编排者作为唯一的顺序 RD 视角完成了这项局部修正。独立 QA 继续负责最终验证。
