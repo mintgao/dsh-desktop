@@ -1,17 +1,12 @@
 {
-  "schemaVersion": 2,
-  "persistedFormatsChanged": true,
-  "assessment": "Historical session and cache format changes remain true. This forward delivery uses the exact authenticated unpublished A build and a protected arm64 B build plus explicitly maintainer-attested local observation; CI smoke alone does not establish GUI acceptance.",
+  "schemaVersion": 1,
+  "persistedFormatsChanged": false,
+  "assessment": "Scoped to the latest public desktop-v0.1.5-alpha.2.unsigned.2 predecessor through official RC.1 and RC.2. Persistence-owner implementations and declared formats are unchanged; this does not reclassify historical format-changing deliveries.",
   "evidenceReferences": [
-    "docs/decisions/20260913-observed-forward-delivery.md",
-    ".github/desktop-delivery/catch-up-assessment.json"
+    ".github/desktop-delivery/rc2-catch-up-assessment.json",
+    ".github/desktop-delivery/rc2-source-inventory.json"
   ],
   "unsupportedDowngrades": [
-    "Never launch A on B-modified data.",
-    "Stop writers, retain B state separately, verify complete backups, restore A and pre-B private state, then observe ordinary usable A entry and quit."
-  ],
-  "forwardPolicy": {
-    "path": ".github/desktop-delivery/forward-update-policy.json",
-    "sha256": "1810d825e3a4f82bb24490d90e18c2b4a8ac35f0a6140a82ff9a9ffb1d78e5c3"
-  }
+    "Do not run an older application on upgraded data. Restore a stopped, complete pre-upgrade data backup together with its matching application."
+  ]
 }
