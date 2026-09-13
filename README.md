@@ -1,20 +1,75 @@
-# DeepSeek Harness
+# DSH Desktop Mint
 
 English | [中文](README.zh.md)
 
-> This downstream checkout includes [DSH Desktop Mint](apps/desktop-mint/README.md), an unofficial macOS distribution maintained by Mint. DeepSeek does not endorse, cooperate with, or authorize this distribution.
+<p align="center">
+  <img src="apps/desktop-mint/build/icon.png" alt="DSH Desktop Mint logo" width="160" height="160">
+</p>
 
-DeepSeek Harness (`dsh`) is an open-source agent harness developed by [DeepSeek AI](https://deepseek.com).
+A macOS desktop app for working with DeepSeek Harness, maintained by Mint. Open a project, configure your model, and work with a coding agent in a dedicated desktop window.
 
-It is built on an **everything-is-a-plugin** architecture and powered by [Cordis](https://github.com/cordiverse/cordis), whose design is described in [_A Programming Paradigm for Spatiotemporal Composability_](https://arxiv.org/abs/2608.25512).
+[Download previews](https://github.com/mintgao/dsh-desktop/releases) · [Getting started](#getting-started) · [Desktop updates](#desktop-updates) · [Report an issue](https://github.com/mintgao/dsh-desktop/issues)
 
-Documentation: [https://deepseek-harness.github.io/deepseek-harness/](https://deepseek-harness.github.io/deepseek-harness/)
+## About Mint
 
-## Developer preview
+Mint packages the DSH runtime and Web client as a Mac application, with its own icon, startup experience, native window, and desktop update entry point. You can use DSH to read and edit project files, run commands, and continue conversations; Mint focuses on the desktop experience and delivery of complete application updates.
 
-DeepSeek Harness is in _developer preview_ and iterating rapidly. **THERE WILL BE COMPATIBILITY-BREAKING CHANGES.**
+This is an unofficial distribution based on [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness). DeepSeek does not endorse, cooperate with, or authorize this distribution.
 
-Review the [safety notice](SAFETY.md) before running the project.
+## Project status
+
+The project is in preview. Check each release's notes for supported hardware, installation requirements, and limitations before updating.
+
+| Item | Current public preview |
+| --- | --- |
+| Platform | macOS; the latest preview provides an Apple Silicon (`arm64`) DMG only |
+| Distribution | Unsigned and not Apple-notarized; intended for personal and small-group testing |
+| Updates | Download and replace the application manually; signed automatic updates are not enabled |
+| Model access | Bring your own model-provider API key |
+
+Review the [safety notice](SAFETY.md) before use. Preview versions may introduce incompatible changes; consult the release's data-compatibility notes before replacing an existing installation. Native task notifications require a signed application and are unavailable in unsigned previews.
+
+<a id="desktop-updates"></a>
+
+## Desktop updates
+
+**2026-09-13 · [0.1.5-alpha.2.unsigned.2](https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.5-alpha.2.unsigned.2)**
+
+- Fixes desktop startup when the local backend returns an authenticated readiness address.
+- Removes authentication query values from startup diagnostics.
+- Provides one Apple Silicon DMG for manual installation of the complete desktop application.
+
+This section tracks the latest published Desktop highlights. See [all releases](https://github.com/mintgao/dsh-desktop/releases) for the full history, downloads, and version-specific limitations.
+
+<a id="homepage-maintenance"></a>
+
+### Homepage maintenance rule
+
+For every public Desktop release with a key feature, important fix, or change to platform support, installation, or updates, the release owner must update both README languages and their pairing record as part of release completion. Record the release date, exact version link, and 3–5 user-facing highlights (fewer when there are fewer changes); revise project status and usage instructions when affected. Describe only verified public artifacts, label limitations, and link full history to Releases. Prepare the text before publication and publish the homepage update after the release is public; until then, retain the previous public version. A release is not complete until the homepage matches its published state. Internal refactors need no homepage entry unless they change user behavior.
+
+<a id="getting-started"></a>
+
+## Getting started
+
+1. Open [Releases](https://github.com/mintgao/dsh-desktop/releases), select a preview compatible with your Mac, and download its `.dmg` asset. The latest preview supports Apple Silicon only.
+2. Open the DMG and drag **DSH Desktop** into Applications. When updating, quit the existing application before replacing it. For an unsigned preview, macOS may require **System Settings → Privacy & Security → Open Anyway**.
+3. Open **DSH Desktop**, configure your API key in **Settings → Models**, then add and select a workspace. See [model configuration](docs/user/guide/providers.md) for other providers.
+4. Start a task, describe what you want to do, and respond to approval or clarification requests. The [usage guide](docs/user/guide/index.md) covers working with the shared DSH interface.
+
+Settings and sessions use the ordinary DSH data directory (`~/.dsh` by default). See the [desktop reference](apps/desktop-mint/README.md) for local-data behavior, troubleshooting logs, and update controls.
+
+## Feedback and development
+
+Report Mint installation, startup, and update problems in [this repository's Issues](https://github.com/mintgao/dsh-desktop/issues). Include the desktop version, Mac chip, macOS version, and steps to reproduce; remove API keys and private project content from attachments.
+
+For desktop source builds, see the [desktop development instructions](apps/desktop-mint/README.md). Contributors can start with [CONTRIBUTING.md](CONTRIBUTING.md), the [development guide](docs/development.md), and [architecture documentation](docs/architecture.md). Agents follow [AGENTS.md](AGENTS.md).
+
+<details>
+<summary>Harness Web and source development</summary>
+
+The commands below launch the Harness Web interface. The npm command uses the upstream package; the source path uses this Mint repository.
+
+<a id="run"></a>
 
 ## Run
 
@@ -28,13 +83,15 @@ npx @deepseek-ai/dsh web
 
 The command starts the Web UI at `http://127.0.0.1:3080` by default and opens it in the default browser for a local launch. An SSH launch only prints the host URL because the SSH client or editor owns the local forwarded address. Pass `--no-open` to run the server without opening a browser. See [Web UI guide](docs/user/guide/index.md).
 
+<a id="run-from-source"></a>
+
 ### Run from source
 
 To run from a repository checkout:
 
 ```sh
-git clone https://github.com/deepseek-ai/deepseek-harness.git
-cd deepseek-harness
+git clone https://github.com/mintgao/dsh-desktop.git
+cd dsh-desktop
 pnpm install
 pnpm run build
 pnpm dsh web
@@ -42,24 +99,10 @@ pnpm dsh web
 
 `pnpm run build` prepares the repository artifacts. `pnpm dsh web` uses those built artifacts without rebuilding.
 
-## Community and support
+</details>
 
-- Submit feedback or bug reports through [GitHub Discussions](https://github.com/deepseek-ai/deepseek-harness/discussions).
-- Add the [`dsh-plugin`](https://github.com/topics/dsh-plugin) topic to your plugin repository for discoverability.
-- Join <a href="https://discord.gg/Ycq5dCaS4">DeepSeek Harness Discord community</a>.
+## Upstream and license
 
-## Contributing
+Mint builds on the open-source work of DeepSeek Harness and [Cordis](https://github.com/cordiverse/cordis). See the [upstream documentation](https://deepseek-harness.github.io/deepseek-harness/) for Harness capabilities and plugin development.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Development
-
-Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
-
-For agents, follow [AGENTS.md](AGENTS.md).
-
-## License
-
-[MIT](LICENSE)
-
-Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[MIT](LICENSE). Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
