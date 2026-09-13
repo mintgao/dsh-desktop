@@ -4,6 +4,8 @@ English | [中文](20260913-forward-native-capability.zh.md)
 
 Status: Accepted
 
+The [observed forward-delivery decision](20260913-observed-forward-delivery.md) supersedes this probe as a required delivery prerequisite. This record governs retained diagnostic evidence only; current Mint delivery supports arm64 and uses bounded ordinary desktop observation.
+
 ## Scope
 
 The [approved probe design](../work-items/20260911-desktop-update-path/forward-probe-draft.json) defines an Intel macOS capability check using authenticated retained A. It does not qualify an update, change release policy or authorize source upload. Full forward-update implementation remains blocked until this capability is observed.

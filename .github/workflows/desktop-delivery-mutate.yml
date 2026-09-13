@@ -13,6 +13,12 @@ on:
         description: Reviewed manifest SHA256
         type: string
         required: true
+      local_observation_base64:
+        description: Canonical base64 of bounded maintainer-attested observation; forward promotion only
+        type: string
+      local_observation_sha256:
+        description: Exact decoded local observation SHA256; forward promotion only
+        type: string
       operation:
         description: Explicit release operation
         type: choice
@@ -57,6 +63,13 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/bundle"
           node --import tsx scripts/desktop-delivery/cli.ts release-bundle --config .github/desktop-delivery/mint.json --tag "$TAG" --operation "$OPERATION" --directory "$RUNNER_TEMP/bundle" --out "$RUNNER_TEMP/recovered.json"
+      - name: Assemble forward acceptance without changing CI-owned bytes
+        env:
+          FORWARD_OBSERVATION_BASE64: ${{ inputs.local_observation_base64 }}
+          FORWARD_OBSERVATION_SHA256: ${{ inputs.local_observation_sha256 }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          node --import tsx scripts/desktop-delivery/cli.ts assemble-forward --config .github/desktop-delivery/mint.json --directory "$RUNNER_TEMP/bundle" --operation "$OPERATION" --out "$RUNNER_TEMP/assembly.json"
       - name: Verify the approved manifest and expose an exact run-bound plan
         env:
           GH_TOKEN: ${{ github.token }}

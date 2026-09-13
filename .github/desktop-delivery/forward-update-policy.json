@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "purpose": "desktop-forward-policy",
+  "architecture": "arm64",
+  "baseline": {
+    "sourceCommit": "825507dd9ca79ea95a32854f3914ac8dc1cb422c",
+    "buildRunId": 34490381479,
+    "desktopVersion": "0.1.5-alpha.2.unsigned.1",
+    "archive": {
+      "id": 10158421538,
+      "name": "desktop-native-arm64",
+      "size": 179106381,
+      "sha256": "54880293516f2f0dfb7e92bd418cd8b8922f9b2aea2026a54ce8263997bb5005"
+    },
+    "candidateDigest": "e43bed768f5a9512feda4c3c0887832d809b2f0a27b025b8604d1377a4c60904",
+    "dmg": {
+      "name": "DSH-Desktop-Mint-0.1.5-alpha.2.unsigned.1-arm64.dmg",
+      "size": 177943746,
+      "sha256": "e3197dc00f60d8e7ddbd41486c83713d2b6296aeef05c49ee4cf9d0caae98d38"
+    },
+    "runtimeDigest": "a1981af563f59ba5825b6185c4165fac60f45f6a2398b5814575c77bea7dc13f"
+  },
+  "targetVersion": "0.1.5-alpha.2.unsigned.2",
+  "upstreamVersion": "0.1.5-alpha.2",
+  "settings": [
+    {
+      "name": "theme",
+      "value": "light"
+    }
+  ],
+  "scenarios": [
+    "artifact-identity",
+    "private-state-process-ownership",
+    "a-normal-entry",
+    "a-settings",
+    "a-quit-reopen",
+    "quiescent-complete-backup",
+    "stopped-same-path-replacement",
+    "b-version-ui-keyless",
+    "b-quit-reopen",
+    "declared-setting-retention",
+    "acquisition-failure-retry",
+    "incorrect-bytes-operator-refusal",
+    "replacement-permission-recovery",
+    "incomplete-backup-refusal",
+    "full-recovery-normal-a",
+    "owned-cleanup"
+  ]
+}

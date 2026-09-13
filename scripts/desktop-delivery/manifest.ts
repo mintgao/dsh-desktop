@@ -1,9 +1,11 @@
 /** Distinct production qualification over exact Git source and native copy-install evidence. */
+import { compatibilityEvidence, compatibilityKind } from './compatibility-evidence.ts'
+import { forwardBuildReceipt } from './forward-package.ts'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { checkedCompositionBytes } from './migration-composition.ts'
-import { migrationEvidence, migrationPolicy } from './migration-evidence.ts'
+import { migrationPolicy } from './migration-evidence.ts'
 import { assessmentAsset, assessmentFiles, gitEvidence } from './catch-up.ts'
 import { deliveryPredecessor, requireUnsignedVersion } from './lineage.ts'
 import { checkArchitecture } from './artifacts.ts'
@@ -76,11 +78,11 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
   textField(notes.toString())
   const compatibilityBytes = committed(input.root, commit, input.compatibilityPath)
   const compatibility = object(JSON.parse(compatibilityBytes.toString()) as unknown)
-  if (compatibility.schemaVersion !== 1 || typeof compatibility.persistedFormatsChanged !== 'boolean' || !Array.isArray(compatibility.evidenceReferences) || compatibility.evidenceReferences.length === 0 || !Array.isArray(compatibility.unsupportedDowngrades) || compatibility.unsupportedDowngrades.length === 0) throw new Error('Missing data compatibility assessment')
+  const compatibilityMode = compatibilityKind(compatibility)
   textField(compatibility.assessment)
 
-  for (const reference of compatibility.evidenceReferences) committed(input.root, commit, string(string(reference).split('#')[0]))
-  for (const limitation of compatibility.unsupportedDowngrades) textField(limitation)
+  for (const reference of compatibility.evidenceReferences as unknown[]) committed(input.root, commit, string(string(reference).split('#')[0]))
+  for (const limitation of compatibility.unsupportedDowngrades as unknown[]) textField(limitation)
   const predecessorBytes = readFileSync(input.predecessorPath)
   const prior = object(JSON.parse(predecessorBytes.toString()) as unknown)
   if (prior.repository !== config.repository || !['desktop-legacy-baseline', 'desktop-release-qualification'].includes(String(prior.purpose))) throw new Error('Unknown delivery predecessor')
@@ -97,7 +99,15 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
   for (const [name, bytes] of [['release-notes.md', notes], ['data-compatibility.json', compatibilityBytes], ['SHA256SUMS.txt', Buffer.from(checksums)], ['candidate.json', readFileSync(input.candidatePath)], ['predecessor.json', predecessorBytes]] as const) writeFileSync(join(input.directory, name), bytes)
   const migrationFiles: ReleaseFile[] = []
   let migration: Record<string, unknown> | undefined
-  if (compatibility.persistedFormatsChanged) {
+  if (compatibilityMode === 'forward') {
+    if (JSON.stringify(config.architectures) !== '["arm64"]' || input.migrationNames !== undefined) throw new Error('Forward builds require only arm64 smoke, without legacy migration reports')
+    const reference = object(compatibility.forwardPolicy)
+    if (reference.path !== '.github/desktop-delivery/forward-update-policy.json') throw new Error('Unknown forward policy path')
+    const bytes = committed(input.root, commit, string(reference.path))
+    if (digest(bytes) !== hex(reference.sha256)) throw new Error('Committed forward policy digest mismatch')
+    writeFileSync(join(input.directory, 'forward-policy.json'), bytes)
+    migrationFiles.push(file(input.directory, 'forward-policy.json'))
+  } else if (compatibility.persistedFormatsChanged) {
     if (input.migrationNames?.length !== config.architectures.length || new Set(input.migrationNames).size !== input.migrationNames.length) throw new Error('Changed formats require explicit migration reports for every configured architecture')
     const reference = object(compatibility.migrationPolicy)
     const bytes = committed(input.root, commit, string(reference.path))
@@ -133,7 +143,8 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
     files: [...new Map(migrationFiles.map(file => [file.name, file])).values(), ...rangeFiles.map(item => file(input.directory, assessmentAsset(item.reference))), ...native.flatMap(item => [item.dmg, item.evidence]), ...['release-notes.md', 'data-compatibility.json', 'SHA256SUMS.txt', 'candidate.json', 'predecessor.json'].map(name => file(input.directory, name))],
     nextAction: 'Review these exact manifest bytes before starting the protected publication operation.',
   }
-  migrationEvidence(result, name => readFileSync(assetPath(input.directory, name)))
+  if (compatibilityMode === 'forward') return forwardBuildReceipt({ ...result, assetPrefix: config.assetPrefix, sourceLockPath: config.sourceLockPath }, hex(object(compatibility.forwardPolicy).sha256), name => readFileSync(assetPath(input.directory, name)))
+  compatibilityEvidence(result, name => readFileSync(assetPath(input.directory, name)))
   return result
 }
 
@@ -149,7 +160,8 @@ export function checkedManifest(config: DeliveryConfig,
   digest: string
   files: ReleaseFile[] } {
   const manifest = object(readJson(path))
-  if ((manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview' || manifest.repository !== config.repository || manifest.repositoryId !== config.repositoryId || manifest.distribution !== config.id) throw new Error('Invalid production qualification; signed-mode-unconfigured or shadow evidence')
+  if ((manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2 && manifest.schemaVersion !== 3) || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview' || manifest.repository !== config.repository || manifest.repositoryId !== config.repositoryId || manifest.distribution !== config.id) throw new Error('Invalid production qualification; signed-mode-unconfigured or shadow evidence')
+  if (manifest.schemaVersion === 3 && (manifest.sourceLockPath !== config.sourceLockPath || manifest.assetPrefix !== config.assetPrefix)) throw new Error('Forward build configuration mismatch')
   const range = manifestCatchUp(manifest)
   if (manifest.tag !== `desktop-v${string(manifest.desktopVersion)}`) throw new Error('Invalid unsigned desktop identity')
   requireUnsignedVersion(string(manifest.desktopVersion))
@@ -180,9 +192,7 @@ export function checkedManifest(config: DeliveryConfig,
   const checksum = manifest.native.map(object).map(entry => object(entry.dmg)).map(dmg => `${string(dmg.sha256)}  ${string(dmg.name)}`).sort().join('\n') + '\n'
   if (readFileSync(assetPath(directory, 'SHA256SUMS.txt'), 'utf8') !== checksum) throw new Error('Checksum convenience file differs from approved DMGs')
   const compatibility = object(readJson(assetPath(directory, 'data-compatibility.json')))
-  if (compatibility.schemaVersion !== 1 || typeof compatibility.persistedFormatsChanged !== 'boolean'
-    || !Array.isArray(compatibility.evidenceReferences)
-    || compatibility.evidenceReferences.length === 0 || !Array.isArray(compatibility.unsupportedDowngrades) || compatibility.unsupportedDowngrades.length === 0) throw new Error('Compatibility assessment requires separate migration qualification')
+  compatibilityKind(compatibility)
   textField(compatibility.assessment)
   if (range !== null) {
     const rangeFiles = assessmentFiles(range, config.sourceLockPath, path => readFileSync(assetPath(directory, assessmentAsset({ path, sha256: '' }))), ! compatibility.persistedFormatsChanged)
@@ -207,7 +217,7 @@ export function checkedManifest(config: DeliveryConfig,
     checkArchitecture(string(native.executableArchitectures), arch)
     for (const key of ['bootstrap', 'backendHttp', 'backendStopped', 'mountedReadOnly', 'detached', 'copiedInstallation', 'installationStopped', 'installationRemoved']) if (native[key] !== true) throw new Error('Native qualification check failed')
   }
-  migrationEvidence(manifest, name => readFileSync(assetPath(directory, name)))
+  compatibilityEvidence(manifest, name => readFileSync(assetPath(directory, name)))
   return { manifest, digest: digest(readFileSync(path)), files }
 }
 
@@ -216,7 +226,7 @@ export function checkedManifest(config: DeliveryConfig,
  * @returns Normalized range or null for ordinary/historical qualification.
  */
 export function manifestCatchUp(manifest: Record<string, unknown>): ReturnType<typeof catchUpEvidence> | null {
-  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) throw new Error('Unknown production manifest schema')
+  if (manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2 && manifest.schemaVersion !== 3) throw new Error('Unknown production manifest schema')
   if (manifest.schemaVersion === 1 && 'catchUp' in manifest) throw new Error('Historical manifests cannot carry catch-up evidence')
   const range = manifest.schemaVersion === 1 || manifest.catchUp === null ? null : catchUpEvidence(manifest.catchUp)
   if (range !== null && !sameRelease(range.to, release(manifest.upstream))) throw new Error('Manifest catch-up target mismatch')

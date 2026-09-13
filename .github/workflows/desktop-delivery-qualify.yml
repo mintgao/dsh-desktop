@@ -87,6 +87,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mode=$(node --import tsx --input-type=module -e 'import {readFileSync} from "node:fs";import {compatibilityKind} from "./scripts/desktop-delivery/compatibility-evidence.ts";console.log(compatibilityKind(JSON.parse(readFileSync(process.argv[1]))))' candidate-source/.github/desktop-delivery/data-compatibility.json)
+          if [ "$mode" = forward ]; then exit 0; fi
           if ! node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1])).persistedFormatsChanged === true ? 0 : 1)' candidate-source/.github/desktop-delivery/data-compatibility.json; then
             exit 0
           fi
@@ -134,11 +136,14 @@ jobs:
           path: ${{ runner.temp }}/bundle
       - name: Bind final manifest to committed source and all artifact bytes
         run: |
+          mode=$(node --import tsx --input-type=module -e 'import {readFileSync} from "node:fs";import {compatibilityKind} from "./scripts/desktop-delivery/compatibility-evidence.ts";console.log(compatibilityKind(JSON.parse(readFileSync(process.argv[1]))))' candidate-source/.github/desktop-delivery/data-compatibility.json)
+          result_name=manifest.json
+          if [ "$mode" = forward ]; then result_name=build-receipt.json; fi
           migration_args=()
-          if node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1])).persistedFormatsChanged === true ? 0 : 1)' candidate-source/.github/desktop-delivery/data-compatibility.json; then
+          if [ "$mode" = legacy ] && node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1])).persistedFormatsChanged === true ? 0 : 1)' candidate-source/.github/desktop-delivery/data-compatibility.json; then
             migration_args=(--migration-reports migration-arm64.json)
           fi
-          node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json "${migration_args[@]}" --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/manifest.json" --summary "$RUNNER_TEMP/manifest.md"
+          node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json "${migration_args[@]}" --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/$result_name" --summary "$RUNNER_TEMP/manifest.md"
           cat "$RUNNER_TEMP/manifest.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:

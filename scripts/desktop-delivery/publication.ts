@@ -1,5 +1,7 @@
 /** Digest-approved publication and recovery over immutable tags and an existing matching draft. */
-import { migrationEvidence } from './migration-evidence.ts'
+import { compatibilityEvidence, compatibilityKind } from './compatibility-evidence.ts'
+import { forwardPackage, forwardApproval, FORWARD_APPROVAL } from './forward-package.ts'
+import type { MigrationReader } from './migration-evidence.ts'
 import { verifyLiveCatchUp, verifyRemoteAssessment } from './catch-up.ts'
 import { compareVersions } from 'compare-versions'
 import { execFileSync } from 'node:child_process'
@@ -17,7 +19,7 @@ import { tagCommit } from './migration.ts'
 function withdrawalManifest(config: DeliveryConfig, path: string): ReturnType<typeof checkedManifest> {
   const bytes = readFileSync(path)
   const manifest = object(JSON.parse(bytes.toString()) as unknown)
-  if ((manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2) || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview'
+  if ((manifest.schemaVersion !== 1 && manifest.schemaVersion !== 2 && manifest.schemaVersion !== 3) || manifest.purpose !== 'desktop-release-qualification' || manifest.mode !== 'unsigned-preview'
     || manifest.repository !== config.repository || manifest.repositoryId !== config.repositoryId || manifest.distribution !== config.id
     || manifest.tag !== `desktop-v${string(manifest.desktopVersion)}` || !Array.isArray(manifest.files)) throw new Error('Withdrawal manifest identity mismatch')
   manifestCatchUp(manifest)
@@ -65,12 +67,14 @@ async function archiveFiles(
  * @param api - GitHub reads.
  * @param files - exact local payload including manifest, absent when retained release assets are authoritative.
  * @param withdrawal - only withdrawal may rely on identity without reauthorizing data compatibility.
+ * @param localRead - Exact local files used for schema-3 assembly and archive comparison.
  */
 export async function verifyQualification(config: DeliveryConfig,
   manifest: Record<string, unknown>,
   api: GitHub,
   files?: ReleaseFile[],
-  withdrawal = false): Promise<void> {
+  withdrawal = false, localRead?: MigrationReader): Promise<void> {
+  if (!withdrawal && manifest.schemaVersion === 3 && (manifest.sourceLockPath !== config.sourceLockPath || manifest.assetPrefix !== config.assetPrefix)) throw new Error('Forward publication configuration mismatch')
   const identity = object(manifest.workflow)
   const run = object(await api.request('GET', `/repos/${config.repository}/actions/runs/${String(identity.runId)}`))
   if (run.event !== 'workflow_dispatch' || run.head_branch !== config.defaultBranch || run.path !== identity.path || run.head_sha !== identity.commit || run.run_attempt !== identity.attempt || run.status !== 'completed' || run.conclusion !== 'success' || object(run.repository).id !== config.repositoryId) throw new Error('Qualification run identity, attempt or conclusion changed')
@@ -105,6 +109,16 @@ export async function verifyQualification(config: DeliveryConfig,
       const compatibility = object(JSON.parse(content.toString()) as unknown)
       if (typeof compatibility.persistedFormatsChanged !== 'boolean') throw new Error('Missing source format assessment')
       changedFormats = compatibility.persistedFormatsChanged
+      if (!withdrawal) {
+        const mode = compatibilityKind(compatibility)
+        if ((mode === 'forward') !== (manifest.schemaVersion === 3)) throw new Error('Manifest/assessment version conflict')
+        if (mode === 'forward') {
+          const reference = object(compatibility.forwardPolicy)
+          if (reference.path !== '.github/desktop-delivery/forward-update-policy.json') throw new Error('Unknown forward source policy')
+          const policy = object(await api.request('GET', `/repos/${config.repository}/contents/${string(reference.path)}?ref=${string(manifest.downstreamCommit)}`))
+          if (digest(Buffer.from(textField(policy.content), 'base64')) !== hex(reference.sha256)) throw new Error('Forward policy differs from source')
+        }
+      }
     }
   }
   if (range !== null) {
@@ -115,15 +129,20 @@ export async function verifyQualification(config: DeliveryConfig,
   if (files !== undefined) {
     const artifacts = (await pages(api, `/repos/${config.repository}/actions/runs/${String(identity.runId)}/artifacts`, 'artifacts')).filter(item => item.name === 'desktop-release-bundle')
     if (artifacts.length !== 1 || artifacts[0]?.expired !== false) throw new Error('Missing or expired qualification artifact bundle')
-    const payload = await archiveFiles(api, config.repository, Number(artifacts[0].id), files)
-    if (changedFormats && !withdrawal) migrationEvidence(manifest, (name) => {
-      const bytes = payload.get(name)
+    let expected = files
+    if (manifest.schemaVersion === 3 && !withdrawal) {
+      if (localRead === undefined) throw new Error('Missing exact local forward package')
+      expected = forwardPackage(manifest, localRead)
+    }
+    const payload = await archiveFiles(api, config.repository, Number(artifacts[0].id), expected)
+    if (changedFormats && !withdrawal) compatibilityEvidence(manifest, (name) => {
+      const bytes = payload.get(name) ?? (manifest.schemaVersion === 3 && name === 'local-observation.json' ? localRead?.(name) : undefined)
       if (bytes === undefined) throw new Error(`Qualification archive omits migration payload ${name}`)
       return bytes
     })
   } else if (changedFormats && !withdrawal) {
     const payload = await retainedMigrationPayload(config, manifest, api)
-    migrationEvidence(manifest, (name) => {
+    compatibilityEvidence(manifest, (name) => {
       const bytes = payload.get(name)
       if (bytes === undefined) throw new Error(`Retained release omits migration payload ${name}`)
       return bytes
@@ -149,6 +168,11 @@ async function retainedMigrationPayload(
     if (bytes.length !== descriptors[0]?.size || digest(bytes) !== descriptors[0].sha256) throw new Error('Retained migration bytes changed')
     payload.set(name, bytes)
     return bytes
+  }
+  if (manifest.schemaVersion === 3) {
+    if (!Array.isArray(manifest.files)) throw new Error('Missing forward retained inventory')
+    for (const file of manifest.files.map(object)) await load(string(file.name))
+    return payload
   }
   await load('data-compatibility.json')
   await load('migration-policy.json')
@@ -299,9 +323,9 @@ export async function promotionPlan(config: DeliveryConfig,
   api: GitHub): Promise<Record<string, unknown>> {
   if (!['promote', 'withdraw', 'restore'].includes(operation)) throw new Error('Unsupported release mutation')
   const checked = operation === 'withdraw' ? withdrawalManifest(config, manifestPath) : checkedManifest(config, manifestPath, directory)
-  await verifyQualification(config, checked.manifest, api, operation === 'promote' ? payload(manifestPath, checked.files) : undefined, operation === 'withdraw')
+  await verifyQualification(config, checked.manifest, api, operation === 'promote' ? payload(manifestPath, checked.files) : undefined, operation === 'withdraw', name => readFileSync(assetPath(directory, name)))
   if (operation === 'promote') await verifyDelivery(config, checked.manifest, directory, checked.digest, api)
-  return operationPlan(config, operation, { manifestDigest: checked.digest, tag: checked.manifest.tag, candidate: checked.manifest.downstreamCommit, qualification: checked.manifest.workflow, mutationRun, nextAction: 'Review the exact plan; prepare its immutable tag and empty draft while this workflow waits for approval.' })
+  return operationPlan(config, operation, { manifestDigest: checked.digest, tag: checked.manifest.tag, candidate: checked.manifest.downstreamCommit, qualification: checked.manifest.workflow, mutationRun, ...(checked.manifest.schemaVersion === 3 && operation !== 'withdraw' ? { localObservationDigest: object(object(checked.manifest.forward).localObservation).sha256, acceptance: FORWARD_APPROVAL } : {}), nextAction: 'Review the exact plan; prepare its immutable tag and empty draft while this workflow waits for approval.' })
 }
 async function verifyMutationRun(config: DeliveryConfig, plan: Record<string, unknown>, api: GitHub, pending: boolean): Promise<void> {
   const identity = object(plan.mutationRun)
@@ -333,9 +357,11 @@ export async function preparePublication(config: DeliveryConfig,
   api: GitHub): Promise<Record<string, unknown>> {
   validatePlan(plan, 'promote', config)
   const checked = checkedManifest(config, manifestPath, directory)
+  forwardApproval(plan, checked.manifest)
   if (plan.candidate !== checked.manifest.downstreamCommit || plan.operation !== 'promote' || checked.digest !== plan.manifestDigest || checked.manifest.tag !== plan.tag) throw new Error('Approved publication plan differs')
   await verifyMutationRun(config, plan, api, true)
-  await verifyQualification(config, checked.manifest, api, payload(manifestPath, checked.files))
+  await verifyQualification(config, checked.manifest, api, payload(manifestPath, checked.files), false,
+    name => readFileSync(assetPath(directory, name)))
   await verifyDelivery(config, checked.manifest, directory, checked.digest, api)
   const tag = string(plan.tag)
   const candidate = hex(plan.candidate, 40)
@@ -376,9 +402,10 @@ export async function mutateRelease(config: DeliveryConfig,
   api: GitHub): Promise<Record<string, unknown>> {
   validatePlan(plan, string(plan.operation), config)
   const checked = plan.operation === 'withdraw' ? withdrawalManifest(config, manifestPath) : checkedManifest(config, manifestPath, directory)
+  forwardApproval(plan, checked.manifest)
   if (checked.digest !== plan.manifestDigest || checked.manifest.tag !== plan.tag || checked.manifest.downstreamCommit !== plan.candidate) throw new Error('Manifest differs from protected approval')
   await verifyMutationRun(config, plan, api, false)
-  await verifyQualification(config, checked.manifest, api, plan.operation === 'promote' ? payload(manifestPath, checked.files) : undefined, plan.operation === 'withdraw')
+  await verifyQualification(config, checked.manifest, api, plan.operation === 'promote' ? payload(manifestPath, checked.files) : undefined, plan.operation === 'withdraw', name => readFileSync(assetPath(directory, name)))
   if (await tagCommit(config, string(plan.tag), api) !== plan.candidate) throw new Error('Publisher cannot create or substitute the approved tag')
   let remote = await findRelease(config, string(plan.tag), api)
   if (remote === undefined || (plan.operation === 'withdraw' ? !textField(remote.body).includes(`Manifest SHA-256: ${checked.digest}`) : remote.body !== releaseBody(directory, checked.digest)) || remote.prerelease !== true) throw new Error('Existing matching draft or release is required')

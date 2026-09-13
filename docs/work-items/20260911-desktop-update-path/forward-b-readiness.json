@@ -1,5 +1,5 @@
 {
-  "outcome": "decision-required",
+  "outcome": "decision-accepted",
   "triggerEvidence": [
     "installed application replacement",
     "artifact trust",
@@ -7,20 +7,16 @@
     "backup/recovery consistency"
   ],
   "decisionOwner": "/root/forward_b_decision",
-  "governingDecision": "forward-b-technical-draft.json (Proposed; not an Accepted ADR)",
+  "governingDecision": "../../decisions/20260913-observed-forward-delivery.md",
   "reviewMode": "independent-agent",
-  "reviewResult": "changes-required",
-  "reviewEvidence": "forward-b-review.json",
+  "reviewResult": "approved",
+  "reviewEvidence": "forward-b-final-review.json",
   "materialProductDecisions": "forward-baseline-scope.json: current A to B; staged public preview approved; architecture-scope.json arm64 only",
-  "openBlockers": [
-    "observer/validator/recovery ownership and alternatives",
-    "restored A normal entry acceptance",
-    "Accepted ADR and approved technical review"
-  ],
-  "gate": "blocked",
+  "openBlockers": [],
+  "gate": "implementation-ready",
   "gateOwner": "/root",
-  "confirmedAt": "none",
-  "confirmationBasis": "none",
+  "confirmedAt": "2026-09-13T06:15:50.776862+00:00",
+  "confirmationBasis": "Accepted observed-forward ADR, independent approved review, owner arm64/A-to-B/staged scope; specific publication remains unapproved",
   "readinessHistory": [
     {
       "reason": "Owner deferred Intel; Intel capability is no longer required, other full-B blockers remain",

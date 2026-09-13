@@ -1,0 +1,25 @@
+{
+  "updatedAt": "2026-09-13T06:19:23.109813+00:00",
+  "decision": "../../decisions/20260913-observed-forward-delivery.md",
+  "architecture": "arm64",
+  "A": {
+    "version": "0.1.5-alpha.2.unsigned.1",
+    "usability": "passed in prior direct ordinary desktop observation",
+    "retainedDmgRechecked": true,
+    "dmgSha256": "e3197dc00f60d8e7ddbd41486c83713d2b6296aeef05c49ee4cf9d0caae98d38",
+    "realUpdateLookup": "passed: native menu reports A newer than public 0.1.2-alpha.3.unsigned.1",
+    "evidenceClass": "local observation, not CI execution or A-to-B acceptance"
+  },
+  "B": {
+    "proposedVersion": "0.1.5-alpha.2.unsigned.2",
+    "implementation": "in progress",
+    "sourceFinalization": "pending after implementation merge",
+    "built": false,
+    "prepublicationObservation": "pending",
+    "exactPublicationAuthorization": "pending",
+    "published": false,
+    "publicUpdateObservation": "pending"
+  },
+  "reusedEvidence": "Authenticated A artifact and previous ordinary use/settings/conversation evidence; no repeated model request",
+  "currentBlocker": "Implementation and verification of the Accepted forward evidence path"
+}
