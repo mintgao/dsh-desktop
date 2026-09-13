@@ -1,0 +1,40 @@
+name: Retained desktop native capability
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-capability:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Authenticate retained x64 artifact
+        timeout-minutes: 4
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node --import tsx scripts/desktop-delivery/forward-native-probe-retrieve.ts "$RUNNER_TEMP/forward-inputs"
+      - name: Observe ordinary launch and Quit without credentials
+        timeout-minutes: 5
+        run: |
+          NODE="$(command -v node)"
+          DMG="$(node -p 'JSON.parse(require("fs").readFileSync(".github/desktop-delivery/forward-probe-x64.json")).dmg.name')"
+          env -i PATH="$(dirname "$NODE"):/usr/bin:/bin:/usr/sbin:/sbin" HOME="$RUNNER_TEMP" TMPDIR="$RUNNER_TEMP" GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted "$NODE" --import tsx scripts/desktop-delivery/forward-native-probe-cli.ts --spec .github/desktop-delivery/forward-probe-x64.json --dmg "$RUNNER_TEMP/forward-inputs/$DMG" --out "$RUNNER_TEMP/forward-native-receipt.json" --timeout-ms 120000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forward-native-capability
+          path: ${{ runner.temp }}/forward-native-receipt.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -1,0 +1,26 @@
+{
+  "outcome": "decision-required",
+  "triggerEvidence": [
+    "installed application replacement",
+    "artifact trust",
+    "versioned publication evidence",
+    "backup/recovery consistency"
+  ],
+  "decisionOwner": "/root/forward_b_decision",
+  "governingDecision": "forward-b-technical-draft.json (Proposed; not an Accepted ADR)",
+  "reviewMode": "independent-agent",
+  "reviewResult": "changes-required",
+  "reviewEvidence": "forward-b-review.json",
+  "materialProductDecisions": "forward-baseline-scope.json: current A to B; staged public preview approved",
+  "openBlockers": [
+    "concrete hosted x64 GUI capability probe",
+    "observer/validator/recovery ownership and alternatives",
+    "restored A normal entry acceptance",
+    "Accepted ADR and approved technical review"
+  ],
+  "gate": "blocked",
+  "gateOwner": "/root",
+  "confirmedAt": "none",
+  "confirmationBasis": "none",
+  "readinessHistory": []
+}

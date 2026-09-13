@@ -1,0 +1,63 @@
+{
+  "status": "proposed",
+  "author": "/root/forward_b_decision",
+  "slice": "x64 retained-A hosted GUI capability probe only",
+  "fullPolicyGate": "blocked until probe passes",
+  "alternatives": "Reuse PID-scoped migration-native-menu AX implementation; separate runner because exerciseMigrationNative uses inspector/direct entry. No generalGUIharness/dependency",
+  "ownership": {
+    "observer": "PID and bundle/path-scoped AX helper",
+    "runner": "normal LaunchServices/private roots/deadline/ownedcleanup",
+    "validator": "fixed pinned descriptor and failure-only diagnostic receipt",
+    "workflow": "read-only retrieval then sanitized execution, input-free macos-15-intel"
+  },
+  "files": [
+    "migration-native-menu.ts",
+    "forward-native-probe.ts",
+    "forward-native-probe-cli.ts",
+    "focused tests",
+    ".github/workflows/desktop-forward-native-probe.yml",
+    ".github/desktop-delivery/forward-probe-x64.json",
+    "probe docs"
+  ],
+  "input": "Pinned x64 archive/run/source/candidate/DMG/runtime descriptors; no arm64 substitutions",
+  "architecture": "process.arch x64 on macos-15-intel; no Rosetta",
+  "command": "node --import tsx scripts/desktop-delivery/forward-native-probe-cli.ts --spec .github/desktop-delivery/forward-probe-x64.json --dmg <authenticated DMG> --out <owned receipt> --timeout-ms 120000",
+  "bounds": "staging/retrieval separately timed; experiment120s total including30s cleanup reserve; exactly initial/reopen observations, no speculative retry",
+  "procedure": [
+    "Authenticate/stage with main withCopiedApp/runtimeInventory/architecture",
+    "Private HOME/DSH_HOME/DSH_AGENTS_HOME/workspace/TMPDIR/userData; clear SSH_AUTH_SOCK, telemetry disabled; strip retrieval credentials before execution",
+    "open -n -a exact app per-launch --env and --user-data-dir; no inspector/remote debugging",
+    "Discover PID exact executable path and recheck identity before each AX operation",
+    "nativeAccessibilityPreflight then visible window/title/roles/allowlisted onboarding content; window alone insufficient",
+    "Observed enabled Command-Q application menu action then owned app/backend gone",
+    "Identical normal reopen and rendered window/ordinaryquit observation",
+    "On refusal/deadline preserve firstphase and identity-scoped cleanup; no TCC reset/permission grants/unrelated termination"
+  ],
+  "receipt": {
+    "purpose": "desktop-forward-native-capability",
+    "qualificationEligible": false,
+    "fields": [
+      "artifact/runtime identity",
+      "runnerarch",
+      "launchmode",
+      "private root declarations",
+      "PIDidentity",
+      "AX access",
+      "renderedcontent",
+      "ordinaryquit/reopen",
+      "cleanup"
+    ],
+    "excluded": [
+      "rawlogs",
+      "profiles",
+      "credentials",
+      "modelconfiguration"
+    ]
+  },
+  "laterRecovery": "Restored exact A/preB state must normal launch/settings/ordinaryquit; incomplete restoration blocks launch and preserves Bdata separately",
+  "executionGates": [
+    "exact authenticated x64 descriptor",
+    "reviewed exact outbound authorization"
+  ],
+  "implementationGate": "pending independent review"
+}

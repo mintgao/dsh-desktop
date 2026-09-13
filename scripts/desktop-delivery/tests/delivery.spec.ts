@@ -16,7 +16,8 @@ import { digest, distribution, readJson, shadow, sourceLock, type Release } from
 
 const root = resolve(import.meta.dirname, '../../..')
 const configPath = join(root, '.github/desktop-delivery/mint.json')
-const lockPath = join(root, '.github/desktop-delivery/source-lock.json')
+// Historical discovery scenarios use the lock paired with their recorded releases.
+const lockPath = join(import.meta.dirname, 'fixtures/source-lock.json')
 const config = distribution(readJson(configPath))
 const lock = sourceLock(readJson(lockPath), config)
 const fixturePath = join(import.meta.dirname, 'fixtures/releases.json')

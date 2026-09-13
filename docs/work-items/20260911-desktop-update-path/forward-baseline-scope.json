@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "owner-approved-product-scope",
+  "approvedAt": "2026-09-12",
+  "objective": "Establish a reliable current Desktop Mint A baseline and verify real A-to-next-test-version-B updates",
+  "acceptance": {
+    "A": "Independent clean environment; authentic packaged A normal user launch, usable window, one conversation, setting change and clean quit/reopen",
+    "B": "Two real packaged versions A and B; actual supported update entry, artifact acquisition, same-path replacement, normal relaunch with B version and usable app; retain a small declared settings set",
+    "recovery": "Downloaded-byte mismatch or failed acquisition must not overwrite installed app; replacement failure has explicit recovery",
+    "history": "Pre-A historical/development versions and full old-history migration are not release prerequisites; no deletion of user data is authorized",
+    "provenance": "No synthetic update notification alone, separate copy launches, or test reports masquerading as real update evidence"
+  },
+  "constraints": [
+    "No speculative fix loop: after two unsuccessful corrections of one symptom stop and report facts, attempts and unknowns",
+    "Reuse applicable passed evidence and exact retained bytes; do not rebuild by default",
+    "Do not expand updater architecture or build generic test infrastructure without an observed need",
+    "No remote source transmission implied by this scope record; earlier exact-payload auto-review rejection remains unresolved",
+    "No source verification result establishes packaged/user-entry/update acceptance"
+  ],
+  "supersedesProductRequirements": [
+    "brief.md historical delivered-baseline requirement",
+    "20260910-desktop-mint-migration-registry mandatory pre-A historical migration as release prerequisite"
+  ],
+  "implementationStatus": "Existing validator still enforces older registry; technical design and independent review must specify explicit scope-aware enforcement before any changed publication claim",
+  "stagedPublication": {
+    "status": "owner-approved",
+    "order": [
+      "prepublication package and replacement qualification",
+      "exact payload approval",
+      "public unsigned preview",
+      "actual public update acceptance"
+    ],
+    "publicExposure": "Existing clients may discover preview before public end-to-end acceptance; state A-based compatibility scope",
+    "authority": "User ok following explicit staged-publication question",
+    "exactPayloadAuthorization": "pending"
+  }
+}

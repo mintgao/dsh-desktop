@@ -1,0 +1,11 @@
+{
+  "reviewer": "/root/forward_b_technical_review",
+  "result": "approved",
+  "scope": "capability probe design only",
+  "reviewed": "forward-probe-draft.json",
+  "conditions": [
+    "record scope-specific readiness",
+    "exact descriptor and outbound approval before execution",
+    "full forward-policy remains blocked"
+  ]
+}

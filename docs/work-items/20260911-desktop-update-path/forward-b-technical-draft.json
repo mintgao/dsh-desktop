@@ -1,0 +1,106 @@
+{
+  "status": "proposed",
+  "author": "/root/forward_b_decision",
+  "size": "L",
+  "sourceBase": "825507dd9ca79ea95a32854f3914ac8dc1cb422c",
+  "B": "0.1.5-alpha.2.unsigned.2",
+  "upstream": "0.1.5-alpha.2",
+  "versionPreflight": "Unused tag and greater precedence than all retained versions; use existing explicit extraMetadata.version",
+  "lineage": "A is unpublished compatibility baseline; preserve actual published predecessor and catch-up provenance",
+  "policy": {
+    "path": ".github/desktop-delivery/forward-update-policy.json",
+    "schemaVersion": 1,
+    "purpose": "desktop-forward-update-policy",
+    "architectures": [
+      "arm64",
+      "x64"
+    ],
+    "bindings": [
+      "repository/distribution/mode",
+      "exact A version/source/run/artifact archive/dmg/runtime per arch",
+      "Mint composition source descriptors",
+      "fixed scenarios and synthetic settings",
+      "A-based compatibility and staged publication"
+    ],
+    "settings": [
+      "persisted Light theme",
+      "supported manual update reminder preferences"
+    ]
+  },
+  "dispatch": {
+    "assessment": "New versioned assessment with forward-policy descriptor; historical persistedFormatsChanged remains true",
+    "legacy": "Legacy assessment and manifest1/2 remain unchanged",
+    "manifest": "schema3, forwardUpdate policy/report descriptors and publicDelivery pending",
+    "sharedConsumer": "compatibility-evidence.ts dispatch used by manifest producer and checkedManifest/publication consumer; unknown/conflicting policy refused"
+  },
+  "scenarios": {
+    "artifact-identity": "A/B installer hashes,size,arch,versions,unsigned and runtime inventories",
+    "fixture-isolation": "Private home/agents/workspace/temp/Electron roots, no secrets or real data",
+    "a-normal-entry": "Uninstrumented LaunchServices usable UI/backend, settings, ordinary quit and same-path reopen",
+    "backup-quiescent": "App/backend stopped; exact A and complete private-root backup verified",
+    "same-path-replacement": "Stopped authenticated A replaced by B at same canonical path",
+    "b-normal-entry": "Normal B version/UI/keyless interaction/ordinary quit/reopen",
+    "settings-preserved": "Declared supported settings before and after restart",
+    "acquisition-failure": "Actual acquisition refusal leaves A unchanged usable; bounded retry",
+    "digest-mismatch": "Corrupt owned installer refused before overwrite; authentic retry",
+    "replacement-denied": "Owned installation permission denial leaves A usable; permission restoration retry",
+    "restore-integrity": "Incomplete backup refused; restore exact A/preB private state, preserve B-modified data separately",
+    "owned-cleanup": "Owned processes stopped, mounts detached, confined cleanup, export failure visible"
+  },
+  "report": {
+    "schemaVersion": 1,
+    "purpose": "desktop-forward-update-qualification",
+    "bindings": [
+      "architecture",
+      "candidate/source-lock/assessment/policy/composition digests",
+      "A/B versions and runtime identities",
+      "B native-report digest",
+      "repository/workflow commit/run/attempt"
+    ],
+    "evidence": "Each fixed scenario exactly once passed with hashed named action/result payloads; bare booleans insufficient",
+    "trust": "Protected workflow actual execution; publication verifies server run/archive and referenced payload bytes; local observation JSON not production evidence"
+  },
+  "hostPreflight": "Before expensive build verify bounded LaunchServices, external GUI observation, ordinary quit. No inspector or direct executable substituted; missing GUI permission blocks without broad grants",
+  "publication": [
+    "botharch artifacts and prepublication qualification",
+    "frozen manifest publicDelivery pending",
+    "exact outbound approval then unsigned preview",
+    "A actual update entry/Open Release/browser/public download/hash",
+    "public bytes same-path replacement/restart/settings botharch; separate immutable-manifest-bound QA public receipt"
+  ],
+  "recovery": "Withdrawal stays available; restoration revalidates retained evidence; never launch A on B-modified data",
+  "reuse": [
+    "lineage.ts",
+    "candidate.ts",
+    "manifest.ts",
+    "publication.ts",
+    "runtime-inventory.ts",
+    "artifacts.ts",
+    "migration-data.ts",
+    "migration-processes.ts"
+  ],
+  "limits": [
+    "withCopiedApp only staging; final unchanged-runtime invariant forbids replacement there",
+    "migration-native inspector/direct launch/app.quit cannot prove normal GUI acceptance",
+    "No entire diagnostic stack cherry-pick",
+    "Existing local A arm64/conversation supplemental only, not x64",
+    "No changes generic DSH or native updater without observed defect"
+  ],
+  "implementation": [
+    "forward-evidence.ts",
+    "compatibility-evidence.ts",
+    "forward-qualifier.ts",
+    "forward-native.ts",
+    "policy/assessment",
+    "CLI/workflow",
+    "manifest/publication",
+    "focused schema/provenance/refusal/retained-recovery tests",
+    "bilingual ADR/AgentNote/workitem"
+  ],
+  "openExecutionGates": [
+    "exact architecture A artifact provenance",
+    "external GUI host capability",
+    "outbound payload authorization"
+  ],
+  "gate": "blocked pending independent review and accepted decision"
+}
