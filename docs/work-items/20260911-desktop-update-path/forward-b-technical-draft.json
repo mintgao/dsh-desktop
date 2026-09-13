@@ -12,8 +12,7 @@
     "schemaVersion": 1,
     "purpose": "desktop-forward-update-policy",
     "architectures": [
-      "arm64",
-      "x64"
+      "arm64"
     ],
     "bindings": [
       "repository/distribution/mode",
@@ -98,9 +97,9 @@
     "bilingual ADR/AgentNote/workitem"
   ],
   "openExecutionGates": [
-    "exact architecture A artifact provenance",
     "external GUI host capability",
     "outbound payload authorization"
   ],
-  "gate": "blocked pending independent review and accepted decision"
+  "gate": "blocked pending independent review and accepted decision",
+  "architectureScope": "architecture-scope.json"
 }

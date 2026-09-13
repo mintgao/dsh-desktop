@@ -1,0 +1,57 @@
+{
+  "status": "live-controls-and-local-activation-verified",
+  "observedAt": "2026-09-13T05:56:30.234350+00:00",
+  "policy": "single-maintainer",
+  "scope": "single-maintainer-scope.json",
+  "review": "single-maintainer-review.json",
+  "remoteRuleChange": {
+    "state": "verified",
+    "permanent": true,
+    "rulesetId": 21944549,
+    "updatedAt": "2026-09-13T13:53:29.928+08:00",
+    "observedAt": "2026-09-13T05:53:33.838537+00:00",
+    "changedFields": [
+      "pull_request.required_approving_review_count",
+      "pull_request.require_last_push_approval"
+    ],
+    "allOtherPayloadFieldsUnchanged": true
+  },
+  "activationCheck": {
+    "state": "passed",
+    "observedAt": "2026-09-13T05:55:39.233Z",
+    "readOnly": true,
+    "reads": 17,
+    "policy": "single-maintainer"
+  },
+  "historicalEvidence": ".github/desktop-delivery/history/20260913-pre-arm64",
+  "verification": {
+    "focusedTests": "57 passed",
+    "defaultInitial": "22463 passed, 129 skipped; typecheck/build passed; lint failed on eight arrow parentheses; mechanical correction, final run pending",
+    "documentation": "33 doc-sync gates passed; paired heading link corrected; all 841 pairs passed",
+    "qaMode": "sequential-perspective; independent reviewer dispatch rejected by host agent thread limit",
+    "defaultFinal": "PASS lint, typecheck, 22463 tests passed / 129 skipped, build; final candidate after mechanical parentheses correction"
+  },
+  "pending": [
+    "source PR checks and merge",
+    "merged-revision activation verification",
+    "separate B qualification and real arm64 A-to-B update"
+  ],
+  "releasePublished": false,
+  "authorConformanceReview": {
+    "reviewer": "/root/verification_method_decision",
+    "result": "passed",
+    "mode": "author conformance, not independent design approval",
+    "verified": [
+      "historical two-architecture config digest matches original activation",
+      "historical activation/report exact bytes match a621831",
+      "current report/config/baseline digests match",
+      "complete mandatory protections retained",
+      "no credential material found in report",
+      "ADR bot identity requirements consistent with explicit review policy"
+    ],
+    "limitations": [
+      "no repeated remote reads",
+      "no test execution by author"
+    ]
+  }
+}

@@ -8,7 +8,7 @@ import { applyAdoption, adoptionPlan, prepareAdoption, verifyFinalization } from
 import { digest, object, sourceLock } from '../evidence.ts'
 import { deliveryPredecessor, requireNewVersion, requireUnsignedVersion } from '../lineage.ts'
 import { applyNotification, notificationPlan } from '../notifications.ts'
-import { deliveryConfig, GitHubError, operationPlan, type GitHub } from '../operations.ts'
+import { deliveryConfig, resolveMainReviewPolicy, GitHubError, operationPlan, type GitHub } from '../operations.ts'
 import { discover } from '../discovery.ts'
 import { reviewedSummary } from '../reviewed-cli.ts'
 
@@ -194,6 +194,7 @@ it('accepts stable-base and prerelease-base unsigned SemVer while rejecting disg
   for (const version of ['0.1.2', '0.1.2+unsigned.1', '0.1.2-alpha_bad.unsigned.1', '0.1.2-unsigned.01']) expect(() =>{  requireUnsignedVersion(version) }).toThrow('signed-mode-unconfigured')
 })
 
+// Two CLI children each have a 30-second deadline; Git preparation and cleanup share the outer budget.
 it('runs actual CLI preparation with an isolated fixture checkout and preserves explicit version failures', async () => {
   const fixture = repository()
   for (const path of ['packages/cli/main', 'vendor/fixture', 'scripts']) mkdirSync(join(fixture.root, path), { recursive: true })
@@ -209,6 +210,8 @@ it('runs actual CLI preparation with an isolated fixture checkout and preserves 
   const output = temporary(); const planPath = join(output, 'plan.json'); store(planPath, plan)
   const command = (checkout: string) => spawnSync(process.execPath, ['--import', 'tsx', resolve('scripts/desktop-delivery/cli.ts'), 'adoption-prepare', '--config', configPath, '--root', fixture.root, '--plan', planPath, '--digest', digest(readFileSync(planPath)), '--checkout', checkout, '--out', join(output, 'result.json')], { encoding: 'utf8', timeout: 30_000 })
   const result = command(join(output, 'checkout'))
+  expect(result.error).toBeUndefined()
+  expect(result.signal).toBeNull()
   expect(result.stderr || result.stdout).not.toContain('ERR_PNPM')
   expect(result.status, result.stdout + result.stderr).toBe(0)
   const prepared = object(JSON.parse(readFileSync(join(output, 'result.json'), 'utf8')) as unknown)
@@ -217,9 +220,11 @@ it('runs actual CLI preparation with an isolated fixture checkout and preserves 
   mkdirSync(join(output, 'checkout', 'packages/cli/mismatch'), { recursive: true })
   store(join(output, 'checkout', 'packages/cli/mismatch/package.json'), { name: '@deepseek-ai/mismatch', version: '0.0.0' })
   const mismatch = command(join(output, 'checkout'))
+  expect(mismatch.error).toBeUndefined()
+  expect(mismatch.signal).toBeNull()
   expect(mismatch.status).toBe(1)
   expect(mismatch.stdout).toContain('dsh release members must share one version')
-})
+}, 90_000)
 
 it('deduplicates authoritative closed notices on later pages and ignores copied human markers', async () => {
   const second = { ...config, id: 'another-desktop' }
@@ -458,4 +463,27 @@ it('preserves catch-up provenance when preparing and finalizing a desktop-only s
   const desktopRemote = gitHubRepository(desktopCheckout)
   await applyAdoption(config, desktopSeed, wrap(desktopRemote.api, desktopCheckout))
   expect(verifyFinalization(desktopCheckout, config, git(desktopCheckout, 'rev-parse', String(desktopSeed.branch))).catchUp).toEqual(plan.catchUp)
+})
+
+
+it('parses explicit review policies without adding a default to historical configuration', () => {
+  const raw = object(JSON.parse(readFileSync(configPath, 'utf8')))
+  const path = join(temporary(), 'config.json')
+  delete raw.mainReviewPolicy
+  store(path, raw)
+  const historical = deliveryConfig(path)
+  expect(Object.hasOwn(historical, 'mainReviewPolicy')).toBe(false)
+  expect(resolveMainReviewPolicy(historical)).toBe('independent-review')
+  const bytes = JSON.stringify(historical)
+  for (const policy of ['single-maintainer', 'independent-review'] as const) {
+    store(path, { ...raw, mainReviewPolicy: policy })
+    const parsed = deliveryConfig(path)
+    expect(resolveMainReviewPolicy(parsed)).toBe(policy)
+    delete parsed.mainReviewPolicy
+    expect(JSON.stringify(parsed)).toBe(bytes)
+  }
+  for (const policy of [null, '', 'disabled', 0, false]) {
+    store(path, { ...raw, mainReviewPolicy: policy })
+    expect(() => deliveryConfig(path)).toThrow('Invalid main review policy')
+  }
 })

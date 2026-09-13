@@ -1,0 +1,20 @@
+{
+  "status": "arm64-host-available",
+  "checkedAt": "2026-09-13T04:12:54.707658+00:00",
+  "localHostArchitecture": "arm64",
+  "repositorySelfHostedRunners": 0,
+  "hostedIntel": {
+    "runner": "macos-15-intel",
+    "nativeExecution": "observed",
+    "windowObservation": "blocked",
+    "lastRun": 34735417975,
+    "failure": "accessibility-rendered subprocess exit 1; underlying AppleScript error not retained"
+  },
+  "ownerIntelDesktopAvailability": "none; x64 support explicitly deferred",
+  "architectures": [
+    "arm64"
+  ],
+  "newDispatchAuthorized": false,
+  "evidenceScope": "Read-only local uname and authenticated repository runners API; no claim about all owner devices or cloud GUI impossibility",
+  "governingScope": "architecture-scope.json"
+}

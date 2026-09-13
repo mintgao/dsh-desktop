@@ -31,8 +31,6 @@ jobs:
         include:
           - arch: arm64
             runner: macos-15
-          - arch: x64
-            runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -138,9 +136,9 @@ jobs:
         run: |
           migration_args=()
           if node -e 'process.exit(JSON.parse(require("fs").readFileSync(process.argv[1])).persistedFormatsChanged === true ? 0 : 1)' candidate-source/.github/desktop-delivery/data-compatibility.json; then
-            migration_args=(--migration-reports migration-arm64.json,migration-x64.json)
+            migration_args=(--migration-reports migration-arm64.json)
           fi
-          node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json,native-x64.json "${migration_args[@]}" --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg,DSH-Desktop-Mint-$VERSION-x64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/manifest.json" --summary "$RUNNER_TEMP/manifest.md"
+          node --import tsx scripts/desktop-delivery/cli.ts release-manifest --config .github/desktop-delivery/mint.json --root candidate-source --candidate "$RUNNER_TEMP/bundle/candidate.json" --directory "$RUNNER_TEMP/bundle" --native native-arm64.json "${migration_args[@]}" --reports "DSH-Desktop-Mint-$VERSION-arm64.dmg" --version "$VERSION" --kind "$KIND" --notes .github/desktop-delivery/release-notes.md --compatibility .github/desktop-delivery/data-compatibility.json --baseline "$PREDECESSOR" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --out "$RUNNER_TEMP/bundle/manifest.json" --summary "$RUNNER_TEMP/manifest.md"
           cat "$RUNNER_TEMP/manifest.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:

@@ -3,7 +3,7 @@
   "active": true,
   "repositoryId": 1344813014,
   "baselineDigest": "df7da59bc09b267cda9f84453a83a01d28c63da0e01908518f6923db57e7e404",
-  "migrationReportDigest": "25279c7abbaa53a486ac99c310821b4b8fc41debf3e3f03fe4e1987b1ccc5711",
+  "migrationReportDigest": "201176851b137c48cc71b5a65e669fe81025f88b27daaedb807a58fccab4971a",
   "protectionIds": [
     21944549,
     21944575,
@@ -16,5 +16,5 @@
     ".github/workflows/desktop-delivery-discover.yml"
   ],
   "botId": 41898282,
-  "configDigest": "e143310ab003abc3c69f92a09fa7ca45195fc5453d1494dbd2ebfdf6de2c1b97"
+  "configDigest": "1e5c668f6b472fe5baf73bd29b0109cf1a7ce960921ad488b0cf5a8dabc98444"
 }

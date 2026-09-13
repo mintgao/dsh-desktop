@@ -45,7 +45,7 @@ function file(directory: string, name: string): ReleaseFile {
   return { name, size, sha256: digest(readFileSync(path)) }
 }
 
-/** Build a final manifest only from clean finalized source and both native installations.
+/** Build a final manifest only from clean finalized source and all configured native installations.
  * @param config - distribution and repository.
  * @param configPath - exact configuration bytes.
  * @param input - candidate, native evidence and trusted run identity.
@@ -98,7 +98,7 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
   const migrationFiles: ReleaseFile[] = []
   let migration: Record<string, unknown> | undefined
   if (compatibility.persistedFormatsChanged) {
-    if (input.migrationNames?.length !== config.architectures.length || new Set(input.migrationNames).size !== input.migrationNames.length) throw new Error('Changed formats require both explicit migration reports')
+    if (input.migrationNames?.length !== config.architectures.length || new Set(input.migrationNames).size !== input.migrationNames.length) throw new Error('Changed formats require explicit migration reports for every configured architecture')
     const reference = object(compatibility.migrationPolicy)
     const bytes = committed(input.root, commit, string(reference.path))
     if (digest(bytes) !== hex(reference.sha256)) throw new Error('Committed migration policy digest mismatch')

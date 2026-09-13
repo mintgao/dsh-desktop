@@ -1,0 +1,73 @@
+{
+  "status": "superseded-for-architecture",
+  "decisionOwner": "/root/verification_method_decision",
+  "workItem": "20260911-desktop-update-path",
+  "size": "L",
+  "ownerApprovedDirection": "Deterministic CI plus ordinary observed A-to-B desktop acceptance; native arm64 and x64 retained",
+  "scope": "forward-baseline-scope.json",
+  "supersessionOnAcceptance": {
+    "decision": "../../decisions/20260913-forward-native-capability.md",
+    "only": [
+      "Specific hosted probe success as exclusive prerequisite",
+      "Existing Accessibility helper as exclusive GUI observer",
+      "macos-15-intel as sole admissible environment"
+    ],
+    "retained": [
+      "Probe authentication, isolation, deadlines, privacy, ownership and cleanup",
+      "Historical receipts and readiness",
+      "Existing executable publication validators until reviewed cutover"
+    ]
+  },
+  "criteria": {
+    "artifactLogic": "Version/channel/architecture, authenticated bytes, package closure and acquisition/digest/refusal tests; synthetic evidence is not desktop acceptance",
+    "A": "Clean authentic package, ordinary launch, usable window, conversation, setting change and quit/reopen; arm64 evidence reusable only for recorded identity; native x64 still required",
+    "prepublication": "Exact A/B bytes, stopped app/backend, same-path replacement, ordinary B launch/version/UI/settings/quit/reopen and required recovery",
+    "publicUpdate": "A Check Updates/Open Release, actual public page, architecture-correct download, integrity, ordinary quit, same-path install and B acceptance; unsigned manual path only",
+    "recovery": "Acquisition/digest failure preserves A; replacement failure leaves usable A or verified recovery; restored A ordinary launch with pre-B state, never B-modified data"
+  },
+  "evidence": {
+    "states": [
+      "passed",
+      "failed",
+      "blocked",
+      "not applicable"
+    ],
+    "ordinaryObserver": "Human or bounded external observer; no debugger or direct executable substitution",
+    "bindings": [
+      "observer identity",
+      "time",
+      "native host architecture/OS/session",
+      "available permissions",
+      "private roots",
+      "exact A/B source and artifact identities",
+      "action/result sequence",
+      "bounded supporting evidence"
+    ],
+    "privacy": "No profiles, credentials or arbitrary window contents exported",
+    "publisher": "Manual/local records remain separate evidence, not trusted qualification merely through hashing/upload; existing protected publisher unchanged",
+    "futureManualConsumption": "Requires Accepted reviewed attestor/binding/refusal design before publisher integration",
+    "postpublication": "Bind to immutable manifest without rewriting it"
+  },
+  "environment": "verification-environment.json",
+  "alternatives": {
+    "selected": "Separate deterministic CI and observed ordinary desktop acceptance",
+    "hostedAXOnly": "Requires known-good-window demonstration and role-aware main/backend identity before further use",
+    "genericGUIFramework": "Not selected; no evidenced need",
+    "dropX64": "Not selected; changes user support scope"
+  },
+  "ownership": {
+    "operator": "Environment and authenticated artifacts",
+    "QA": "Independent observed acceptance and limitations",
+    "publisher": "Protected release authority"
+  },
+  "failurePolicy": "Preserve first failure; finite execution and verified owned cleanup; uncertain containment retains roots; stop rather than automatic retries",
+  "implementationPrerequisites": [
+    "Inspectable native Intel session identified",
+    "Full-B observer/validator/recovery ownership and alternatives reviewed",
+    "Restored-A normal-entry acceptance designed",
+    "Accepted full-B implementation decision and review",
+    "Manual evidence trust decision if publisher would consume it"
+  ],
+  "execution": "No new host purchase, security grant, protection change, native dispatch or publication in this method-record change",
+  "architectureAuthority": "architecture-scope.json"
+}

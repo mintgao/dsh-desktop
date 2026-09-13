@@ -121,9 +121,9 @@ it('combines exact files while preserving unsigned non-publication markers', () 
 
 it('rejects substituted files, symlinks, malformed evidence, missing architectures and failed smokes', () => {
   const { directory, candidatePath, names } = packageEvidence()
-  expect(() => combine(configPath, candidatePath, directory, names.slice(0, 1))).toThrow('Missing')
+  expect(() => combine(configPath, candidatePath, directory, names.slice(0, -1))).toThrow('Missing')
   expect(() => combine(configPath, candidatePath, directory, [names[0]!, names[0]!])).toThrow('duplicate')
-  expect(() => combine(configPath, candidatePath, directory, ['../outside.json', names[1]!])).toThrow('Unsafe')
+  expect(() => combine(configPath, candidatePath, directory, names.map(() => '../outside.json'))).toThrow('Unsafe')
   const dmg = join(directory, 'package-arm64.dmg')
   const original = readFileSync(dmg)
   writeFileSync(dmg, 'altered')
@@ -179,9 +179,10 @@ it('keeps the workflow dispatch-only, read-only, pinned, unsigned and connected 
   expect(workflow.jobs.combine?.needs).toEqual(['candidate', 'qualify'])
   for (const job of Object.values(workflow.jobs)) for (const step of job.steps) if (step.uses?.startsWith('actions/checkout@')) expect(step.with).toMatchObject({ ref: '${{ github.sha }}', 'persist-credentials': false })
   for (const command of ['discover', 'candidate', 'smoke', 'artifact', 'combine']) expect(text).toContain(`desktop:delivery ${command}`)
-  for (const required of ['macos-15-intel', 'macos-15', '--publish never', '--config.mac.identity=null', '--config.mac.notarize=false', 'pnpm run desktop:stage', 'cmp "$RUNNER_TEMP/shadow/candidate.json"']) expect(text).toContain(required)
+  for (const required of ['macos-15', '--publish never', '--config.mac.identity=null', '--config.mac.notarize=false', 'pnpm run desktop:stage', 'cmp "$RUNNER_TEMP/shadow/candidate.json"']) expect(text).toContain(required)
   const writes = /secrets\.|contents: write|git (?:push|commit|tag)|gh (?:api|release|pr|issue)|upstream-sync-state|environment:/u
   expect(text).not.toMatch(writes)
+  expect(text).not.toContain('macos-15-intel')
   expect(summary({ kind: 'discovery', state: 'blocked', blocker: 'API failed' })).toContain('    API failed')
 })
 
@@ -202,7 +203,7 @@ it('executes offline artifact and combine CLI paths and persists blocking output
   expect(good.signal).toBeNull()
   expect(good.status).toBe(0)
   expect((readJson(out) as Record<string, unknown>).state).toBe('shadow-qualified')
-  const bad = command(['combine', '--candidate', candidatePath, '--directory', directory, '--reports', names[0]!])
+  const bad = command(['combine', '--candidate', candidatePath, '--directory', directory, '--reports', names.concat(names[0]!).join(',')])
   expect(bad.error).toBeUndefined()
   expect(bad.signal).toBeNull()
   expect(bad.status).toBe(1)
@@ -283,4 +284,19 @@ it('writes readable Markdown for a real multiline candidate failure without a se
   expect(text).not.toContain('checks passed')
   expect(result.stdout).toBe(text)
   expect(result.stderr).not.toMatch(/Expected nonempty|Error:|artifacts\.ts|evidence\.ts/u)
+})
+
+it('aligns Mint workflow matrices and manifest inputs with the supported architecture', () => {
+  expect(config.architectures).toEqual(['arm64'])
+  for (const [name, job] of [['desktop-ci.yml', 'package-smoke'], ['desktop-delivery-qualify.yml', 'native'], ['desktop-delivery-shadow.yml', 'qualify']]) {
+    const workflow = load(readFileSync(join(root, '.github/workflows', name!), 'utf8')) as { jobs: Record<string, { strategy: { matrix: { include: { arch: string }[] } } }> }
+    expect(workflow.jobs[job!]!.strategy.matrix.include.map(value => value.arch)).toEqual(config.architectures)
+  }
+  const qualification = readFileSync(join(root, '.github/workflows/desktop-delivery-qualify.yml'), 'utf8')
+  expect(qualification).toContain('--migration-reports migration-arm64.json)')
+  expect(qualification).toContain('--native native-arm64.json ')
+  expect(qualification).toContain('--reports "DSH-Desktop-Mint-$VERSION-arm64.dmg"')
+  expect(qualification).not.toContain('x64')
+  const probe = load(readFileSync(join(root, '.github/workflows/desktop-forward-native-probe.yml'), 'utf8')) as { jobs: { 'native-capability': { if: string } } }
+  expect(probe.jobs['native-capability'].if).toBe('${{ false }}')
 })

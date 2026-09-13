@@ -11,9 +11,8 @@
   "reviewMode": "independent-agent",
   "reviewResult": "changes-required",
   "reviewEvidence": "forward-b-review.json",
-  "materialProductDecisions": "forward-baseline-scope.json: current A to B; staged public preview approved",
+  "materialProductDecisions": "forward-baseline-scope.json: current A to B; staged public preview approved; architecture-scope.json arm64 only",
   "openBlockers": [
-    "concrete hosted x64 GUI capability probe",
     "observer/validator/recovery ownership and alternatives",
     "restored A normal entry acceptance",
     "Accepted ADR and approved technical review"
@@ -22,5 +21,10 @@
   "gateOwner": "/root",
   "confirmedAt": "none",
   "confirmationBasis": "none",
-  "readinessHistory": []
+  "readinessHistory": [
+    {
+      "reason": "Owner deferred Intel; Intel capability is no longer required, other full-B blockers remain",
+      "scope": "architecture-scope.json"
+    }
+  ]
 }
