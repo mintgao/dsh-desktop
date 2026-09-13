@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSyn
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { assessmentFiles, assessmentReferences, catchUpObservations, gitEvidence, localEvidence, verifyLiveCatchUp } from '../catch-up.ts'
+import { assessmentFiles, assessmentReferences, catchUpObservations, gitEvidence, localEvidence, verifyCatchUpBaseline, verifyLiveCatchUp } from '../catch-up.ts'
 import { catchUpEvidence, digest, object, sourceLock, type CatchUp, type Release } from '../evidence.ts'
 import { deliveryConfig, type GitHub } from '../operations.ts'
 import { manifestCatchUp } from '../manifest.ts'
@@ -165,4 +165,34 @@ it.each(['target-tag', 'target-commit', 'assessment'])('rejects a missing --%s t
   expect(object(JSON.parse(readFileSync(out, 'utf8')) as unknown).state).toBe('blocked')
   expect(object(JSON.parse(readFileSync(out, 'utf8')) as unknown).blocker).toBe(`Missing --${missing}`)
   expect(result.stderr).not.toContain('Unknown option')
+})
+
+
+it('accepts published final manifest schemas and rejects unqualified or changed predecessors', async () => {
+  const published = object(JSON.parse(readFileSync(resolve('scripts/desktop-delivery/tests/fixtures/published-forward-manifest.json'), 'utf8')) as unknown)
+  let downloaded = structuredClone(published)
+  let tagCommit = published.downstreamCommit
+  const api: GitHub = { async request(method, path) {
+    if (method === 'DOWNLOAD') return Buffer.from(JSON.stringify(downloaded))
+    if (path.includes('/releases/1/assets?')) return [{ id: 2, name: 'manifest.json' }]
+    if (path.includes('/releases?')) return [{ id: 1, tag_name: published.tag, draft: false }]
+    if (path.includes('/git/ref/tags/')) return { object: { type: 'commit', sha: tagCommit } }
+    throw new Error(`Unexpected baseline read ${method} ${path}`)
+  } }
+  for (const schemaVersion of [1, 2, 3]) {
+    downloaded = { ...published, schemaVersion }
+    await expect(verifyCatchUpBaseline(config, downloaded, api)).resolves.toBeUndefined()
+  }
+  for (const changes of [
+    { schemaVersion: 4 }, { schemaVersion: '3' },
+    { purpose: 'desktop-forward-build' }, { mode: 'shadow' },
+    { distribution: 'another-product' }, { repositoryId: 1 },
+  ]) {
+    downloaded = { ...published, ...changes }
+    await expect(verifyCatchUpBaseline(config, downloaded, api)).rejects.toThrow()
+  }
+  downloaded = { ...published, desktopVersion: '0.1.5-alpha.2.unsigned.99' }
+  await expect(verifyCatchUpBaseline(config, published, api)).rejects.toThrow('differs from verified')
+  downloaded = published; tagCommit = 'a'.repeat(40)
+  await expect(verifyCatchUpBaseline(config, published, api)).rejects.toThrow('tag identity changed')
 })
