@@ -32,7 +32,7 @@ jobs:
           NODE="$(command -v node)"
           DMG="$(node -p 'JSON.parse(require("fs").readFileSync(".github/desktop-delivery/forward-probe-x64.json")).dmg.name')"
           env -i PATH="$(dirname "$NODE"):/usr/bin:/bin:/usr/sbin:/sbin" HOME="$RUNNER_TEMP" TMPDIR="$RUNNER_TEMP" GITHUB_ACTIONS=true RUNNER_ENVIRONMENT=github-hosted "$NODE" --import tsx scripts/desktop-delivery/forward-native-probe-cli.ts --spec .github/desktop-delivery/forward-probe-x64.json --dmg "$RUNNER_TEMP/forward-inputs/$DMG" --out "$RUNNER_TEMP/forward-native-receipt.json" --timeout-ms 120000
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: forward-native-capability
