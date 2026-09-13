@@ -35,6 +35,8 @@ End users receive one client update with one desktop version and installation ch
 
 Each installable release identifies the desktop version, exact DSH source/version, included plugin versions, supported architecture, artifact integrity and trust status, and relevant data compatibility. Installation remains a user choice. Failure must leave a usable installed application or an explicit recovery path; replacing application files does not prove that an older runtime can safely read newer user data. No automatic data downgrade, silent destructive migration, or rollback claim is permitted without scenario evidence.
 
+Distribution configuration changes require a fresh live control preflight and a reviewed activation record bound to that exact configuration before release qualification. Preserve unchanged protections and historical baseline evidence; a successful build cannot replace publication-authority verification.
+
 Update infrastructure must have a documented owner, bounded retry policy, visible blocking reason, and a tested resume procedure. Correctness and maintainability both count toward acceptance. Additional automation and permissions must remove an observed operational problem and retain a recoverable failure path.
 
 ## Review and acceptance

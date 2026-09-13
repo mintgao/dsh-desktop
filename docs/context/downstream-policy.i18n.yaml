@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/context/downstream-policy.md
-downstream-policy.md: 90cde814608982c7a605498e8c46ce61f6df14ca
-downstream-policy.zh.md: 3426ae4d32923a37a46937aa39d6c3dba62f8baf
+downstream-policy.md: 90bfc920327a445374c06566c93e2a8dc2aa9a42
+downstream-policy.zh.md: bf4f67074f4ecfa1a034eb3478b01e0b226d8a09
