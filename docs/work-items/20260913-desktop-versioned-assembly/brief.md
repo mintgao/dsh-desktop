@@ -4,7 +4,7 @@ English | [中文](brief.zh.md)
 
 - ID: `20260913-desktop-versioned-assembly`
 - Size: `L`
-- Status: implementing
+- Status: locally-verified
 - Created: 2026-09-13
 
 ## Goal
@@ -13,7 +13,7 @@ Adopt DSH RC.2 through an unmodified upstream runtime, separately packed Mint pl
 
 ## Authority and scope
 
-The owner explicitly requests both improvements in this adoption and standing development rules enforcing them. PM `assembly_scope` reviewed the scope read-only and found no unresolved product choice. The protected main baseline is `8e1df6fd25166943e6105859832b42a4da258755`; the delivered Desktop is `desktop-v0.1.5-alpha.2.unsigned.2`, built from `2c00aa9602335c927a89d3b6208aa6a8d812c32d` with upstream `b2e3b2a0125854567a4a5fcba75782e42fe84901`. The target is `dsh-v0.1.5-rc.2`, commit `fb2c4b9e698e30edb738bca4cf0618587db7d203`. The official npm CLI version exists; complete runtime closure is unverified.
+The owner explicitly requests both improvements in this adoption and standing development rules enforcing them. PM `assembly_scope` reviewed the scope read-only and found no unresolved product choice. The protected main baseline is `8e1df6fd25166943e6105859832b42a4da258755`; the delivered Desktop is `desktop-v0.1.5-alpha.2.unsigned.2`, built from `2c00aa9602335c927a89d3b6208aa6a8d812c32d` with upstream `b2e3b2a0125854567a4a5fcba75782e42fe84901`. The target is `dsh-v0.1.5-rc.2`, commit `fb2c4b9e698e30edb738bca4cf0618587db7d203`. The official runtime closure and assembled local application are verified in the [independent report](verification.md); publication and user installation remain excluded.
 
 Follow the [downstream policy](../../context/downstream-policy.md) and [native ownership decision](../../decisions/20260910-desktop-mint-target-integration.md). Mint lives in `apps/desktop-mint`; `apps/desktop` is upstream-owned. Original user changes remain in the original recovery checkout and are excluded. Preserve user home, custom profile patches, unsigned arm64 behavior, navigation and authentication protections. No new product features, Intel support, generic plugin platform, arbitrary-version compatibility, signing activation, remote publication or installed-app replacement are included.
 

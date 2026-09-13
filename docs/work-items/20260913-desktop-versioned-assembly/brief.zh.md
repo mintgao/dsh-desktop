@@ -4,7 +4,7 @@
 
 - ID：`20260913-desktop-versioned-assembly`
 - 规模：`L`
-- 状态：implementing
+- 状态：locally-verified
 - 创建日期：2026-09-13
 
 ## 目标
@@ -13,7 +13,7 @@
 
 ## 授权与范围
 
-所有者明确要求在本次采用中同时实现两项改进，并制定常设开发规则。PM `assembly_scope` 只读评审了范围，确认没有未解决的产品选择。受保护主线基线为 `8e1df6fd25166943e6105859832b42a4da258755`；已交付 Desktop 为 `desktop-v0.1.5-alpha.2.unsigned.2`，来自 `2c00aa9602335c927a89d3b6208aa6a8d812c32d`，上游为 `b2e3b2a0125854567a4a5fcba75782e42fe84901`。目标为 `dsh-v0.1.5-rc.2`，提交为 `fb2c4b9e698e30edb738bca4cf0618587db7d203`。官方 npm CLI 版本存在；完整运行时闭包尚未验证。
+所有者明确要求在本次采用中同时实现两项改进，并制定常设开发规则。PM `assembly_scope` 只读评审了范围，确认没有未解决的产品选择。受保护主线基线为 `8e1df6fd25166943e6105859832b42a4da258755`；已交付 Desktop 为 `desktop-v0.1.5-alpha.2.unsigned.2`，来自 `2c00aa9602335c927a89d3b6208aa6a8d812c32d`，上游为 `b2e3b2a0125854567a4a5fcba75782e42fe84901`。目标为 `dsh-v0.1.5-rc.2`，提交为 `fb2c4b9e698e30edb738bca4cf0618587db7d203`。[独立报告](verification.zh.md)验证了官方运行时闭包和本地组装应用；仍不包含发布和用户安装。
 
 遵循[下游策略](../../context/downstream-policy.zh.md)与[原生归属决策](../../decisions/20260910-desktop-mint-target-integration.zh.md)。Mint 位于 `apps/desktop-mint`；`apps/desktop` 属于上游。原始用户改动保留在原恢复工作区，不包含在本任务中。保留用户 home、自定义 profile 补丁、未签名 arm64 行为、导航和认证保护。不包含新产品功能、Intel 支持、通用插件平台、任意版本兼容、签名激活、远程发布或已安装应用替换。
 
