@@ -3,8 +3,8 @@
 English | [中文](brief.zh.md)
 
 - Size: L
-- Status: preparing
-- Target: `0.1.5-rc.2.unsigned.1`, subject to live unused-version validation
+- Status: published
+- Target: `0.1.5-rc.2.unsigned.1`
 
 ## Authorization and scope
 
@@ -58,4 +58,4 @@ Reuse [accepted local assembly evidence](../20260913-desktop-versioned-assembly/
 
 ## Release configuration binding
 
-The qualified candidate is `be4fb7f15508d0101e0a16ccbdff6730116af81c`, run `34764279121`; exact CI artifact upgrade acceptance passed. The stricter assembly configuration invalidates the prior activation configuration digest. A fresh production preflight returned `controls-verified` without blockers. Independent review approves refreshing only the live-control report and its activation digests, with existing baseline, protections and permissions retained. Only administrator identity fields are retained from the raw account response. The qualified application remains unchanged; a new mutation plan must run from the refreshed protected main. Verify the updated activation through the production validator before commit. No runtime or permission change requires another application build.
+The qualified candidate is `be4fb7f15508d0101e0a16ccbdff6730116af81c`, run `34764279121`; exact CI artifact upgrade acceptance passed. The stricter assembly configuration invalidates the prior activation configuration digest. A fresh production preflight returned `controls-verified` without blockers. Independent review approves refreshing only the live-control report and its activation digests, with existing baseline, protections and permissions retained. Only administrator identity fields are retained from the raw account response. The qualified application remains unchanged; a new mutation plan must run from the refreshed protected main. Verify the updated activation through the production validator before commit. This update changes only control records and documentation; the qualified application does not require rebuilding.
