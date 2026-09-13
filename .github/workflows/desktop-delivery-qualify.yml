@@ -67,11 +67,9 @@ jobs:
         working-directory: candidate-source
         run: |
           pnpm run test:desktop
-          pnpm run build:desktop-mint
+          pnpm run desktop:stage
           pnpm run typecheck
           pnpm run doc-sync
-          git diff --exit-code
-          pnpm run desktop:stage
           git diff --exit-code
           pnpm exec electron-builder --config apps/desktop-mint/electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --config.extraMetadata.version="$VERSION" --mac dmg --"$ARCH" --publish never
       - name: Verify mounted and copied isolated installation

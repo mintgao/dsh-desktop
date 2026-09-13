@@ -28,7 +28,7 @@ pnpm run desktop:app:mac
 
 Mint 仅支持 Apple Silicon；[架构决策](../../docs/decisions/20260913-mint-arm64-scope.zh.md)将 Intel 支持延后。将命令中的 `app` 替换为 `dmg` 即可生成本地 DMG。默认结果位于 `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`。
 
-每条命令都会执行官方客户端构建，打包当前本地 DSH 与 vendored 包，向隔离的资源目录安装选定运行时闭包，拒绝逃逸该目录的链接，再调用 electron-builder。因此，尚未发布的本地后端变更会进入应用，而不会被 npm 上的同版本替换。
+打包流程从 `runtime/package-lock.json` 安装冻结的官方 npm 运行时，核对其 tarball 文件内容，再加入单独打包的 Mint 扩展。原生外壳嵌入组装凭据摘要，并在启动前拒绝缺失或变化的文件。`runtime/assembly-input.json` 标识支持的上游版本与完整性；修改本地上游源码不会改变打包运行时。
 
 本地命令会关闭签名身份自动发现，也不会发布 Release。Electron 43 无法从未签名或 ad-hoc 签名的应用发送 macOS 通知，因此本地产物和申请证书前的公开预览版都不能验证任务通知或其他依赖稳定应用身份的原生能力；这些验收必须使用经过 Developer ID 签名与公证的产物。可以使用以下命令为当前用户安装本地 Apple Silicon 版本：
 
@@ -38,7 +38,7 @@ ditto "apps/desktop-mint/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH
 
 ## 运行时行为
 
-Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh --profile desktop-mint --no-open --port 0`。这个 Profile 会在用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 Mint 产品 Bundle。壳接受标准回环根就绪 URL，包括单个认证令牌，并为窗口保留该 URL。后端诊断和启动错误会对查询值脱敏。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
+Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh --profile desktop-mint --no-open --port 0`。外壳通过已安装 DSH 的公开 API 原子初始化新的 Profile。现有清单、补丁和依赖保持不变；不完整的 profile、中断的初始化和冲突的软件包会明确失败。这个 Profile 会在用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 Mint 产品 Bundle。壳接受标准回环根就绪 URL，包括单个认证令牌，并为窗口保留该 URL。后端诊断和启动错误会对查询值脱敏。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
 
 后端日志位于 `~/Library/Logs/DSH Desktop/backend.log`。外部 HTTP 与 HTTPS 链接会在系统浏览器中打开。同源应用导航留在 DSH 窗口内；新窗口与其他所有 scheme 均被拒绝。
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "complete",
-  "updated_at": "2026-09-10",
+  "updated_at": "2026-09-13",
   "evidence": [
     "README.md",
     "package.json",
@@ -15,6 +15,9 @@
     "apps/desktop/README.md",
     "docs/session-format-status.md",
     "docs/decisions/20260910-desktop-mint-target-integration.md",
-    "docs/decisions/20260910-desktop-mint-migration-registry.md"
+    "docs/decisions/20260910-desktop-mint-migration-registry.md",
+    "docs/decisions/20260913-desktop-versioned-assembly.md",
+    "apps/desktop-mint/runtime/assembly-input.json",
+    "scripts/desktop-assembly.ts"
   ]
 }

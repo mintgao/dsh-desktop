@@ -9,6 +9,7 @@ export const shadow = { schemaVersion: 1, purpose: 'desktop-delivery-shadow', si
 export type Architecture = 'arm64' | 'x64'
 /** Distribution-specific values, independent of executable packaging commands. */
 export interface Distribution {
+  assemblyRequired?: boolean
   id: string
   upstreamRepository: string
   tagPrefix: string
@@ -131,7 +132,9 @@ export function distribution(value: unknown): Distribution {
   const application = string(item.application)
   if (!/^[a-z0-9-]+$/u.test(id) || !/^[\w.-]+\/[\w.-]+$/u.test(upstreamRepository) || /[\/\\]/u.test(application)) throw new Error('Invalid distribution identity')
   if (!Array.isArray(item.architectures) || item.architectures.length === 0 || item.architectures.some(arch => arch !== 'arm64' && arch !== 'x64') || new Set(item.architectures).size !== item.architectures.length) throw new Error('Invalid architecture set')
-  return { id, upstreamRepository, application, tagPrefix: string(item.tagPrefix), architectures: item.architectures as Architecture[] }
+  if (item.assemblyRequired !== undefined && typeof item.assemblyRequired !== 'boolean') throw new Error('Invalid assembly requirement')
+  return { ...(item.assemblyRequired === undefined ? {} : { assemblyRequired: item.assemblyRequired }),
+    id, upstreamRepository, application, tagPrefix: string(item.tagPrefix), architectures: item.architectures as Architecture[] }
 }
 /** Parse a source lock and require internally consistent recorded identities.
  * @param value - external lock.

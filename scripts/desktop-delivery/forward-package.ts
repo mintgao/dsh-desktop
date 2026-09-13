@@ -1,4 +1,5 @@
 /** Deterministic assembly of CI-owned build bytes and bounded manual acceptance. */
+import { candidateComponentsMatch, validateCandidateAssembly } from './candidate.ts'
 import { checkArchitecture } from './artifacts.ts'
 import { assessmentAsset, assessmentFiles } from './catch-up.ts'
 import { catchUpEvidence, digest, hex, object, string } from './evidence.ts'
@@ -76,11 +77,12 @@ export function forwardBuild(value: unknown, read: MigrationReader): {
   if (candidate.purpose !== 'desktop-delivery-shadow' || candidate.kind !== 'candidate' || candidate.qualificationEligible !== true
     || object(candidate.sourceDifference).status !== '' || candidate.downstreamCommit !== build.downstreamCommit
     || candidate.sourceLockDigest !== build.sourceLockDigest || candidate.configDigest !== build.configDigest
-    || JSON.stringify(candidate.components) !== JSON.stringify(build.componentVersions) || JSON.stringify(candidate.upstream) !== JSON.stringify(build.upstream)) throw new Error('Forward candidate differs from build')
+    || !candidateComponentsMatch(candidate, build.componentVersions) || JSON.stringify(candidate.upstream) !== JSON.stringify(build.upstream)) throw new Error('Forward candidate differs from build')
   const report = object(JSON.parse(Buffer.from(read(string(evidence.name))).toString()) as unknown)
   if (report.schemaVersion !== 1 || report.purpose !== 'desktop-release-native-evidence' || report.mode !== 'unsigned-preview'
     || report.qualificationEligible !== true || report.architecture !== 'arm64' || report.candidateDigest !== build.candidateDigest
     || report.desktopVersion !== build.desktopVersion || report.dmgDigest !== dmg.sha256) throw new Error('Forward native smoke identity mismatch')
+  validateCandidateAssembly(candidate, report, build.componentVersions)
   checkArchitecture(string(report.executableArchitectures), 'arm64')
   for (const name of ['bootstrap', 'backendHttp', 'backendStopped', 'mountedReadOnly', 'detached', 'copiedInstallation', 'installationStopped', 'installationRemoved']) {
     if (report[name] !== true) throw new Error('Forward native smoke is incomplete')

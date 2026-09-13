@@ -3,11 +3,12 @@ import { spawnSync } from 'node:child_process'
 import { cpSync, lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
+import { verifyAssembly, assemblyDigest } from '../../apps/desktop-mint/src/assembly.ts'
 import { BackendSupervisor } from '../../apps/desktop-mint/src/backend.ts'
 import { checkArchitecture } from './artifacts.ts'
 import { readCandidate } from './candidate.ts'
 import { runtimeInventory } from './runtime-inventory.ts'
-import { assetPath, digest, distribution, readJson, shadow, type Architecture } from './evidence.ts'
+import { assetPath, digest, distribution, object, readJson, shadow, type Architecture } from './evidence.ts'
 
 function command(executable: string, args: string[], environment: NodeJS.ProcessEnv): string {
   const result = spawnSync(executable, args, { encoding: 'utf8', env: environment, timeout: 60_000, maxBuffer: 1024 * 1024 })
@@ -15,40 +16,8 @@ function command(executable: string, args: string[], environment: NodeJS.Process
   return result.stdout.trim()
 }
 
-/**
- * Exercise the loopback token exchange and fetch its Web page with the issued cookie.
- * @param url - canonical readiness URL retained in memory by the supervisor.
- * @param request - HTTP adapter; production uses fetch.
- */
-export async function probeBackendPage(url: string, request: typeof fetch = fetch): Promise<void> {
-  const initial = new URL(url)
-  if (initial.protocol !== 'http:' || initial.hostname !== '127.0.0.1' || initial.username !== '' || initial.password !== '') {
-    throw new Error('Backend smoke requires loopback HTTP')
-  }
-  let response = await request(url, { method: 'GET', redirect: 'manual', signal: AbortSignal.timeout(15_000) })
-  if (response.status === 303) {
-    await response.body?.cancel()
-    const location = response.headers.get('location')
-    const target = location === null ? undefined : new URL(location, initial)
-    const cookies = response.headers.getSetCookie()
-    const cookie = cookies[0]?.split(';')[0]
-    if (target?.origin !== initial.origin || target.pathname !== '/' || target.search !== '' || target.hash !== ''
-      || target.username !== '' || target.password !== '' || cookies.length !== 1 || cookie === undefined || !cookie.includes('=')) {
-      throw new Error('Unsafe or missing backend authentication redirect')
-    }
-    response = await request(target.href, {
-      method: 'GET', redirect: 'error', headers: { Cookie: cookie }, signal: AbortSignal.timeout(15_000),
-    })
-  }
-  const body = await response.text()
-  if (!response.ok || !body.includes('<html')) {
-    const mediaType = response.headers.get('content-type')?.split(';')[0]?.trim()
-    const contentType = ['text/html', 'text/plain', 'application/json', 'application/octet-stream'].includes(mediaType ?? '')
-      ? mediaType
-      : mediaType === undefined ? 'missing' : 'other'
-    throw new Error(`Packaged backend did not serve its Web application (status=${String(response.status)}, content-type=${contentType})`)
-  }
-}
+export { probeBackendPage } from '../../apps/desktop-mint/src/backend-admission.ts'
+import { probeBackendPage } from '../../apps/desktop-mint/src/backend-admission.ts'
 
 
 /** Reject root application aliases before any executable is inspected or launched.
@@ -149,9 +118,19 @@ export async function smokeDmg(
     const app = join(mount, `${config.application}.app`)
     validateApplicationRoot(mount, app)
     const packagedRuntimeDigest = runtimeInventory(app).sha256
+    const assemblyRoot = join(app, 'Contents/Resources/backend')
+    const assemblyBytes = readFileSync(join(assemblyRoot, 'assembly.json'))
+    const assemblyRecord = verifyAssembly(assemblyRoot, assemblyDigest(assemblyBytes))
+    const expectedInput = object(selected.record.assemblyInput)
+    if (assemblyRecord.descriptorDigest !== expectedInput.descriptorDigest || assemblyRecord.lockDigest !== expectedInput.lockDigest
+      || assemblyRecord.runtimeVersion !== expectedInput.runtimeVersion) throw new Error('Packaged assembly differs from candidate inputs')
+    const assembly = {
+      digest: digest(assemblyBytes), lockDigest: assemblyRecord.lockDigest,
+      descriptorDigest: assemblyRecord.descriptorDigest, components: assemblyRecord.components,
+    }
     const executableArchitectures = await exercisePayload(
       app, config.application, architecture, options.desktopVersion ?? selected.record.desktopVersion,
-      selected.record.desktopVersion, workspace, environment,
+      object(selected.record.components)['@deepseek-ai/dsh'], workspace, environment,
     )
     if (options.copyInstall === true) {
       const installed = join(temporary, 'installation', `${config.application}.app`)
@@ -159,12 +138,12 @@ export async function smokeDmg(
       validateApplicationRoot(join(temporary, 'installation'), installed)
       await exercisePayload(
         installed, config.application, architecture, options.desktopVersion ?? selected.record.desktopVersion,
-        selected.record.desktopVersion, workspace, environment,
+        object(selected.record.components)['@deepseek-ai/dsh'], workspace, environment,
       )
     }
     if (runtimeInventory(app).sha256 !== packagedRuntimeDigest) throw new Error('Packaged runtime changed during smoke')
     if (digest(readFileSync(dmg)) !== dmgDigest) throw new Error('DMG changed during smoke')
-    result = { ...shadow, ...(options.copyInstall === true ? { purpose: 'desktop-release-native-evidence', state: selected.record.qualificationEligible === true ? 'native-checks-passed' : 'diagnostic-native-checks-passed', mode: 'unsigned-preview', copiedInstallation: true, installationStopped: true, installationRemoved: true, qualificationEligible: selected.record.qualificationEligible, desktopVersion: options.desktopVersion ?? selected.record.desktopVersion } : {}), kind: 'smoke', packagedRuntimeDigest, candidateDigest: selected.digest, dmgDigest, architecture, executableArchitectures, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true }
+    result = { ...shadow, ...(options.copyInstall === true ? { purpose: 'desktop-release-native-evidence', state: selected.record.qualificationEligible === true ? 'native-checks-passed' : 'diagnostic-native-checks-passed', mode: 'unsigned-preview', copiedInstallation: true, installationStopped: true, installationRemoved: true, qualificationEligible: selected.record.qualificationEligible, desktopVersion: options.desktopVersion ?? selected.record.desktopVersion } : {}), kind: 'smoke', assembly, packagedRuntimeDigest, candidateDigest: selected.digest, dmgDigest, architecture, executableArchitectures, bootstrap: true, backendHttp: true, backendStopped: true, mountedReadOnly: true, detached: true }
   } finally {
     cleanupSmoke(temporary, () => {
       if (mountAttempted) command('/usr/bin/hdiutil', ['detach', mount], environment)

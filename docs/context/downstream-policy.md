@@ -13,6 +13,10 @@ DSH Desktop Mint is a downstream desktop distribution of DeepSeek Harness. This 
 - Native code owns application, window, menu, installer, updater, and backend-process lifecycle. It must not recreate Agent or Session policy. When DSH UI needs native privilege, expose a narrow typed capability with a replaceable provider; do not import Electron into a reusable Client plugin.
 - When an extension point is missing, first define the smallest reusable DSH extension and implement the feature as its consumer. Record unavoidable upstream changes separately, with rationale, compatibility tests, and an upstream contribution or removal path.
 
+## Versioned desktop assembly
+
+Desktop packages use a frozen official DSH npm closure, separately packed Mint extensions, and the native shell. Exact versions, artifact integrity, installed payloads, and effective plugin resolution are checked before launch; startup never installs packages. Mint must not enter upstream CLI dependencies or shipped profile templates. The existing `desktop:stage` pipeline executes coupling and payload checks, and the [assembly decision](../decisions/20260913-desktop-versioned-assembly.md) defines launch, authenticated readiness, shutdown, profile preservation, and qualification obligations. Adoption changes reviewed versioned inputs; source ancestry alone does not identify the shipped runtime.
+
 ## Reuse and compatibility
 
 Every addition must identify a concrete benefit and delivery form for another DSH developer: an installable plugin or Bundle, a replaceable native adapter, or reusable build and release tooling. Native and release infrastructure are not required to pretend to be runtime plugins; they must separate reusable behavior from Mint configuration. Extraction is proportional to a real consumer need, not permission to build a general platform.

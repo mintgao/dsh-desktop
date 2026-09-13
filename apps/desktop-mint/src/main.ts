@@ -2,7 +2,7 @@
 
 import { createWriteStream, existsSync, mkdirSync, type WriteStream } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   app,
@@ -16,6 +16,12 @@ import {
   type MessageBoxOptions,
   type MessageBoxReturnValue,
 } from 'electron'
+import { verifyAssembly } from './assembly.ts'
+import { probeBackendPage } from './backend-admission.ts'
+import { prepareMintProfile } from './profile.ts'
+
+declare const MINT_ASSEMBLY_DIGEST: string
+
 import { BackendSupervisor, redactBackendDiagnostics, type BackendExit } from './backend.ts'
 import { ElectronUpdateDriver } from './electron-updates.ts'
 import { GitHubReleaseDriver } from './github-releases.ts'
@@ -53,7 +59,13 @@ let updateDriver: ElectronUpdateDriver | undefined
 let requestUpdateCheck: (() => Promise<void>) | undefined
 
 if (process.argv.includes(PACKAGE_SMOKE_ARGUMENT)) {
-  app.exit(0)
+  if (process.env.DSH_HOME === undefined) throw new Error('Package smoke requires an explicit synthetic DSH_HOME')
+  const cli = resolveCliPath()
+  const root = dirname(dirname(dirname(dirname(dirname(cli)))))
+  void prepareMintProfile(cli, verifyAssembly(root, MINT_ASSEMBLY_DIGEST)).then(() => { app.exit(0) }, (error: unknown) => {
+    console.error(redactBackendDiagnostics(String(error)))
+    app.exit(1)
+  })
 } else {
   app.setName(APPLICATION_NAME)
   app.setAboutPanelOptions({
@@ -102,6 +114,8 @@ async function startApplication(): Promise<void> {
   if (!existsSync(cliPath)) {
     throw new Error(`The built dsh CLI was not found at ${cliPath}.`)
   }
+  const assembly = verifyAssembly(dirname(dirname(dirname(dirname(dirname(cliPath))))), MINT_ASSEMBLY_DIGEST)
+  await prepareMintProfile(cliPath, assembly)
   backend = new BackendSupervisor({
     executable: process.execPath,
     cliPath,
@@ -112,6 +126,7 @@ async function startApplication(): Promise<void> {
     onUnexpectedExit: reportUnexpectedExit,
   })
   const backendUrl = await backend.start()
+  await probeBackendPage(backendUrl)
   installNavigationPolicy(mainWindow, backendUrl)
   await mainWindow.loadURL(backendUrl)
   await initializeUpdates()
@@ -533,11 +548,12 @@ function finishApplicationQuit(): void {
 /** Resolve the source-build or packaged CLI entry without changing dsh's data directory. */
 function resolveCliPath(): string {
   const override = process.env.DSH_DESKTOP_CLI_PATH
+  if (app.isPackaged && override !== undefined) throw new Error('Packaged CLI overrides are unavailable')
   if (override !== undefined && override !== '') return override
   if (app.isPackaged) {
     return join(process.resourcesPath, 'backend', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   }
-  return fileURLToPath(new URL('../../cli/lib/bin.js', import.meta.url))
+  return fileURLToPath(new URL('../backend/node_modules/@deepseek-ai/dsh/lib/bin.js', import.meta.url))
 }
 
 /** Create a sandboxed renderer with no Node or preload bridge. */

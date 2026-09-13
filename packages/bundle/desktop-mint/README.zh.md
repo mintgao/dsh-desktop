@@ -25,9 +25,9 @@ kind: "package-bundle"
 <a id="use-this-package"></a>
 ## 使用本包
 
-通过桌面应用运行 `dsh --profile desktop-mint`。该 Profile 依次组合 `dsh-base`、`dsh-web-app`、本 Bundle，最后应用用户 patch。
+桌面应用通过 DSH 公开 API 初始化自己的自定义 `desktop-mint` Profile，并启动 `dsh --profile desktop-mint`。该 Profile 依次组合 `dsh-base`、`dsh-web-app`、此 Bundle 和用户补丁。
 
-[`cordis.patch.yml`](cordis.patch.yml) 挂载可复用的 `@deepseek-ai/dsh-client-ui-session-notifications` 插件，并设置 `defaultMode: background`。共享 `web` Profile 既不挂载该条目，也不继承 Mint 的默认值。未来由 Mint 选择的 DSH 功能会以独立插件形式加入这个 patch；原生应用、更新器、安装器、窗口、菜单和后端进程生命周期仍由 [`apps/desktop`](../../../apps/desktop/README.zh.md) 管理。
+[`cordis.patch.yml`](cordis.patch.yml) 挂载可复用的 `@deepseek-ai/dsh-client-ui-session-notifications` 插件，并设置 `defaultMode: background`。共享 `web` Profile 既不挂载该条目，也不继承 Mint 的默认值。未来由 Mint 选择的 DSH 功能会以独立插件形式加入这个 patch；原生应用、更新器、安装器、窗口、菜单和后端进程生命周期仍由 [`apps/desktop-mint`](../../../apps/desktop-mint/README.zh.md) 管理。
 
 -----
 
@@ -54,7 +54,7 @@ kind: "package-bundle"
 
 - [下游客户端产品层](../../../.agents/notes/implemented/architecture/2026-08-25-downstream-client-product-layer.zh.md)——放置依据。
 - [Mint 客户端功能工作流](../../../.agents/skills/dsh-mint-client-feature/SKILL.md)——修改组合时必须遵循的工作流。
-- [桌面应用](../../../apps/desktop/README.zh.md)——原生生命周期与打包责任方。
+- [桌面应用](../../../apps/desktop-mint/README.zh.md)——原生生命周期与打包责任方。
 
 -----
 
@@ -71,7 +71,7 @@ kind: "package-bundle"
 <a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
 
-- **这里不选择原生行为**——Electron 应用生命周期仍在 `apps/desktop`；需要原生权限的 DSH 插件必须使用类型化 provider，而不能导入 Electron。
+- **这里不选择原生行为**——Electron 应用生命周期仍在 `apps/desktop-mint`；需要原生权限的 DSH 插件必须使用类型化 provider，而不能导入 Electron。
 
 <a id="dev-note"></a>
 ### 开发备注

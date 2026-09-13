@@ -25,9 +25,9 @@ This patch-only Bundle is the DSH feature-selection source for DSH Desktop Mint.
 <a id="use-this-package"></a>
 ## Use this package
 
-Run `dsh --profile desktop-mint` through the desktop application. The Profile composes `dsh-base`, `dsh-web-app`, this Bundle, and then the user patch.
+The desktop application initializes its custom `desktop-mint` Profile through the public DSH API and launches `dsh --profile desktop-mint`. The Profile composes `dsh-base`, `dsh-web-app`, this Bundle, and then the user patch.
 
-[`cordis.patch.yml`](cordis.patch.yml) mounts the reusable `@deepseek-ai/dsh-client-ui-session-notifications` plugin with `defaultMode: background`. The shared `web` Profile neither mounts that row nor inherits the Mint default. Future Mint-selected DSH features join this patch as independent plugins; native application, updater, installer, window, menu, and backend-process lifecycle remain in [`apps/desktop`](../../../apps/desktop/README.md).
+[`cordis.patch.yml`](cordis.patch.yml) mounts the reusable `@deepseek-ai/dsh-client-ui-session-notifications` plugin with `defaultMode: background`. The shared `web` Profile neither mounts that row nor inherits the Mint default. Future Mint-selected DSH features join this patch as independent plugins; native application, updater, installer, window, menu, and backend-process lifecycle remain in [`apps/desktop-mint`](../../../apps/desktop-mint/README.md).
 
 -----
 
@@ -54,7 +54,7 @@ The Bundle owns one static patch and no runtime glue. Its package entry supports
 
 - [Downstream client product layer](../../../.agents/notes/implemented/architecture/2026-08-25-downstream-client-product-layer.md) — placement rationale.
 - [Mint client feature workflow](../../../.agents/skills/dsh-mint-client-feature/SKILL.md) — required workflow for composition changes.
-- [Desktop application](../../../apps/desktop/README.md) — native lifecycle and packaging owner.
+- [Desktop application](../../../apps/desktop-mint/README.md) — native lifecycle and packaging owner.
 
 -----
 
@@ -70,7 +70,7 @@ None; the selected notification plugin neither assembles nor sends a provider re
 
 ## Known Limitations and Deferred Work
 
-- **Native behavior is not selected here** — Electron application lifecycle remains in `apps/desktop`; a DSH plugin that needs native privilege requires a typed provider instead of importing Electron.
+- **Native behavior is not selected here** — Electron application lifecycle remains in `apps/desktop-mint`; a DSH plugin that needs native privilege requires a typed provider instead of importing Electron.
 
 <a id="dev-note"></a>
 ### Dev Note
