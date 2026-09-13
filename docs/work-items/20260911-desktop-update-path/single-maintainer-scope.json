@@ -1,0 +1,32 @@
+{
+  "status": "owner-approved",
+  "ownerConfirmation": "确认，仓库确实只有我一个维护者",
+  "scope": "Permanent single-maintainer review policy for Mint",
+  "mainRulesetId": 21944549,
+  "changes": {
+    "required_approving_review_count": {
+      "from": 1,
+      "to": 0
+    },
+    "require_last_push_approval": {
+      "from": true,
+      "to": false
+    }
+  },
+  "retained": [
+    "required source checks and strict policy",
+    "PR requirement and stale review dismissal",
+    "review thread resolution",
+    "no bypass actors",
+    "non-fast-forward protection",
+    "tag protections",
+    "owner release environment approval"
+  ],
+  "acceptance": [
+    "explicit distribution policy; unknown policies reject",
+    "historical default retains independent review",
+    "fresh authenticated preflight and activation after final rules",
+    "no temporary protection relaxation for merge"
+  ],
+  "publicationAuthorization": "No approval of an exact B publication"
+}

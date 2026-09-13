@@ -8,7 +8,7 @@ import { applyAdoption, adoptionPlan, prepareAdoption, verifyFinalization } from
 import { digest, object, sourceLock } from '../evidence.ts'
 import { deliveryPredecessor, requireNewVersion, requireUnsignedVersion } from '../lineage.ts'
 import { applyNotification, notificationPlan } from '../notifications.ts'
-import { deliveryConfig, GitHubError, operationPlan, type GitHub } from '../operations.ts'
+import { deliveryConfig, resolveMainReviewPolicy, GitHubError, operationPlan, type GitHub } from '../operations.ts'
 import { discover } from '../discovery.ts'
 import { reviewedSummary } from '../reviewed-cli.ts'
 
@@ -463,4 +463,27 @@ it('preserves catch-up provenance when preparing and finalizing a desktop-only s
   const desktopRemote = gitHubRepository(desktopCheckout)
   await applyAdoption(config, desktopSeed, wrap(desktopRemote.api, desktopCheckout))
   expect(verifyFinalization(desktopCheckout, config, git(desktopCheckout, 'rev-parse', String(desktopSeed.branch))).catchUp).toEqual(plan.catchUp)
+})
+
+
+it('parses explicit review policies without adding a default to historical configuration', () => {
+  const raw = object(JSON.parse(readFileSync(configPath, 'utf8')))
+  const path = join(temporary(), 'config.json')
+  delete raw.mainReviewPolicy
+  store(path, raw)
+  const historical = deliveryConfig(path)
+  expect(Object.hasOwn(historical, 'mainReviewPolicy')).toBe(false)
+  expect(resolveMainReviewPolicy(historical)).toBe('independent-review')
+  const bytes = JSON.stringify(historical)
+  for (const policy of ['single-maintainer', 'independent-review'] as const) {
+    store(path, { ...raw, mainReviewPolicy: policy })
+    const parsed = deliveryConfig(path)
+    expect(resolveMainReviewPolicy(parsed)).toBe(policy)
+    delete parsed.mainReviewPolicy
+    expect(JSON.stringify(parsed)).toBe(bytes)
+  }
+  for (const policy of [null, '', 'disabled', 0, false]) {
+    store(path, { ...raw, mainReviewPolicy: policy })
+    expect(() => deliveryConfig(path)).toThrow('Invalid main review policy')
+  }
 })

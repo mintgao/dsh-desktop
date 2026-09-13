@@ -46,5 +46,6 @@
     "commit": "fd2ad450f6524d7e9047743064e19cfa235373bd",
     "path": "state/upstream-adoption.json",
     "digest": "290e509f5ad48ac13233ef7bfdf252770054ed26d48323240efc54de563812aa"
-  }
+  },
+  "mainReviewPolicy": "single-maintainer"
 }

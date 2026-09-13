@@ -16,6 +16,8 @@ Status: implemented
 
 初始未启用的替代机制保留[试运行工作流](2026-09-08-desktop-delivery-shadow.zh.md)，启用写入者前要求验证迁移。[旧采用记录](2026-08-27-automatic-upstream-desktop-releases.zh.md) 仍与保留的工作流和迁移证据相关，其自动发布策略不约束替代机制。[未签名预览](2026-08-27-pre-certificate-unsigned-desktop-previews.zh.md) 和[签名身份](2026-08-25-signed-public-desktop-releases.zh.md) 决策保留信任限制。这些是部分重叠，并非完全取代。
 
+Mint 使用所有者批准的[单人维护主分支审核策略](../../../../docs/decisions/20260908-desktop-reviewed-delivery.zh.md#configured-main-review-policy)。必需的源码检查、标签保护和明确的发布批准仍为强制要求。永久策略避免反复修改保护导致绑定时间戳的激活证据失效；它放弃了必须由第二人批准的保证。其他发行项目缺省保留独立审核。
+
 每次 Release PATCH 都保留获批的不可变标签、显式可见性和预发布状态。完成操作前必须按同一 ID 重新读取并验证预期状态，包括探测正文。身份偏移会停止后续写入并要求维护者恢复；重试不能重新指定冲突版本的标签。
 
 [初始安装检查](../../../../docs/cookbook/bootstrap-installation-check.zh.md) 将一个显式验证且已完成引导的 PR 与待处理采用分开分类。历史基线和迁移证据在后继种子中保持原样；外部最终提交检查验证最新控制、发布字节和相同安装谱系。这避免证据摘要递归，同时不豁免仅匹配分支名称的记录或未来 PR。下载计数属于展示元数据；版本来源和实际资产哈希仍具有约束力。

@@ -1,0 +1,16 @@
+{
+  "mode": "sequential-perspective",
+  "result": "approved",
+  "reviewer": "/root technical review before implementation",
+  "author": "/root/verification_method_decision",
+  "capabilityLimitation": "identity-isolated independent reviewer unavailable: agent thread limit reached",
+  "decision": "../../decisions/20260908-desktop-reviewed-delivery.md#configured-main-review-policy",
+  "findings": [
+    "Absent policy must not change serialized historical config; no count inference",
+    "Exact numeric/boolean API predicates reject malformed values",
+    "Mandatory strict/thread/non-fast-forward protections apply to both policies; historical reports remain bytes but are not guaranteed current activation",
+    "Only two approved remote values may change; re-read and compare immediately before mutation",
+    "Bot source-lock requirements and explicit publication approval are retained"
+  ],
+  "openBlockers": []
+}

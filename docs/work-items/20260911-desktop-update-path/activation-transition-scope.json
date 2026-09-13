@@ -1,0 +1,17 @@
+{
+  "status": "owner-authorized-preparation",
+  "objective": "Revalidate arm64 distribution activation with existing mechanisms; preserve baseline and protections; real update remains separate",
+  "scope": [
+    "Fresh authenticated control preflight",
+    "Exact historical byte preservation",
+    "Reviewed current report/activation binding",
+    "Postmerge requireActivation verification"
+  ],
+  "constraints": [
+    "No attestation or timestamp invention",
+    "No protection relaxation without exact owner approval",
+    "No repeated exception-refresh loop"
+  ],
+  "observedBlocker": "Main rules require another reviewer; temporary exception modifies updated_at, invalidating captured ruleset attestation after final restoration",
+  "gate": "blocked pending sustainable receipt landing path"
+}

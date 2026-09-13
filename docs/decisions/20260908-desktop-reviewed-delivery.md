@@ -93,6 +93,15 @@ Preflight inventories controller, observer, finalizer, validation, policy prefli
 
 Rollback disables replacement writers first. Restoring legacy machinery requires valid prerequisites and reconciliation of every replacement publication. Competing publishers are prohibited.
 
+
+<a id="configured-main-review-policy"></a>
+
+### Configured main review policy
+
+`mainReviewPolicy` is optional distribution configuration with `independent-review` and `single-maintainer` values. Absence retains independent review and does not add a serialized default, preserving historical configuration digests. Unknown values reject. Mint explicitly selects single-maintainer review with the owner's approval. Independent review requires an integer approving count of at least one and last-push approval; single-maintainer review requires exactly zero and false. Other main protections remain mandatory: PRs, stale-review dismissal, resolved review threads, strict required source checks, no bypass actors and non-fast-forward protection. Tag and release-environment protections remain unchanged.
+
+Single-maintainer review gives up mandatory approval by another person. It does not authorize automatic merging or publication. Bot adoption identity, substantive source-lock finalization and explicit release approval remain required by their owning operations. Administrators establish the final rules before capturing a fresh authenticated preflight and reviewed activation. The previous activation and report remain byte-preserved under the delivery history directory. Any policy reversal also requires fresh preflight and reviewed binding; retained historical bytes do not authorize current writes. Runtime still rejects configuration, report or ruleset timestamp drift.
+
 ### Administrator preflight and runtime checks
 
 `migration-preflight` validates all required settings using the maintainer's authenticated session. `requireActivation` verifies the accepted report and refreshes checks available to its declared runtime token; it does not rerun administrator preflight with `GITHUB_TOKEN`.

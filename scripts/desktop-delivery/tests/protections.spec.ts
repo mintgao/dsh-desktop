@@ -9,7 +9,7 @@ import { digest, object } from '../evidence.ts'
 const config = deliveryConfig(resolve('.github/desktop-delivery/mint.json'))
 const admin = { schemaVersion: 1, repositoryId: config.repositoryId, revokedAppIds: config.legacyAppIds, revocationEvidence: ['fixture administrator observation'], outstandingAuthorityRevoked: true, delayedCallbacksDisabled: true, botReviewEligibilityVerified: true, preparedDraftTokenAccessVerified: true, draftAccessProbe: { schemaVersion: 1, operation: 'bootstrap-probe', state: 'draft-access-verified', repository: config.repository, repositoryId: config.repositoryId, tag: `${config.bootstrapTagPrefix}fixture`, commit: 'a'.repeat(40), workflow: { commit: 'a'.repeat(40), runId: 123, attempt: 1 }, uploaded: true, deleted: true, bodyRestored: true, remainedDraft: true, downloadedDigest: digest('Desktop delivery draft access probe. No application payload.\n'), tokenPermissions: { contents: 'write', issues: 'write', actions: 'read' } } }
 function controls() {
-  const main = { id: config.mainRulesetId, updated_at: '2026-01-01T00:00:00Z', target: 'branch', enforcement: 'active', conditions: { ref_name: { include: ['refs/heads/main'], exclude: [] as string[] } }, bypass_actors: [] as unknown[], rules: [{ type: 'pull_request', parameters: { required_approving_review_count: 1, require_last_push_approval: true, dismiss_stale_reviews_on_push: true } }, { type: 'required_status_checks', parameters: { required_status_checks: config.requiredChecks.map(context => ({ context })) } }] }
+  const main = { id: config.mainRulesetId, updated_at: '2026-01-01T00:00:00Z', target: 'branch', enforcement: 'active', conditions: { ref_name: { include: ['refs/heads/main'], exclude: [] as string[] } }, bypass_actors: [] as unknown[], rules: [{ type: 'pull_request', parameters: { required_approving_review_count: 0, require_last_push_approval: false, dismiss_stale_reviews_on_push: true, required_review_thread_resolution: true } }, { type: 'non_fast_forward' }, { type: 'required_status_checks', parameters: { strict_required_status_checks_policy: true, required_status_checks: config.requiredChecks.map(context => ({ context })) } }] }
   const creation = { id: config.tagCreationRulesetId, updated_at: '2026-01-01T00:00:00Z', target: 'tag', enforcement: 'active', conditions: { ref_name: { include: ['refs/tags/desktop-v*'], exclude: [] as string[] } }, bypass_actors: [{ actor_type: 'RepositoryRole', actor_id: 2, bypass_mode: 'always' }], rules: [{ type: 'creation' }] }
   const immutable = { ...creation, id: config.tagImmutabilityRulesetId, bypass_actors: [] as unknown[], rules: [{ type: 'update' }, { type: 'deletion' }] }
   const reviewers = config.maintainerIds.map(id => ({ reviewer: { id } }))
@@ -69,9 +69,50 @@ it('runtime validates pinned attestations without requesting Administration perm
     } }
     await requireActivation(localConfig, activationPath, reportPath, runtime)
     await expect(requireActivation({ ...localConfig, architectures: ['x64'] }, activationPath, reportPath, runtime)).rejects.toThrow('Activation distribution configuration changed')
+    await expect(requireActivation({ ...localConfig, mainReviewPolicy: 'independent-review' }, activationPath, reportPath, runtime)).rejects.toThrow('Activation distribution configuration changed')
     drift = true
     await expect(requireActivation(localConfig, activationPath, reportPath, runtime)).rejects.toThrow('Live activation controls blocked')
     const failed: GitHub = { request: () => Promise.reject(new Error('403')) }
     expect((await migrationPreflight(config, failed, admin)).state).toBe('blocked')
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+it('keeps independent review as the absent policy and refuses policy mismatch or malformed counts', async () => {
+  const fixture = controls()
+  const independent = { ...config }
+  delete independent.mainReviewPolicy
+  expect((await migrationPreflight(independent, fixture.api, admin)).state).toBe('blocked')
+  const pr = object(fixture.main.rules.find(rule => rule.type === 'pull_request')?.parameters)
+  pr.required_approving_review_count = 1
+  pr.require_last_push_approval = true
+  expect((await migrationPreflight(independent, fixture.api, admin)).state).toBe('controls-verified')
+  expect((await migrationPreflight({ ...independent, mainReviewPolicy: 'independent-review' }, fixture.api, admin)).state).toBe('controls-verified')
+  expect((await migrationPreflight(config, fixture.api, admin)).state).toBe('blocked')
+  for (const count of [undefined, '1', -1, 1.5, Infinity]) {
+    pr.required_approving_review_count = count
+    expect((await migrationPreflight(independent, fixture.api, admin)).state).toBe('blocked')
+  }
+  pr.require_last_push_approval = false
+  for (const count of [undefined, '0', -1, 0.5]) {
+    pr.required_approving_review_count = count
+    expect((await migrationPreflight(config, fixture.api, admin)).state).toBe('blocked')
+  }
+})
+
+it('single-maintainer review retains every other main protection', async () => {
+  const changes: ((main: ReturnType<typeof controls>['main']) => void)[] = [
+    (main) => { main.rules = main.rules.filter(rule => rule.type !== 'pull_request') },
+    (main) => { main.rules = main.rules.filter(rule => rule.type !== 'non_fast_forward') },
+    (main) => { main.rules = main.rules.filter(rule => rule.type !== 'required_status_checks') },
+    (main) => { object(main.rules.find(rule => rule.type === 'pull_request')?.parameters).dismiss_stale_reviews_on_push = false },
+    (main) => { object(main.rules.find(rule => rule.type === 'pull_request')?.parameters).required_review_thread_resolution = false },
+    (main) => { object(main.rules.find(rule => rule.type === 'required_status_checks')?.parameters).strict_required_status_checks_policy = false },
+    (main) => { object(main.rules.find(rule => rule.type === 'required_status_checks')?.parameters).required_status_checks = [] },
+    (main) => { main.bypass_actors.push({ actor_type: 'RepositoryRole', actor_id: 5, bypass_mode: 'always' }) },
+  ]
+  for (const change of changes) {
+    const fixture = controls()
+    change(fixture.main)
+    expect((await migrationPreflight(config, fixture.api, admin)).state).toBe('blocked')
+  }
 })

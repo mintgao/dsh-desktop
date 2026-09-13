@@ -3,7 +3,7 @@ import { installationRecord, validateBootstrapInstallation } from './bootstrap-i
 import { rulesetTime } from './ruleset-time.ts'
 import { readFileSync, statSync } from 'node:fs'
 import { assetPath, digest, hex, object, readJson, sourceLock, string, textField } from './evidence.ts'
-import { optional, pages, type DeliveryConfig, type GitHub } from './operations.ts'
+import { optional, pages, resolveMainReviewPolicy, type DeliveryConfig, type GitHub } from './operations.ts'
 
 /** Resolve a lightweight or annotated immutable tag to its commit.
  * @param config - repository.
@@ -128,9 +128,17 @@ export async function migrationPreflight(config: DeliveryConfig,
     if (kind === 'main') {
       const pr = rules.find(item => item.type === 'pull_request')
       const parameters = pr === undefined ? {} : object(pr.parameters)
-      if (Number(parameters.required_approving_review_count) < 1 || parameters.require_last_push_approval !== true || parameters.dismiss_stale_reviews_on_push !== true) blockers.push('Main requires approving review, stale-review dismissal and last-push approval')
+      const count = parameters.required_approving_review_count
+      const matchesReview = resolveMainReviewPolicy(config) === 'single-maintainer'
+        ? count === 0 && parameters.require_last_push_approval === false
+        : typeof count === 'number' && Number.isSafeInteger(count) && count >= 1 && parameters.require_last_push_approval === true
+      if (!matchesReview) blockers.push('Main review policy mismatch')
+      if (parameters.dismiss_stale_reviews_on_push !== true || parameters.required_review_thread_resolution !== true
+        || !rules.some(item => item.type === 'non_fast_forward')) blockers.push('Main review dismissal, thread resolution or non-fast-forward protection is missing')
       const status = rules.find(item => item.type === 'required_status_checks')
-      const checks = status === undefined ? [] : object(status.parameters).required_status_checks
+      const statusParameters = status === undefined ? {} : object(status.parameters)
+      const checks = statusParameters.required_status_checks
+      if (statusParameters.strict_required_status_checks_policy !== true) blockers.push('Main requires strict status checks')
       if (!Array.isArray(checks) || config.requiredChecks.some(name => !checks.some(item => object(item).context === name))) blockers.push('Required main status checks are missing')
       if (bypass.length !== 0) blockers.push('Main retains bypass actors')
     } else if (kind === 'creation') {

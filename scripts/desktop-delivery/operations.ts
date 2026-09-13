@@ -5,6 +5,7 @@ import { digest, distribution, hex, object, readJson, string, type Distribution 
 
 /** Product values needed by the operational delivery consumer. */
 export interface DeliveryConfig extends Distribution {
+  mainReviewPolicy?: 'independent-review' | 'single-maintainer'
   legacyAdoptionEvidence: { commit: string; path: string; digest: string }
   assetPrefix: string
   repository: string
@@ -39,6 +40,7 @@ export class GitHubError extends Error {
 export function deliveryConfig(path: string): DeliveryConfig {
   const raw = object(readJson(path))
   const parsed = distribution(raw)
+  if (raw.mainReviewPolicy !== undefined && raw.mainReviewPolicy !== 'independent-review' && raw.mainReviewPolicy !== 'single-maintainer') throw new Error('Invalid main review policy')
   const fields = ['repository', 'defaultBranch', 'releaseEnvironment', 'sourceLockPath', 'activationPath', 'baselinePath'] as const
   const values = Object.fromEntries(fields.map(field => [field, string(raw[field])])) as Record<typeof fields[number], string>
   if (!/^[\w.-]+\/[\w.-]+$/u.test(values.repository) || values.defaultBranch !== 'main') throw new Error('Delivery requires a configured repository and protected main')
@@ -58,6 +60,7 @@ export function deliveryConfig(path: string): DeliveryConfig {
     40),
   path: string(legacy.path),
   digest: hex(legacy.digest) },
+  ...(raw.mainReviewPolicy === undefined ? {} : { mainReviewPolicy: raw.mainReviewPolicy }),
   assetPrefix: string(raw.assetPrefix),
   bootstrapTagPrefix: string(raw.bootstrapTagPrefix),
 
@@ -74,6 +77,13 @@ export function deliveryConfig(path: string): DeliveryConfig {
   maintainerIds: raw.maintainerIds as number[],
   requiredChecks: raw.requiredChecks.map(string),
   botId: Number(raw.botId) }
+}
+/** Resolve the configured review policy without changing serialized historical configuration.
+ * @param config - validated delivery configuration.
+ * @returns Explicit main review policy.
+ */
+export function resolveMainReviewPolicy(config: DeliveryConfig): 'independent-review' | 'single-maintainer' {
+  return config.mainReviewPolicy ?? 'independent-review'
 }
 /** HTTP implementation with GET retries only; ambiguous writes are never blindly retried.
  * @param token - optional GitHub token, retained only in request headers.
