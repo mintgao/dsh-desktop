@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { constants, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { nativeAccessibilityPreflight, nativeOrdinaryQuit, nativeRenderedOnboarding } from './migration-native-menu.ts'
 
@@ -19,6 +19,34 @@ export interface ProbeDriver {
   quit(pid: number, signal: AbortSignal): Promise<string>
   stop(process: ProbeProcess, signal: AbortSignal): Promise<void>
 }
+type ProbeOperation = 'process-inventory' | 'launch' | 'process-identity' | 'accessibility-preflight' | 'accessibility-rendered' | 'ordinary-quit' | 'owned-process-stop' | 'poll'
+type FailureCategory = 'operation-error' | 'process-inventory-error' | 'process-missing' | 'process-replaced' | 'process-not-unique' | 'already-running' | 'subprocess-error' | 'subprocess-timeout' | 'unexpected-output' | 'deadline'
+/** Last inventory observation; stale means a subsequent operation could have changed it. */
+export interface ProbeMainPresence {
+  freshness: 'unknown' | 'fresh' | 'stale'
+  count?: number
+  expectedPid?: number
+  expectedIdentity?: 'present' | 'missing' | 'replaced'
+}
+/** Fixed failure fields exclude error text, process paths and subprocess output. */
+export interface ProbeFailureDetails {
+  operation: ProbeOperation
+  category: FailureCategory
+  subprocess?: { exitCode?: number; signal?: NodeJS.Signals; timeout: true | 'unknown' }
+  mainPresence: ProbeMainPresence
+}
+
+function subprocessFailure(error: unknown): ProbeFailureDetails['subprocess'] {
+  if (!(error instanceof Error)) return undefined
+  const value = error as Error & { code?: unknown; signal?: unknown; killed?: unknown }
+  const exitCode = typeof value.code === 'number' && Number.isSafeInteger(value.code) ? value.code : undefined
+  const signal = typeof value.signal === 'string' && Object.hasOwn(constants.signals, value.signal) ? value.signal as NodeJS.Signals : undefined
+  if (exitCode === undefined && signal === undefined && !(typeof value.code === 'string' && ['ERR_CHILD_PROCESS_STDIO_MAXBUFFER', 'ABORT_ERR', 'ENOENT', 'EACCES'].includes(value.code))) return undefined
+  // execFile's fixed timeout kills with SIGTERM; maxBuffer failures carry a string code.
+  const timeout = value.killed === true && value.code === null && signal === 'SIGTERM' ? true : 'unknown'
+  return { ...(exitCode === undefined ? {} : { exitCode }), ...(signal === undefined ? {} : { signal }), timeout }
+}
+
 /** Capability observations contain no raw logs, profiles or credentials. */
 export interface ProbeResult {
   purpose: 'desktop-forward-native-capability'
@@ -26,6 +54,7 @@ export interface ProbeResult {
   launchMode: 'LaunchServices'
   state: 'observed' | 'blocked'
   firstFailure?: string
+  failureDetails?: ProbeFailureDetails
   cycles: { pid: number; rendered: string; quit: boolean }[]
   cleanup: { stopped: boolean; failure?: string; launchCompletionUnknown?: true; containment?: 'disposable-runner-teardown' }
 }
@@ -58,63 +87,94 @@ export async function runForwardProbe(app: string, driver: ProbeDriver, timeoutM
   const owned = (entry: ProbeProcess) => entry.executable.startsWith(`${app}/Contents/`)
   let phase = 'initial-launch'
   let launchCompletionUnknown = false
+  let operation: ProbeOperation = 'process-inventory'
+  let category: FailureCategory | undefined
+  let presence: ProbeMainPresence = { freshness: 'unknown' }
+  let expectedPid: number | undefined
+  const call = async <T>(name: ProbeOperation, action: () => Promise<T>): Promise<T> => {
+    operation = name
+    category = undefined
+    if (presence.freshness === 'fresh') presence = { ...presence, freshness: 'stale' }
+    return action()
+  }
+  const inventory = async (signal: AbortSignal): Promise<ProbeProcess[]> => {
+    const entries = await call('process-inventory', () => driver.processes(signal))
+    const expected = entries.find(entry => entry.pid === expectedPid)
+    presence = { freshness: 'fresh', count: entries.filter(entry => entry.executable === main).length,
+      ...(expectedPid === undefined ? {} : { expectedPid, expectedIdentity: expected === undefined ? 'missing' : expected.executable === main ? 'present' : 'replaced' }) }
+    return entries
+  }
+  const refuse = (reason: FailureCategory): never => { category = reason; throw new Error(reason) }
+  const details = (error: unknown, signal: AbortSignal): ProbeFailureDetails => {
+    const subprocess = subprocessFailure(error)
+    return { operation, category: signal.aborted ? 'deadline' : category ?? (operation === 'process-inventory' ? 'process-inventory-error'
+      : subprocess?.timeout === true ? 'subprocess-timeout' : subprocess ? 'subprocess-error' : 'operation-error'),
+    ...(subprocess === undefined ? {} : { subprocess }), mainPresence: { ...presence } }
+  }
   const verify = async (pid: number, signal: AbortSignal): Promise<void> => {
-    if (!(await driver.processes(signal)).some(entry => entry.pid === pid && entry.executable === main)) throw new Error('Native executable identity differs')
+    const entries = await inventory(signal)
+    operation = 'process-identity'
+    const current = entries.find(entry => entry.pid === pid)
+    if (!current) refuse('process-missing')
+    if (current?.executable !== main) refuse('process-replaced')
   }
   const wait = async <T>(observe: () => Promise<T | undefined>, signal: AbortSignal): Promise<T> => {
     for (;;) {
       signal.throwIfAborted()
       const value = await observe()
       if (value !== undefined) return value
-      await delay(100, undefined, { signal })
+      await call('poll', () => delay(100, undefined, { signal }))
     }
   }
   try {
-    if ((await driver.processes(work)).some(owned)) throw new Error('Private application already running')
+    if ((await inventory(work)).some(owned)) refuse('already-running')
     for (const cycle of ['initial', 'reopen']) {
       phase = `${cycle}-launch`
       launchCompletionUnknown = true
-      await driver.launch(work)
+      await call('launch', () => driver.launch(work))
       const pid = await wait(async () => {
-        const matches = (await driver.processes(work)).filter(entry => entry.executable === main)
-        if (matches.length > 1) throw new Error('Native main process is not unique')
+        const matches = (await inventory(work)).filter(entry => entry.executable === main)
+        if (matches.length > 1) refuse('process-not-unique')
         return matches[0]?.pid
       }, work)
+      expectedPid = pid
       launchCompletionUnknown = false
       phase = `${cycle}-accessibility`
       await verify(pid, work)
-      await driver.preflight(pid, work)
+      await call('accessibility-preflight', () => driver.preflight(pid, work))
       phase = `${cycle}-rendered-window`
       const rendered = await wait(async () => {
         await verify(pid, work)
-        const observation = await driver.rendered(pid, work)
+        const observation = await call('accessibility-rendered', () => driver.rendered(pid, work))
         if (observation === 'absent') return undefined
-        if (!observation.startsWith('rendered\tAX')) throw new Error('Unexpected rendered observation')
+        if (!observation.startsWith('rendered\tAX')) refuse('unexpected-output')
         return observation
       }, work)
       const observation = { pid, rendered, quit: false }
       result.cycles.push(observation)
       phase = `${cycle}-ordinary-quit`
       await verify(pid, work)
-      if (await driver.quit(pid, work) !== 'ordinary-menu-quit') throw new Error('Ordinary Quit was not observed')
-      await wait(async () => (await driver.processes(work)).some(owned) ? undefined : true, work)
+      if (await call('ordinary-quit', () => driver.quit(pid, work)) !== 'ordinary-menu-quit') refuse('unexpected-output')
+      await wait(async () => (await inventory(work)).some(owned) ? undefined : true, work)
       observation.quit = true
     }
     result.state = 'observed'
-  } catch {
+  } catch (error) {
+    result.failureDetails = details(error, work)
     result.firstFailure = `${phase}:${work.aborted ? 'deadline' : 'refused'}`
   } finally {
     try {
       await wait(async () => {
-        const remaining = (await driver.processes(cleanup)).filter(owned)
+        const remaining = (await inventory(cleanup)).filter(owned)
         for (const entry of remaining) {
-          const current = (await driver.processes(cleanup)).find(value => value.pid === entry.pid)
-          if (current?.executable === entry.executable) await driver.stop(entry, cleanup)
+          const current = (await inventory(cleanup)).find(value => value.pid === entry.pid)
+          if (current?.executable === entry.executable) await call('owned-process-stop', () => driver.stop(entry, cleanup))
         }
-        return (await driver.processes(cleanup)).some(owned) ? undefined : true
+        return (await inventory(cleanup)).some(owned) ? undefined : true
       }, cleanup)
       result.cleanup.stopped = !launchCompletionUnknown
-    } catch {
+    } catch (error) {
+      result.failureDetails ??= details(error, cleanup)
       result.cleanup.failure = cleanup.aborted ? 'deadline' : 'identity-or-termination-refused'
       result.firstFailure ??= 'cleanup:refused'
       result.state = 'blocked'

@@ -11,5 +11,5 @@ it('preserves root ownership and the first failure through the actual CLI module
     fileURLToPath(new URL('./fixtures/forward-native-probe-cli.mjs', import.meta.url))], {
     env: { PATH: process.env.PATH }, timeout: 20_000,
   })
-  expect(object(JSON.parse(result.stdout)).results).toHaveLength(5)
+  expect(object(JSON.parse(result.stdout)).results).toHaveLength(6)
 })
