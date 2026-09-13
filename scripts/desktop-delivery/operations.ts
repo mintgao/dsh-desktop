@@ -86,12 +86,14 @@ export function resolveMainReviewPolicy(config: DeliveryConfig): 'independent-re
   return config.mainReviewPolicy ?? 'independent-review'
 }
 /** HTTP implementation with GET retries only; ambiguous writes are never blindly retried.
+ * Actions archives use GitHub JSON negotiation; release assets use octet-stream.
  * @param token - optional GitHub token, retained only in request headers.
  * @returns Real HTTP adapter.
  */
 export function github(token: string | undefined): GitHub {
   return { async request(method, path, body) {
     const download = method === 'DOWNLOAD'
+    const artifactArchive = /^\/repos\/[^/]+\/[^/]+\/actions\/artifacts\/[0-9]+\/zip$/u.test(path)
     if (download) method = 'GET'
     const url = path.startsWith('https://uploads.github.com/') ? path : `https://api.github.com${path}`
     if (!path.startsWith('/') && !path.startsWith('https://uploads.github.com/repos/')) throw new Error('Unsupported GitHub endpoint')
@@ -100,7 +102,7 @@ export function github(token: string | undefined): GitHub {
       try {
         response = await fetch(url, {
           method, redirect: download ? 'manual' : 'error', signal: AbortSignal.timeout(30_000),
-          headers: { Accept: download ? 'application/octet-stream' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }), ...(body instanceof Uint8Array ? { 'Content-Type': 'application/octet-stream' } : { 'Content-Type': 'application/json' }) },
+          headers: { Accept: download && !artifactArchive ? 'application/octet-stream' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }), ...(body instanceof Uint8Array ? { 'Content-Type': 'application/octet-stream' } : { 'Content-Type': 'application/json' }) },
           ...(body === undefined ? {} : { body: body instanceof Uint8Array ? Buffer.from(body) : JSON.stringify(body) }),
         })
       } catch (error) {
