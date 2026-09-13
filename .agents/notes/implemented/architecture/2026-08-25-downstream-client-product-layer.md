@@ -29,6 +29,8 @@ Every proposed product feature starts with a short feature record that names the
 
 Feature delivery keeps three review units explicit: the reusable plugin or provider, the product composition change that enables it, and product-level acceptance evidence. Non-trivial decisions receive an Agent Note; user-visible behavior receives a keyless snapshot through the real composition; native integration additionally receives focused platform tests. Release notes describe the product outcome without making the Electron shell the feature owner.
 
+The [versioned assembly decision](../../../../docs/decisions/20260913-desktop-versioned-assembly.md) extends this ownership rule to physical delivery: official runtime bytes remain unmodified, while Mint extensions have separate tarball identities. The native shell verifies the assembled payload and initializes its custom profile through public DSH APIs.
+
 ## Alternatives considered
 
 **Put product behavior directly in the Electron main process.** This is appropriate for window and application lifecycle but would force the shell to duplicate session ancestry, completion, reconnect, and interaction semantics. It also makes the same feature unavailable to other DSH clients.

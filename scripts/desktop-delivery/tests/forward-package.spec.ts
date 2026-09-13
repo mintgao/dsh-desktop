@@ -48,6 +48,7 @@ function fixture() {
   const commit = git(root, 'rev-parse', 'HEAD')
   const candidate = { ...shadow, kind: 'candidate', distribution: config.id, qualificationEligible: true, downstreamCommit: commit,
     configDigest: digest(readFileSync(configPath)), sourceLockDigest: digest(forwardBytes(lock)), upstream,
+    assemblyInput: { descriptorDigest: digest('synthetic descriptor'), lockDigest: digest('synthetic lock'), runtimeVersion: policy.upstreamVersion },
     desktopVersion: policy.upstreamVersion, components: { '@deepseek-ai/dsh': policy.upstreamVersion },
     sourceDifference: { status: '', trackedDiffDigest: digest('') } }
   put(join(directory, 'input-candidate.json'), candidate)
@@ -56,6 +57,7 @@ function fixture() {
   const native = { schemaVersion: 1, purpose: 'desktop-release-native-evidence', mode: 'unsigned-preview', qualificationEligible: true,
     candidateDigest: digest(forwardBytes(candidate)), desktopVersion: policy.targetVersion, architecture: 'arm64', executableArchitectures: 'arm64',
     dmgDigest: digest('synthetic DMG'), packagedRuntimeDigest: digest('synthetic runtime'),
+    assembly: { ...candidate.assemblyInput, digest: digest('synthetic receipt'), components: { '@deepseek-ai/dsh': { version: policy.upstreamVersion, source: 'official', integrity: 'sha512-YWJjZA==' } } },
     ...Object.fromEntries(['bootstrap', 'backendHttp', 'backendStopped', 'mountedReadOnly', 'detached', 'copiedInstallation', 'installationStopped', 'installationRemoved'].map(key => [key, true])) }
   put(join(directory, 'native-arm64.json'), native)
   put(join(directory, 'baseline.json'), { purpose: 'desktop-legacy-baseline', repository: config.repository, upstream,

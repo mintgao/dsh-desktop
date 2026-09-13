@@ -15,7 +15,7 @@ import { mutateRelease, promotionPlan, retainedBundle, preparePublication } from
 
 const mintConfig = deliveryConfig(resolve('.github/desktop-delivery/mint.json'))
 // Historical publication fixtures retain their original two-architecture policy.
-const config = { ...mintConfig, architectures: ['arm64', 'x64'] as ('arm64' | 'x64')[] }
+const config = { ...mintConfig, assemblyRequired: false, architectures: ['arm64', 'x64'] as ('arm64' | 'x64')[] }
 const temporary: string[] = []
 afterEach(() => { for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true }) })
 function directory(): string { const path = mkdtempSync(join(tmpdir(), 'delivery-payload-')); temporary.push(path); return path }

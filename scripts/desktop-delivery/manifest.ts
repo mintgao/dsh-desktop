@@ -9,7 +9,7 @@ import { migrationPolicy } from './migration-evidence.ts'
 import { assessmentAsset, assessmentFiles, gitEvidence } from './catch-up.ts'
 import { deliveryPredecessor, requireUnsignedVersion } from './lineage.ts'
 import { checkArchitecture } from './artifacts.ts'
-import { readCandidate } from './candidate.ts'
+import { candidateComponentsMatch, requireAssemblyInput, validateCandidateAssembly, readCandidate } from './candidate.ts'
 import { git, verifyFinalization } from './adoption.ts'
 import { assetPath, catchUpEvidence, digest, hex, object, readJson, sameRelease, release, string, textField } from './evidence.ts'
 import type { DeliveryConfig } from './operations.ts'
@@ -135,7 +135,7 @@ export function releaseManifest(config: DeliveryConfig, configPath: string, inpu
   } else if (input.migrationNames !== undefined && input.migrationNames.length > 0) throw new Error('Unexpected migration reports for unchanged formats')
   const result = {
     schemaVersion: 2, catchUp: lock.catchUp ?? null, purpose: 'desktop-release-qualification', mode: 'unsigned-preview', repository: config.repository, repositoryId: config.repositoryId, distribution: config.id,
-    releaseKind: input.releaseKind, ...(input.releaseKind === 'replacement' ? { supersedes: { tag: prior.tag, manifestDigest: digest(predecessorBytes) } } : {}), desktopVersion: input.version, tag: `desktop-v${input.version}`, upstream: lock.release, downstreamCommit: commit, sourceLockDigest: candidate.record.sourceLockDigest, configDigest: candidate.record.configDigest, componentVersions: candidate.record.components,
+    releaseKind: input.releaseKind, ...(input.releaseKind === 'replacement' ? { supersedes: { tag: prior.tag, manifestDigest: digest(predecessorBytes) } } : {}), desktopVersion: input.version, tag: `desktop-v${input.version}`, upstream: lock.release, downstreamCommit: commit, sourceLockDigest: candidate.record.sourceLockDigest, configDigest: candidate.record.configDigest, componentVersions: candidate.record.assemblyInput === undefined ? candidate.record.components : Object.fromEntries(Object.entries(object(object(readJson(assetPath(input.directory, string(object(object(native[0]).evidence).name)))).assembly).components as Record<string, { version: string }>).filter(([name]) => !name.startsWith('node_modules/')).map(([name, component]) => [name, component.version])),
     workflow: { path: '.github/workflows/desktop-delivery-qualify.yml', commit: input.run.commit, runId: input.run.id, attempt: input.run.attempt },
     predecessor: input.releaseKind === 'replacement' ? predecessor : { ...predecessor, digest: digest(predecessorBytes) },
     native, ...(migration === undefined ? {} : { migration }), candidateDigest: candidate.digest,
@@ -185,10 +185,11 @@ export function checkedManifest(config: DeliveryConfig,
   for (const name of ['candidate.json', 'release-notes.md', 'data-compatibility.json', 'SHA256SUMS.txt', 'predecessor.json']) if (!names.has(name)) throw new Error(`Missing ${name}`)
   if (file(directory, 'candidate.json').sha256 !== manifest.candidateDigest || file(directory, 'release-notes.md').sha256 !== manifest.releaseNotesDigest || file(directory, 'data-compatibility.json').sha256 !== manifest.dataCompatibilityDigest) throw new Error('Manifest evidence digest mismatch')
   const candidate = object(readJson(assetPath(directory, 'candidate.json')))
+  requireAssemblyInput(config, candidate)
   if (candidate.purpose !== 'desktop-delivery-shadow' || candidate.kind !== 'candidate' || candidate.qualificationEligible !== true || object(candidate.sourceDifference).status !== ''
     || candidate.downstreamCommit !== manifest.downstreamCommit || candidate.sourceLockDigest !== manifest.sourceLockDigest
     || candidate.configDigest !== manifest.configDigest || !sameRelease(release(candidate.upstream), release(manifest.upstream))
-    || JSON.stringify(candidate.components) !== JSON.stringify(manifest.componentVersions)) throw new Error('Candidate source identity differs from final manifest')
+    || !candidateComponentsMatch(candidate, manifest.componentVersions)) throw new Error('Candidate source identity differs from final manifest')
   const checksum = manifest.native.map(object).map(entry => object(entry.dmg)).map(dmg => `${string(dmg.sha256)}  ${string(dmg.name)}`).sort().join('\n') + '\n'
   if (readFileSync(assetPath(directory, 'SHA256SUMS.txt'), 'utf8') !== checksum) throw new Error('Checksum convenience file differs from approved DMGs')
   const compatibility = object(readJson(assetPath(directory, 'data-compatibility.json')))
@@ -214,6 +215,7 @@ export function checkedManifest(config: DeliveryConfig,
     if (dmg.name !== `${config.assetPrefix}-${string(manifest.desktopVersion)}-${arch}.dmg`) throw new Error('DMG name does not match desktop release reader')
     const native = object(readJson(assetPath(directory, string(evidence.name))))
     if (native.schemaVersion !== 1 || native.mode !== 'unsigned-preview' || native.purpose !== 'desktop-release-native-evidence' || native.candidateDigest !== manifest.candidateDigest || native.dmgDigest !== dmg.sha256 || native.architecture !== arch || native.desktopVersion !== manifest.desktopVersion || native.qualificationEligible !== true) throw new Error('Native qualification identity mismatch')
+    validateCandidateAssembly(candidate, native, manifest.componentVersions)
     checkArchitecture(string(native.executableArchitectures), arch)
     for (const key of ['bootstrap', 'backendHttp', 'backendStopped', 'mountedReadOnly', 'detached', 'copiedInstallation', 'installationStopped', 'installationRemoved']) if (native[key] !== true) throw new Error('Native qualification check failed')
   }

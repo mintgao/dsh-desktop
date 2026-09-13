@@ -138,7 +138,7 @@ Real-API tests and demos read `DEEPSEEK_API_KEY`, optional `DEEPSEEK_BASE_URL`, 
 - **Waterfall listeners MUST call `next()`** to delegate; returning without it short-circuits the chain ([semantics](docs/cordis-primer.md#cordis-waterfall-semantics)).
 - **Model-visible ⟺ logged**: anything that reaches a model request must be reconstructable from the session log; a new model-visible input requires a session event.
 - **Plugins, not loop changes**: new behavior goes on documented extension points; changing `agent-loop` requires updating docs/architecture.md.
-- **Downstream:** follow [policy](docs/context/downstream-policy.md) and [plugin-placement workflow](.agents/skills/dsh-mint-client-feature/SKILL.md) for all requirements.
+- **Downstream:** enforce [policy](docs/context/downstream-policy.md), [plugin placement](.agents/skills/dsh-mint-client-feature/SKILL.md), and [versioned assembly](docs/context/downstream-policy.md#versioned-desktop-assembly).
 - **Desktop signing:** follow the [staged release decision](.agents/notes/implemented/process/2026-08-27-pre-certificate-unsigned-desktop-previews.md).
 - **A capability seam comprises Service Definition / Service Provider / Consumer roles.** It is complete, never one role; split only when roles evolve independently ([glossary](docs/glossary.md#capability-seam)).
 - **Prefer maintained dependencies over hand-rolling** when they genuinely delete owned code and tests ([policy](.agents/notes/implemented/process/2026-07-26-dependencies-over-hand-rolling.md)).

@@ -28,7 +28,7 @@ pnpm run desktop:app:mac
 
 Mint 仅支持 Apple Silicon；[架构决策](../../docs/decisions/20260913-mint-arm64-scope.zh.md)将 Intel 支持延后。将命令中的 `app` 替换为 `dmg` 即可生成本地 DMG。默认结果位于 `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`。
 
-每条命令都会执行官方客户端构建，打包当前本地 DSH 与 vendored 包，向隔离的资源目录安装选定运行时闭包，拒绝逃逸该目录的链接，再调用 electron-builder。因此，尚未发布的本地后端变更会进入应用，而不会被 npm 上的同版本替换。
+打包流程从 `runtime/package-lock.json` 安装冻结的官方 npm 运行时，核对其 tarball 文件内容，再加入单独打包的 Mint 扩展。原生外壳嵌入组装凭据摘要，并在启动前拒绝缺失或变化的文件。`runtime/assembly-input.json` 标识支持的上游版本与完整性；修改本地上游源码不会改变打包运行时。 只有冻结依赖图证明平台排除且安装清单一致时，才允许缺少被平台排除的可选依赖。每个已安装包仍接受完整 tarball 载荷核验，包括 npm 保留的可选后代。必需或已选包缺失会拒绝组装；[平台选择](../../docs/decisions/20260913-desktop-versioned-assembly.zh.md#frozen-platform-selection)定义具体检查。
 
 本地命令会关闭签名身份自动发现，也不会发布 Release。Electron 43 无法从未签名或 ad-hoc 签名的应用发送 macOS 通知，因此本地产物和申请证书前的公开预览版都不能验证任务通知或其他依赖稳定应用身份的原生能力；这些验收必须使用经过 Developer ID 签名与公证的产物。可以使用以下命令为当前用户安装本地 Apple Silicon 版本：
 
@@ -38,7 +38,7 @@ ditto "apps/desktop-mint/dist/mac-arm64/DSH Desktop.app" "$HOME/Applications/DSH
 
 ## 运行时行为
 
-Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh --profile desktop-mint --no-open --port 0`。这个 Profile 会在用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 Mint 产品 Bundle。壳接受标准回环根就绪 URL，包括单个认证令牌，并为窗口保留该 URL。后端诊断和启动错误会对查询值脱敏。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
+Electron 主进程以 Node 模式运行自己的可执行文件，带上应用内 CLI 与 `dsh --profile desktop-mint --no-open --port 0`。外壳通过已安装 DSH 的公开 API 原子初始化新的 Profile。现有清单、补丁和依赖保持不变；不完整的 profile、中断的初始化和冲突的软件包会明确失败。这个 Profile 会在用户 patch 之前依次组合 `dsh-base`、共享 Web Bundle 和 Mint 产品 Bundle。壳接受标准回环根就绪 URL，包括单个认证令牌，并为窗口保留该 URL。后端诊断和启动错误会对查询值脱敏。就绪行出现前持续展示启动页；Mint 海洋场景分别驱动鲸鱼、海面、气泡与进度水流，减少动态效果偏好则显示静态鲸鱼与进度状态。启动失败或后端意外退出时显示原生错误对话框。关闭最后一个窗口时，先以 `SIGTERM` 停止后端；若超过限定宽限期，再使用 `SIGKILL`。第二次启动应用会聚焦已有窗口。
 
 后端日志位于 `~/Library/Logs/DSH Desktop/backend.log`。外部 HTTP 与 HTTPS 链接会在系统浏览器中打开。同源应用导航留在 DSH 窗口内；新窗口与其他所有 scheme 均被拒绝。
 
@@ -129,7 +129,7 @@ gh workflow run desktop-release-withdraw.yml \
 
 ## 开发职责
 
-[`src/backend.ts`](src/backend.ts) 持有就绪解析与有界进程关闭。[`src/navigation.ts`](src/navigation.ts) 是纯 URL 策略。[`src/updates.ts`](src/updates.ts) 持有签名更新决策，[`src/electron-updates.ts`](src/electron-updates.ts) 适配签名传输。[`src/manual-updates.ts`](src/manual-updates.ts) 持有预览版提醒，[`src/github-releases.ts`](src/github-releases.ts) 校验公开 Release API，[`src/manual-update-preferences.ts`](src/manual-update-preferences.ts) 以原子方式保存相应选择。[`src/main.ts`](src/main.ts) 根据应用版本选择通道并持有原生展示。[`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) 暂存由源码构建的运行时闭包；[`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) 校验并合并签名版的分架构元数据；[`electron-builder.yml`](electron-builder.yml) 持有 macOS bundle 布局与公开更新源身份。运行 `pnpm run test:desktop` 可执行聚焦的桌面测试。
+[`src/backend.ts`](src/backend.ts) 持有就绪解析与有界进程关闭。[`src/navigation.ts`](src/navigation.ts) 是纯 URL 策略。[`src/updates.ts`](src/updates.ts) 持有签名更新决策，[`src/electron-updates.ts`](src/electron-updates.ts) 适配签名传输。[`src/manual-updates.ts`](src/manual-updates.ts) 持有预览版提醒，[`src/github-releases.ts`](src/github-releases.ts) 校验公开 Release API，[`src/manual-update-preferences.ts`](src/manual-update-preferences.ts) 以原子方式保存相应选择。[`src/main.ts`](src/main.ts) 根据应用版本选择通道并持有原生展示。[`../../scripts/prepare-desktop-backend.ts`](../../scripts/prepare-desktop-backend.ts) 暂存已校验的官方运行时与单独打包的 Mint 扩展；[`../../scripts/merge-desktop-update-metadata.ts`](../../scripts/merge-desktop-update-metadata.ts) 校验并合并签名版的分架构元数据；[`electron-builder.yml`](electron-builder.yml) 持有 macOS bundle 布局与公开更新源身份。运行 `pnpm run test:desktop` 可执行聚焦的桌面测试。执行 `pnpm run desktop:stage` 后，运行 `pnpm run test:desktop:assembly`，可在合成数据目录中测试实际安装的 Host 与 Client。在 macOS 上，`pnpm run test:desktop:packaged -- "/path/to/DSH Desktop.app/Contents/MacOS/DSH Desktop"` 使用隔离的原生路径检查编译后的启动入口，并验证 CLI 覆盖会在时限内被拒绝并退出。这些脚本使用 `.node-version` 选定的 Node 版本。
 
 运行时决策与备选方案记录在 [Electron 桌面壳](../../.agents/notes/implemented/feature/2026-08-24-electron-desktop-shell.zh.md)。两种更新生命周期分别记录在[预览版手工更新提醒](../../.agents/notes/implemented/feature/2026-08-24-desktop-manual-preview-updates.zh.md)与[由用户控制的桌面版签名更新](../../.agents/notes/implemented/feature/2026-08-24-desktop-signed-auto-update.zh.md)。仓库模型记录在 [Mint 桌面下游开发](../../.agents/notes/implemented/process/2026-08-24-mint-desktop-downstream-development.zh.md)中；[申请证书前的未签名桌面预览版](../../.agents/notes/implemented/process/2026-08-27-pre-certificate-unsigned-desktop-previews.zh.md)持有默认信任阶段，[自动引入上游并发布桌面版](../../.agents/notes/implemented/process/2026-08-27-automatic-upstream-desktop-releases.zh.md)持有引入、发布、撤回和跨 Agent 记录。
 

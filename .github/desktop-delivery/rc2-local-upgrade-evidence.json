@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "scope": "Published alpha.2 unsigned.2 to unchanged local RC.2 assembled application using private synthetic data; final CI/public artifact and installed-user acceptance are separate.",
+  "status": "verified",
+  "baseline": {
+    "tag": "desktop-v0.1.5-alpha.2.unsigned.2",
+    "dmgSha256": "e6fcc6ab31161d22628cee807e042fbf96850b6f7822fd14a68ab0aee292fc1d"
+  },
+  "target": {
+    "runtimeVersion": "0.1.5-rc.2",
+    "appAsarSha256": "d91e5a66638fa1fc64ddc1762bc27e7a4e6a6e20336fd774a238d76296d33184",
+    "assemblyReceiptSha256": "ef5db71ff7ac3c4bba190b7b052a5c4d5ddecd9265eff89d53ac38e441b94ea2"
+  },
+  "observations": [
+    "A creates genuine persisted history through the public services and native composer. B displays A history, continues it, and retains both conversations after ordinary restart.",
+    "All 9 selected existing settings, profile, workspace and sentinel files remain byte-identical to the stopped A inventory. History correctly appends new turns.",
+    "Three ordinary native quits complete with no remaining fixture process. The final log contains 58 events and completed assistant/message and turn/end records.",
+    "After-use verification accepts all 25484 installed payload files. No real credentials or user data are involved."
+  ],
+  "limitations": [
+    "Deterministic local provider; no real model connectivity claim.",
+    "No intermediate Desktop artifact or arbitrary historical format migration certified.",
+    "Exact final CI artifact and actual installation require independent acceptance before release completion."
+  ],
+  "retainedLocalEvidence": [
+    {
+      "path": "run.mjs",
+      "sha256": "be25a2b6d697eeebcf1810dcdcecee4a3eca2de81670e0a85ca18369f0c32a12",
+      "bytes": 5359
+    },
+    {
+      "path": "after-use.json",
+      "sha256": "9cc0928b5d4387f705b25904705b290170bfa7190e2f26ebf23ef1873e5e956d",
+      "bytes": 54
+    },
+    {
+      "path": "private/native-observer.mjs",
+      "sha256": "cc51e5a2deeed7e53ec05c4165a2175cbd7f24f7616d00f82a38279a88efb3e4",
+      "bytes": 7405
+    },
+    {
+      "path": "private/A-data-inventory.json",
+      "sha256": "ab03c4eeb4f7c11026095edd3a25cce28760e888f932ba7426f2ec6db6d4c6e8",
+      "bytes": 3574
+    },
+    {
+      "path": "private/retention.json",
+      "sha256": "137ee421ef86a87ff75b973ffc56d29f235745356153f40af88c4e53a9f1655c",
+      "bytes": 1159
+    },
+    {
+      "path": "private/A-result.json",
+      "sha256": "745dc61eef53982549277a22e8e4fe02075ab7135829bdaa041b96e9a64a8c33",
+      "bytes": 1837
+    },
+    {
+      "path": "private/B-result.json",
+      "sha256": "62f2538ecbd453bc4ada9cef8c2b4fac8f7c87f19c2af0648599fd97a4fe30b9",
+      "bytes": 1961
+    },
+    {
+      "path": "private/B-reopen-result.json",
+      "sha256": "eea05f9726754f17af7fbaa66d0cabbc1bda81f37e07954eb2fc907dda9a894a",
+      "bytes": 2069
+    },
+    {
+      "path": "private/evidence/A-conversation.png",
+      "sha256": "c46416f206c9b4fbb4f8919f9d84d077e581c59de705799e6ced9698de9114a1",
+      "bytes": 163590
+    },
+    {
+      "path": "private/evidence/B-conversation.png",
+      "sha256": "7febc5f625d82df4eb275bf5605d12f952795a0c0e592b55166fae40322e18e4",
+      "bytes": 174380
+    },
+    {
+      "path": "private/evidence/B-reopen-conversation.png",
+      "sha256": "e305eba9e0e5536f4d92f30525716306d652418a1292c0832a9c6f56bab805ad",
+      "bytes": 181619
+    },
+    {
+      "path": "private/evidence/live-qualification-native-selected.json",
+      "sha256": "f3738d16c636e6834f6ace6a7648570121dc987e0cb01d01b61792e99174d994",
+      "bytes": 180839
+    },
+    {
+      "path": "B-evidence/native-agent-ready.json",
+      "sha256": "857866009b0c77fef5686bd0ba71bdc06c9362e50722bc721d56c32b9a5306cb",
+      "bytes": 149169
+    }
+  ]
+}

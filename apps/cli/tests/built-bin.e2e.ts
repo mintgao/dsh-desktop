@@ -1020,23 +1020,8 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       expect(stdout).toContain('agents: []')
       expect(stdout).toContain('# == @deepseek-ai/dsh-base')
       expect(stdout).toContain("name: '@deepseek-ai/dsh-host-webserver'")
-      expect(stdout).not.toContain("name: '@deepseek-ai/dsh-client-ui-session-notifications'")
       expect(existsSync(join(home, 'profiles', 'node_modules'))).toBe(false)
-    }, 30_000)
-
-    it('prints the Mint product layer after the shared Web bundles', async () => {
-      const { stdout, code, stderr } = await runBuiltBin(
-        ['--profile', 'desktop-mint', '--dump-default-config'],
-        { DSH_HOME: home },
-      )
-      expect(code).toBe(0)
-      expect(stderr).toBe('')
-      expect(stdout).toContain('# == @deepseek-ai/dsh-base')
-      expect(stdout).toContain('# == @deepseek-ai/dsh-web-app')
-      expect(stdout).toContain('# == @deepseek-ai/dsh-desktop-mint')
-      expect(stdout.match(/name: '@deepseek-ai\/dsh-client-ui-session-notifications'/gu)).toHaveLength(1)
-      expect(stdout).toContain('defaultMode: background')
-    }, 30_000)
+    }, SPAWN_TIMEOUT_MS + 30_000)
 
     it('creates a custom profile from a shipped template before printing it', async () => {
       const { stdout, code, stderr } = await runBuiltBin(

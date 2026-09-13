@@ -8,6 +8,7 @@ import { resolve } from 'node:path'
 import { bootstrapResponsePath, prepareBootstrapProtection } from './bootstrap-protection.ts'
 import { probePlan, probeDraft } from './probe.ts'
 import { releaseFamily } from '../release/families.ts'
+import { MINT_PACKAGES } from '../desktop-assembly.ts'
 import { capture } from '../release/process.ts'
 import { bootstrapAdoption, bootstrapPlan } from './bootstrap.ts'
 import { releaseManifest } from './manifest.ts'
@@ -57,7 +58,8 @@ export async function reviewedCommand(operation: string, values: Record<string, 
   if (operation === 'adoption-prepare') {
     const plan = approvedPlan(required('plan'), required('digest'), operation, config)
     return prepareAdoption(config, root, plan, required('checkout'), (cwd, environment) => {
-      for (const id of ['dsh', 'vendor']) { const family = releaseFamily(id); family.verifyVersions(family.members(cwd)) }
+      const mintDirectories = new Set<string>(MINT_PACKAGES)
+      for (const id of ['dsh', 'vendor']) { const family = releaseFamily(id); family.verifyVersions(family.members(cwd).filter(member => !mintDirectories.has(member.directory))) }
       capture('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], { cwd, env: environment })
       for (const name of ['check-workspace-constraints.ts', 'verify-package-dependencies.ts']) capture(process.execPath, ['--import', 'tsx', resolve(cwd, 'scripts', name)], { cwd, env: environment })
       return Promise.resolve()

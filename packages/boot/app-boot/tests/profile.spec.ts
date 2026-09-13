@@ -202,11 +202,7 @@ describe('loadProfile', () => {
   })
 
   it('auto-initializes only shipped templates and fails loud otherwise', () => {
-    const anchor = stageInstallation({
-      '@deepseek-ai/dsh-base': { patch: '[]\n' },
-      '@deepseek-ai/dsh-web-app': { patch: '[]\n' },
-      '@deepseek-ai/dsh-desktop-mint': { patch: '[]\n' },
-    })
+    const anchor = stageInstallation({})
     const home = tmp()
     expect(() => loadProfile('t', 'custom', anchor, home))
       .toThrow('profile "custom" does not exist')
@@ -228,14 +224,6 @@ describe('loadProfile', () => {
       bundles: ['@deepseek-ai/dsh-sdk-minimal'],
       patchReload: 'startup',
     })
-    expect(PROFILE_TEMPLATES['desktop-mint']).toEqual({
-      bundles: [
-        '@deepseek-ai/dsh-base',
-        '@deepseek-ai/dsh-web-app',
-        '@deepseek-ai/dsh-desktop-mint',
-      ],
-      patchReload: 'live',
-    })
     try {
       loadProfile('t', 'web', anchor, home)
     } catch {
@@ -244,11 +232,6 @@ describe('loadProfile', () => {
     expect(readProfileManifest('t', resolveProfileDir('web', home)).dsh?.profile?.bundles)
       .toEqual([...PROFILE_TEMPLATES.web?.bundles ?? []])
     expect(readProfileManifest('t', resolveProfileDir('web', home)).dsh?.profile?.patchReload)
-      .toBe('live')
-    const desktop = loadProfile('t', 'desktop-mint', anchor, home)
-    expect(desktop.layers.map(layer => layer.packageName))
-      .toEqual(PROFILE_TEMPLATES['desktop-mint']?.bundles)
-    expect(readProfileManifest('t', resolveProfileDir('desktop-mint', home)).dsh?.profile?.patchReload)
       .toBe('live')
   })
 

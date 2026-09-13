@@ -1,8 +1,11 @@
 /** Experimental-package publication and dependency constraints. */
 
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { MINT_PACKAGES } from './desktop-assembly.ts'
 import {
   checkDshFamilyVersion,
+  checkWorkspaceManifest,
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
   expectedDshPackageFiles,
@@ -142,4 +145,16 @@ describe('package payload constraints', () => {
       'lib/types/**/*.d.ts',
     ])
   })
+})
+
+
+it('allows independent Mint versions only at their owned directories and keeps publication checks', () => {
+  for (const dir of MINT_PACKAGES) {
+    const manifest = JSON.parse(readFileSync(`${dir}/package.json`, 'utf8')) as WorkspaceManifest['manifest']
+    manifest.version = '8.7.6'
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    expect(checkWorkspaceManifest({ dir: `${dir}-other`, manifest }).some(error => error.includes('version must match root'))).toBe(true)
+    expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, publishConfig: { access: 'private' } } })).not.toEqual([])
+  }
+  expect(checkWorkspaceManifest({ dir: 'packages/core/session', manifest: { name: '@deepseek-ai/dsh-session', version: '8.7.6' } }).some(error => error.includes('version must match root'))).toBe(true)
 })

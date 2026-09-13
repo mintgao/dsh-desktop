@@ -197,10 +197,14 @@ it('accepts stable-base and prerelease-base unsigned SemVer while rejecting disg
 // Two CLI children each have a 30-second deadline; Git preparation and cleanup share the outer budget.
 it('runs actual CLI preparation with an isolated fixture checkout and preserves explicit version failures', async () => {
   const fixture = repository()
-  for (const path of ['packages/cli/main', 'vendor/fixture', 'scripts']) mkdirSync(join(fixture.root, path), { recursive: true })
+  for (const path of ['packages/cli/main', 'packages/bundle/desktop-mint', 'packages/client/ui-session-notifications', 'vendor/fixture', 'scripts']) mkdirSync(join(fixture.root, path), { recursive: true })
   store(join(fixture.root, 'package.json'), { name: 'desktop-cli-fixture', version: '1.0.0-alpha.1', private: true, type: 'module', devDependencies: { tsx: `link:${resolve('node_modules/tsx')}` } })
   store(join(fixture.root, 'packages/cli/main/package.json'), { name: '@deepseek-ai/dsh', version: '1.0.0-alpha.1' })
   store(join(fixture.root, 'vendor/fixture/package.json'), { name: '@deepseek-ai/vendor-fixture', version: '1.0.0' })
+  store(join(fixture.root, 'packages/bundle/desktop-mint/package.json'), { name: '@deepseek-ai/dsh-desktop-mint', version: '0.4.0' })
+  store(join(fixture.root, 'packages/client/ui-session-notifications/package.json'), { name: '@deepseek-ai/dsh-ui-session-notifications', version: '0.7.0' })
+  // The frozen local-link fixture must not wait for pnpm's registry update check.
+  writeFileSync(join(fixture.root, 'pnpm-workspace.yaml'), 'updateNotifier: false\n')
   writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), `lockfileVersion: '9.0'\nsettings:\n  autoInstallPeers: true\n  excludeLinksFromLockfile: false\nimporters:\n  .:\n    devDependencies:\n      tsx:\n        specifier: link:${resolve('node_modules/tsx')}\n        version: link:${resolve('node_modules/tsx')}\n`)
   writeFileSync(join(fixture.root, '.gitignore'), 'node_modules/\n')
   for (const name of ['check-workspace-constraints.ts', 'verify-package-dependencies.ts']) writeFileSync(join(fixture.root, 'scripts', name), 'import assert from "node:assert/strict"; assert.equal(process.env.GH_TOKEN, undefined)\n')

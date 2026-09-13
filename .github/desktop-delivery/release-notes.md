@@ -1,13 +1,13 @@
-# DSH Desktop Mint unsigned preview
+# DSH Desktop Mint RC.2 unsigned preview
 
-This candidate fixes desktop startup when the local backend returns an authenticated readiness address. Startup diagnostics remove authentication query values.
+This release adopts DSH 0.1.5-rc.2 and delivers the official frozen runtime, independently packaged Mint plugins and native shell as one Desktop update. Packaged startup checks exact inputs and plugin loading; normal startup does not install packages. Public alpha.2-to-RC.2 session and cache formats are unchanged. Existing profiles and sessions are retained.
 
-The desktop application remains one update. This preview supports Apple Silicon Macs only. Download the DMG, quit DSH Desktop and replace the application manually. This unsigned preview has no Apple notarization and does not enable signed automatic updates. macOS may require an explicit Open Anyway confirmation.
+This preview supports Apple Silicon Macs only. Quit DSH Desktop and replace it with the downloaded DMG application. It is unsigned and not Apple-notarized; signed automatic updates and notification capabilities requiring signed identity are unavailable. macOS may require an explicit Open Anyway confirmation. Keep an application and stopped-data backup; do not run an older version on upgraded data.
 
 ---
 
-# DSH Desktop Mint 未签名预览
+# DSH Desktop Mint RC.2 未签名预览
 
-此候选修复本地后端返回带认证的就绪地址时桌面端无法启动的问题。启动诊断会移除认证查询值。
+此版本采用 DSH 0.1.5-rc.2，将冻结的官方运行时、独立打包的 Mint 插件和原生外壳作为一次 Desktop 更新交付。打包后的启动会检查精确输入和插件加载；正常启动不安装软件包。从公开 alpha.2 到 RC.2 的会话和缓存格式没有变化，保留已有配置档案和会话。
 
-桌面应用仍作为一次更新交付。此预览仅支持 Apple Silicon Mac。下载 DMG，退出 DSH Desktop 后手动替换应用。此未签名预览没有 Apple 公证，不启用签名自动更新。macOS 可能要求明确选择“仍要打开”。
+此预览仅支持 Apple Silicon Mac。退出 DSH Desktop，用下载的 DMG 中的应用替换。该版本未签名、未经 Apple 公证，不能使用签名自动更新和依赖签名身份的通知能力。macOS 可能要求明确选择“仍要打开”。保留应用及停止写入后的数据备份；不要用旧版本打开升级后的数据。
