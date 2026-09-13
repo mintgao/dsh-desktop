@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "purpose": "desktop-forward-native-capability",
+  "architecture": "x64",
+  "repository": "mintgao/dsh-desktop",
+  "repositoryId": 1344813014,
+  "runId": 34490381479,
+  "runAttempt": 1,
+  "workflow": ".github/workflows/desktop-delivery-qualify.yml",
+  "artifactId": 10158733937,
+  "sourceCommit": "825507dd9ca79ea95a32854f3914ac8dc1cb422c",
+  "archive": { "size": 181909327, "sha256": "7600099b2ddc1e7d5eb715b64fa3d6b609051db380700a946e16d14ee9890f2c" },
+  "candidate": { "name": "candidate.json", "size": 16749, "sha256": "e43bed768f5a9512feda4c3c0887832d809b2f0a27b025b8604d1377a4c60904" },
+  "native": { "name": "native-x64.json", "size": 835, "sha256": "ce6f0d01e16003fa132952094b926f68a57ce309bb06e1772b7d3d90f16ab785" },
+  "dmg": { "name": "DSH-Desktop-Mint-0.1.5-alpha.2.unsigned.1-x64.dmg", "size": 180754956, "sha256": "910aa3a0d838f21ca56685ade6f2a25e2b917e144403a4ad83bacd3f8bf24190" },
+  "runtimeDigest": "55a81c1ff72d1dbd3d3c36c9575a3a92558568d5a1b61f260e89baa521aab775"
+}

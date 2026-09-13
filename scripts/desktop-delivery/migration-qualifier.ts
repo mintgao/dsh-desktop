@@ -38,7 +38,12 @@ function command(name: string, args: string[], home: string): void {
   if (result.status !== 0 || result.signal !== null || result.error) throw new Error(`${name} failed: ${String(result.error)} ${result.stderr}`)
 }
 
-async function withCopiedApp<T>(dmg: string, action: (app: string) => Promise<T>): Promise<T> {
+/** Stage an immutable private application copy, retaining failed fixtures for assessment.
+ * @param dmg - Authenticated installer path.
+ * @param action - Bounded caller that stops every owned process before returning.
+ * @returns Caller result after checking runtime immutability.
+ */
+export async function withCopiedApp<T>(dmg: string, action: (app: string) => Promise<T>): Promise<T> {
   const root = mkdtempSync(join(tmpdir(), 'dsh-migration-app-'))
   const mount = join(root, 'mount')
   const installation = join(root, 'installation')

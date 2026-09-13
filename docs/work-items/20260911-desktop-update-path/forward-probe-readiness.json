@@ -1,0 +1,32 @@
+{
+  "outcome": "decision-accepted",
+  "triggerEvidence": [
+    "process ownership",
+    "credentials isolation",
+    "native GUI observation"
+  ],
+  "decisionOwner": "/root/forward_b_decision",
+  "governingDecision": "../../decisions/20260913-forward-native-capability.md",
+  "reviewMode": "independent-agent",
+  "reviewResult": "approved",
+  "reviewEvidence": "forward-probe-review.json",
+  "materialProductDecisions": "forward-baseline-scope.json",
+  "openBlockers": "none",
+  "gate": "implementation-ready",
+  "gateOwner": "/root",
+  "confirmedAt": "2026-09-13T01:04:10.840163+00:00",
+  "confirmationBasis": "Existing Accepted capability ADR and independent design review; author confirms late-launch correction covered by same cleanup requirements",
+  "readinessHistory": [
+    {
+      "at": "2026-09-13T01:21:55.004323+00:00",
+      "reason": "Independent QA late-launch reproduction violates accepted ownership/cleanup requirement",
+      "decisionOwner": "/root/forward_b_decision",
+      "outcome": "covered-by-accepted-decision",
+      "scope": "One bounded corrective pass: unresolved launch prohibits data/app root disposal; existing deadline unchanged"
+    }
+  ],
+  "executionPrerequisites": [
+    "authenticated x64 descriptor",
+    "exact outbound approval"
+  ]
+}

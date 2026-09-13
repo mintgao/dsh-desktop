@@ -15,6 +15,47 @@ const script = `on run argv
     set targetProcess to item 1 of matches
     if bundle identifier of targetProcess is not "io.github.mintgao.dsh-desktop" then error "Native bundle identity differs"
     if action is "preflight" then return (bundle identifier of targetProcess) & tab & (name of targetProcess)
+    if action is "rendered" then
+      tell targetProcess
+        set frontmost to true
+        repeat with nativeWindow in windows
+          if visible of nativeWindow and (name of nativeWindow as text) is not "" then
+            repeat with element in entire contents of nativeWindow
+              if role of element is "AXStaticText" or role of element is "AXHeading" then
+                set labelText to ""
+                try
+                  set labelText to value of element as text
+                end try
+                if labelText is "Internal Testing Notice" or labelText is "Add an API key to get started" or labelText is "内测声明" or labelText is "添加一个 API Key 开始使用" then
+                  return "rendered" & tab & (role of element) & tab & labelText
+                end if
+              end if
+            end repeat
+          end if
+        end repeat
+      end tell
+      return "absent"
+    end if
+    if action is "quit" then
+      tell targetProcess
+        set frontmost to true
+        set appMenu to menu bar item 1 of menu bar 1
+        click appMenu
+        set quitItems to {}
+        repeat with menuEntry in menu items of menu 1 of appMenu
+          if exists attribute "AXMenuItemCmdChar" of menuEntry then
+            if value of attribute "AXMenuItemCmdChar" of menuEntry is "Q" then
+              if value of attribute "AXMenuItemCmdModifiers" of menuEntry is 0 then set end of quitItems to menuEntry
+            end if
+          end if
+        end repeat
+        if (count of quitItems) is not 1 then error "Native Command-Q menu is not unique"
+        set quitItem to item 1 of quitItems
+        if enabled of quitItem is false then error "Native Quit menu is disabled"
+        click quitItem
+      end tell
+      return "ordinary-menu-quit"
+    end if
     if action is "menu" then
       tell targetProcess
         set frontmost to true
@@ -92,4 +133,22 @@ export async function nativeUpdatePreference(
   const button = await accessibility(pid, 'button', buttonLabel, signal)
   if (button !== buttonLabel) throw new Error('Native preference click did not match the observed button')
   return { preflight, menu, button }
+}
+
+/** Observe allowlisted onboarding text in a visible native window without exporting arbitrary UI content.
+ * @param pid - Exact executable PID verified immediately before this action.
+ * @param signal - Experiment cancellation.
+ * @returns Rendered role and allowlisted text, or absent while the renderer is loading.
+ */
+export async function nativeRenderedOnboarding(pid: number, signal: AbortSignal): Promise<string> {
+  return accessibility(pid, 'rendered', '', signal)
+}
+
+/** Invoke the unique enabled Command-Q item in the native application menu.
+ * @param pid - Exact executable PID verified immediately before this action.
+ * @param signal - Experiment cancellation.
+ * @returns Ordinary menu action acknowledgement.
+ */
+export async function nativeOrdinaryQuit(pid: number, signal: AbortSignal): Promise<string> {
+  return accessibility(pid, 'quit', '', signal)
 }
