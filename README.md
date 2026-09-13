@@ -33,11 +33,11 @@ Review the [safety notice](SAFETY.md) before use. Preview versions may introduce
 
 ## Desktop updates
 
-**2026-09-13 · [0.1.5-alpha.2.unsigned.2](https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.5-alpha.2.unsigned.2)**
+**2026-09-13 · [0.1.5-rc.2.unsigned.1](https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.5-rc.2.unsigned.1)**
 
-- Fixes desktop startup when the local backend returns an authenticated readiness address.
-- Removes authentication query values from startup diagnostics.
-- Provides one Apple Silicon DMG for manual installation of the complete desktop application.
+- Upgrades to DSH 0.1.5-rc.2 while retaining existing profiles and sessions.
+- Checks the bundled runtime and plugins before launch; normal startup does not install packages.
+- Continues to provide one Apple Silicon DMG for manual replacement of the complete desktop app.
 
 This section tracks the latest published Desktop highlights. See [all releases](https://github.com/mintgao/dsh-desktop/releases) for the full history, downloads, and version-specific limitations.
 
@@ -63,6 +63,8 @@ Settings and sessions use the ordinary DSH data directory (`~/.dsh` by default).
 Report Mint installation, startup, and update problems in [this repository's Issues](https://github.com/mintgao/dsh-desktop/issues). Include the desktop version, Mac chip, macOS version, and steps to reproduce; remove API keys and private project content from attachments.
 
 For desktop source builds, see the [desktop development instructions](apps/desktop-mint/README.md). Contributors can start with [CONTRIBUTING.md](CONTRIBUTING.md), the [development guide](docs/development.md), and [architecture documentation](docs/architecture.md). Agents follow [AGENTS.md](AGENTS.md).
+
+Before moving Macs or continuing development, read the [project handoff](docs/context/handoff.md) for authoritative source, private data backup and installation acceptance.
 
 <details>
 <summary>Harness Web and source development</summary>

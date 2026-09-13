@@ -2,18 +2,24 @@
 
 English | [中文](verification.zh.md)
 
-## Verified source scope
+## Source and platform acceptance
 
-Independent review verifies identical persistence implementation files across official alpha.2, RC.1 and RC.2. The release preparation CLI accepts the two exact Mint package directories at independent versions while retaining the official-version mismatch rejection. Its focused real-CLI regression passed. [Assembly acceptance](../20260913-desktop-versioned-assembly/verification.md) owns unchanged runtime evidence.
+The independently verified seed `c1284f11471b429621bdfce141ba199bd4a9f7a7` passed lint, typecheck, build and 22,518 tests, with 129 tests skipped. Bot finalization changes only the source lock. Protected candidate `be4fb7f15508d0101e0a16ccbdff6730116af81c` includes the verified source; Linux CI and macOS packaging passed. Official alpha.2, RC.1 and RC.2 preserve persistence implementation and formats.
 
-## Local predecessor upgrade
+Actual npm 10 and npm 11.19 installations of the unchanged official lock verify 522 and 520 packages respectively. Every installed payload passes authenticated tarball comparison; altered optional payloads and missing selected packages reject. The official lock SHA256 remains `afa439f37a8b544b3884460a10634c6b474736958942aa4543ea048a95d348df`.
 
-Independent native QA ran the exact public alpha.2 unsigned.2 application against private synthetic data, then the unchanged local RC.2 application and its ordinary restart. History continues across all phases; nine existing settings/profile/workspace files remain byte-identical. Three normal quits leave no process, and after-use verification accepts all 25,484 packaged files. [Digest-bound evidence](../../../.github/desktop-delivery/rc2-local-upgrade-evidence.json) states artifact identities and limits.
+## Exact CI artifact upgrade
 
-## Platform selection verification
+[Qualification run 34764279121](https://github.com/mintgao/dsh-desktop/actions/runs/34764279121), attempt 1, built and verified the unsigned arm64 DMG from the protected candidate. Independent native QA used the public alpha.2 unsigned.2 application, this exact CI application and its ordinary restart against fresh private synthetic data. Each phase persisted its own user message, assistant response and completed turn. Nine configuration/profile/workspace files remained identical; all three ordinary quits left no application or backend process.
 
-The approved platform-selection checker accepts both actual installations of the unchanged official lock: npm 10 installs 522 packages and npm 11.19 installs 520. Every installed package passes integrity-authenticated complete payload comparison. Tampering with a retained optional package is rejected. Focused tests cover missing selected packages, malformed or inconsistent inventories, shared required paths, nested/scoped dependencies, cycles and platform selectors. The frozen lock SHA256 remains `afa439f37a8b544b3884460a10634c6b474736958942aa4543ea048a95d348df`. Independent final candidate verification and actual CI platform qualification remain separate release checks.
+After use, 25,460 backend entries and all 25,734 application entries remained verified. The CI application's asar SHA256 is `ac8ee9087164130323d34afe35312faa687506fefee7eebade9d0fe9054f2829`; its assembly receipt SHA256 is `c277db0f599e60a91a3a23677ef06790d0c4809ebf26f34b48965d0ef187718f`. This is exact-artifact synthetic upgrade evidence, not a claim about every user profile or external provider.
 
-## Delivery acceptance
+## Public release
 
-Final CI artifact upgrade, protected source finalization, exact release artifact qualification, public asset verification, installed-client replacement and cleanup remain pending. This report grants no publication or installation success claim. The release owner records final public and local acceptance after observing each outcome.
+[Desktop 0.1.5-rc.2.unsigned.1](https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.5-rc.2.unsigned.1) was published at `2026-09-13T15:44:46Z` through [approved mutation run 34766075890](https://github.com/mintgao/dsh-desktop/actions/runs/34766075890). The immutable tag targets the qualified candidate. Control-record successor `7fbc26c4e57ec4806a5791b0c824f1502e0438a7` retains the same runtime and configuration and refreshes the independently validated activation binding.
+
+The schema-2 manifest SHA256 is `168d4c2e3612dfbdbd5fac2e44bbebf7d6985b7d210723079556df1f6956bb87`. The arm64 DMG has 179,108,978 bytes and SHA256 `cdbc1adfb3928496812786d2d1df084fe986b82d281240230ccc99400d9be2a4`. The release has 11 assets. This remains an unsigned preview without notarization, signed automatic updates or identity-dependent native notifications.
+
+## Installed-user evidence
+
+Machine-specific backup, installed-client acceptance and cleanup records remain private. Follow [machine handoff](../../context/handoff.md) to preserve stopped data, verify the public artifact and check existing workspace, model selection and history after installation. Public qualification and synthetic tests do not establish a real provider connection or arbitrary user-data compatibility.

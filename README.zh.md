@@ -33,11 +33,11 @@ Mint 将 DSH 运行时和 Web 客户端打包为 Mac 应用，提供独立图标
 
 ## Desktop 最新动态
 
-**2026-09-13 · [0.1.5-alpha.2.unsigned.2](https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.5-alpha.2.unsigned.2)**
+**2026-09-13 · [0.1.5-rc.2.unsigned.1](https://github.com/mintgao/dsh-desktop/releases/tag/desktop-v0.1.5-rc.2.unsigned.1)**
 
-- 修复本地后端返回带认证的就绪地址时桌面端无法启动的问题。
-- 从启动诊断中移除认证查询值。
-- 提供一个 Apple Silicon DMG，用于手动安装完整桌面应用。
+- 升级到 DSH 0.1.5-rc.2，保留已有配置档案和会话。
+- 启动前检查随应用交付的运行时与插件；正常启动不安装软件包。
+- 继续提供一个 Apple Silicon DMG，手动替换即可更新整个桌面应用。
 
 本区域记录最新已发布 Desktop 版本的要点。完整历史、下载文件和各版本限制见[全部发布记录](https://github.com/mintgao/dsh-desktop/releases)。
 
@@ -63,6 +63,8 @@ Mint 将 DSH 运行时和 Web 客户端打包为 Mac 应用，提供独立图标
 Mint 的安装、启动和更新问题请提交到[本仓库 Issues](https://github.com/mintgao/dsh-desktop/issues)。请附桌面版本、Mac 芯片、macOS 版本和复现步骤，并从附件中移除 API 密钥和私人项目内容。
 
 从源码运行桌面端，请参阅[桌面开发说明](apps/desktop-mint/README.zh.md)。贡献者可从[贡献指南](CONTRIBUTING.zh.md)、[开发指南](docs/development.zh.md)和[架构文档](docs/architecture.zh.md)开始。面向 agent：遵循 [AGENTS.md](AGENTS.md)。
+
+换机或继续开发前，请阅读[项目交接说明](docs/context/handoff.zh.md)，确认源码入口、本地数据备份和安装验收。
 
 <details>
 <summary>Harness Web 与源码开发</summary>
