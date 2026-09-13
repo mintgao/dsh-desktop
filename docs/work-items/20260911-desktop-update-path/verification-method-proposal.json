@@ -1,5 +1,5 @@
 {
-  "status": "superseded-for-architecture",
+  "status": "superseded",
   "decisionOwner": "/root/verification_method_decision",
   "workItem": "20260911-desktop-update-path",
   "size": "L",
@@ -69,5 +69,7 @@
     "Manual evidence trust decision if publisher would consume it"
   ],
   "execution": "No new host purchase, security grant, protection change, native dispatch or publication in this method-record change",
-  "architectureAuthority": "architecture-scope.json"
+  "architectureAuthority": "architecture-scope.json",
+  "supersededBy": "../../decisions/20260913-observed-forward-delivery.md",
+  "retention": "Historical proposal; not current implementation authority"
 }

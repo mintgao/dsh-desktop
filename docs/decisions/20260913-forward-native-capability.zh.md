@@ -4,6 +4,8 @@
 
 状态：已接受
 
+[通过观察验证的向前交付决定](20260913-observed-forward-delivery.zh.md)取代本探测作为必需交付前提。本记录仅约束保留的诊断证据；当前 Mint 交付支持 arm64，使用有界的普通桌面观察。
+
 ## 范围
 
 [已批准的检查设计](../work-items/20260911-desktop-update-path/forward-probe-draft.json)使用经过认证的保留版本 A 检查 Intel macOS 能力。它不代表更新验收通过，不修改发布规则，也不授权上传源码。完整向前更新实现须等待实际能力检查结果。

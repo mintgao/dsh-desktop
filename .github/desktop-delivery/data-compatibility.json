@@ -1,17 +1,17 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "persistedFormatsChanged": true,
-  "assessment": "Compared with delivered desktop-v0.1.2-alpha.3.unsigned.1, the target changes session V0 to V3 and projection-cache V4 to V7, with additional attachment and store behavior changes. The immutable seven-release assessment remains unverified. Publication requires the fixed 56-scenario registry on both native architectures, exact candidate and runtime identities, and complete backup restoration evidence.",
+  "assessment": "Historical session and cache format changes remain true. This forward delivery uses the exact authenticated unpublished A build and a protected arm64 B build plus explicitly maintainer-attested local observation; CI smoke alone does not establish GUI acceptance.",
   "evidenceReferences": [
-    ".github/desktop-delivery/catch-up-assessment.json",
-    "docs/decisions/20260910-desktop-mint-migration-registry.md"
+    "docs/decisions/20260913-observed-forward-delivery.md",
+    ".github/desktop-delivery/catch-up-assessment.json"
   ],
   "unsupportedDowngrades": [
-    "Never start the baseline on upgraded data roots.",
-    "Stop every writer, retain upgraded roots separately, verify the complete backup inventory, restore into empty roots and then start the exact delivered baseline."
+    "Never launch A on B-modified data.",
+    "Stop writers, retain B state separately, verify complete backups, restore A and pre-B private state, then observe ordinary usable A entry and quit."
   ],
-  "migrationPolicy": {
-    "path": ".github/desktop-delivery/migration-policy.json",
-    "sha256": "a1356a32bce0fbae700d10ff30c09cf24be5e7a20a89ee96dacaa36191979c04"
+  "forwardPolicy": {
+    "path": ".github/desktop-delivery/forward-update-policy.json",
+    "sha256": "1810d825e3a4f82bb24490d90e18c2b4a8ac35f0a6140a82ff9a9ffb1d78e5c3"
   }
 }

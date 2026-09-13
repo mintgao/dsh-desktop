@@ -1,5 +1,5 @@
 {
-  "status": "proposed",
+  "status": "superseded",
   "author": "/root/forward_b_decision",
   "size": "L",
   "sourceBase": "825507dd9ca79ea95a32854f3914ac8dc1cb422c",
@@ -101,5 +101,7 @@
     "outbound payload authorization"
   ],
   "gate": "blocked pending independent review and accepted decision",
-  "architectureScope": "architecture-scope.json"
+  "architectureScope": "architecture-scope.json",
+  "supersededBy": "../../decisions/20260913-observed-forward-delivery.md",
+  "retention": "Historical proposal; not current implementation authority"
 }

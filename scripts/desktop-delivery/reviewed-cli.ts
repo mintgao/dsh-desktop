@@ -1,6 +1,9 @@
 /** Operational CLI entry points shared with the protected delivery workflows. */
+import { compatibilityKind } from './compatibility-evidence.ts'
+import { assembleForwardPackage, forwardBytes } from './forward-package.ts'
+import { decodeForwardObservation } from './forward-evidence.ts'
 import { bootstrapInstallationCheck } from './bootstrap-installation-check.ts'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { bootstrapResponsePath, prepareBootstrapProtection } from './bootstrap-protection.ts'
 import { probePlan, probeDraft } from './probe.ts'
@@ -93,6 +96,24 @@ export async function reviewedCommand(operation: string, values: Record<string, 
     await requireActivation(config, resolve(root, config.activationPath), required('migration-report'), api)
     return applyAdoption(config, plan, api)
   }
+  if (operation === 'compatibility-mode') return { kind: operation, mode: compatibilityKind(readJson(required('compatibility'))) }
+  if (operation === 'assemble-forward') {
+    const directory = required('directory')
+    const encoded = process.env.FORWARD_OBSERVATION_BASE64 ?? ''
+    const expected = process.env.FORWARD_OBSERVATION_SHA256 ?? ''
+    const buildPath = resolve(directory, 'build-receipt.json')
+    if (required('operation') !== 'promote' || !existsSync(buildPath)) {
+      if (encoded !== '' || expected !== '') throw new Error('Observation inputs are only valid for forward promotion')
+      return { kind: operation, state: 'no-new-observation', nextAction: 'Use existing legacy or retained evidence.' }
+    }
+    if (existsSync(resolve(directory, 'manifest.json')) || existsSync(resolve(directory, 'local-observation.json'))) throw new Error('CI forward archive contains derived acceptance evidence')
+    const observation = decodeForwardObservation(encoded, expected)
+    const manifest = assembleForwardPackage(readFileSync(buildPath), observation, name => readFileSync(resolve(directory, name)))
+    writeFileSync(resolve(directory, 'local-observation.json'), observation, { flag: 'wx', mode: 0o600 })
+    writeFileSync(resolve(directory, 'manifest.json'), forwardBytes(manifest), { flag: 'wx', mode: 0o600 })
+    return { kind: operation, state: 'assembled-not-approved', manifestDigest: digest(forwardBytes(manifest)), localObservationDigest: digest(observation),
+      nextAction: 'Approve this exact limited manual observation and release operation through the protected mutation plan.' }
+  }
   if (operation === 'release-manifest') return releaseManifest(config, required('config'), {
     root, directory: required('directory'), candidatePath: required('candidate'), nativeNames: required('native').split(','),
     ...(typeof values['migration-reports'] === 'string' ? { migrationNames: values['migration-reports'].split(',') } : {}),
@@ -135,6 +156,8 @@ export function reviewedSummary(report: Record<string, unknown>): string {
   const blockers = report.blockers ?? (report.blocker === undefined ? [] : [report.blocker])
   const identities = ['tag', 'desktopVersion', 'downstreamCommit', 'candidate', 'seed', 'pullRequest', 'manifestDigest', 'releaseId']
     .filter(key => report[key] !== undefined).map(key => `${key}: ${JSON.stringify(report[key])}`)
+  if (report.acceptance !== undefined) identities.push(`Approval meaning: ${string(report.acceptance)}`)
+  if (report.localObservationDigest !== undefined) identities.push(`Local observation SHA256: ${string(report.localObservationDigest)}`)
   if (report.upstream !== undefined) identities.push(`Upstream: ${JSON.stringify(report.upstream)}`)
   for (const key of ['workflow', 'mutationRun']) if (report[key] !== undefined) identities.push(`${key}: ${JSON.stringify(report[key])}`)
   const checks = ['bootstrap', 'backendHttp', 'backendStopped', 'mountedReadOnly', 'detached', 'copiedInstallation', 'installationStopped', 'installationRemoved']

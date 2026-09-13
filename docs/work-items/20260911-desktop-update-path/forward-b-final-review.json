@@ -1,0 +1,14 @@
+{
+  "result": "approved",
+  "mode": "independent-agent",
+  "author": "/root/forward_b_decision",
+  "reviewer": "/root/verification_method_decision",
+  "decision": "../../decisions/20260913-observed-forward-delivery.md",
+  "reviewedProposedSha256": "6e6bbf49d2a1d56b69ad62d22b109043fbdb42e8d80acea5cf0119b6540682af",
+  "acceptanceDetails": [
+    "Fixed trusted build-owned file inventory cannot reclassify DMG or candidate as derived",
+    "Reject noncanonical base64, invalid UTF8, oversize and unknown/duplicate evidence; changed observation invalidates approval",
+    "Shared dispatch applies to producer, local checker, plan, preparePublication and final publisher including restore/withdraw"
+  ],
+  "openBlockers": []
+}
