@@ -24,11 +24,11 @@ BrowserWindow 启用上下文隔离、renderer 沙箱与 Web 安全，不启用 
 
 监管器等待就绪期间，由 asar 持有的启动页会展示 Mint 海洋场景，并分别运行鲸鱼横游、身体起伏、气泡、海面漂移和进度水流时间线。该页面的内容安全策略只允许应用内本地资源。减少动态效果偏好会停止这些时间线、隐藏气泡，并以静态状态保留鲸鱼与进度指示器。
 
-### 由源码构建的应用内运行时
+### 已核验的应用内运行时
 
-macOS 暂存流程先运行官方客户端构建，再从当前 checkout 打包两个发布族，读取打包后的 manifest，并选择从 `@deepseek-ai/dsh` 可达的本地 dependency、optional dependency 与 peer 闭包。npm 把这些 tarball 与外部依赖安装到 `apps/desktop-mint/backend`。版本冒烟测试会运行已安装 CLI，递归链接检查则拒绝任何解析目标离开暂存根的符号链接。electron-builder 把这棵隔离目录复制为应用外部资源，而不是装入 asar；Electron 主 bundle 与静态启动页仍位于 asar 内。
+[版本化组装决策](../../../../docs/decisions/20260913-desktop-versioned-assembly.zh.md)负责冻结官方运行时获取、单独打包的 Mint 插件及平台选择。electron-builder 将已核验运行时复制为应用外部资源；Electron 主 bundle 与静态启动页保留在 asar 内。外壳嵌入组装收据摘要，启动前拒绝被替换或修改的载荷。运行时身份来自冻结的官方产物，独立于工作区及 Mint 包版本。
 
-本地目标是名为 DSH Desktop、带 Mint 浪花图标与 `io.github.mintgao.dsh-desktop` bundle 标识符的未签名 macOS arm64 和 x64 应用。它们适合源码构建与用户级安装。[Mint 桌面下游开发](../process/2026-08-24-mint-desktop-downstream-development.zh.md)持有 Developer ID 签名、hardened runtime、公证、原生架构产物与公开发布。[由用户控制的桌面版签名更新](2026-08-24-desktop-signed-auto-update.zh.md)持有更新源与安装行为。当前没有通用二进制。
+公开预览版是未签名的 macOS arm64 应用，名称为 DSH Desktop，使用 Mint 浪花图标及 `io.github.mintgao.dsh-desktop` bundle 标识符。[Mint 桌面下游开发](../process/2026-08-24-mint-desktop-downstream-development.zh.md)负责签名及发布政策。[由用户控制的桌面版签名更新](2026-08-24-desktop-signed-auto-update.zh.md)负责签名更新行为；未签名预览版使用手动下载。当前没有通用二进制。
 
 ## 考虑过的替代方案
 
@@ -38,14 +38,14 @@ macOS 暂存流程先运行官方客户端构建，再从当前 checkout 打包�
 
 **使用 SwiftUI 或 Tauri，再带一个 Node sidecar。** 两者仍需要兼容 Node 的 DSH 运行时与 sidecar 生命周期，同时会增加一套工具链与桥接层。Electron 已经提供所需 Node 版本，也能在不重写 UI 的情况下渲染现有客户端。
 
-**使用 pnpm legacy deploy 部署后端。** 它生成的相对 workspace 链接会解析到暂存目录以外的 `packages/` 与 `vendor/`。打包并安装当前发布族产物速度更慢，但能证明应用确实包含其声称交付的源码构建运行时。
+**使用 pnpm legacy deploy 部署后端。** 它生成的相对 workspace 链接会解析到暂存目录以外的 `packages/` 与 `vendor/`。经过核验的自包含安装可避免这种工作区依赖。
 
-**打包时安装已发布的 `@deepseek-ai/dsh` 版本。** 这样实现更小，却会静默丢失 checkout 中尚未发布的变更。本地 tarball 保留开发迭代，同时仍只从 npm 获取外部包。
+**从开发 checkout 打包所有运行时依赖。** 这会将未发布变更混入运行时，并将官方采用与 Mint 功能构建耦合。冻结官方产物并单独标识 Mint tarball，可以保留预期的运行时身份。
 
 ## 验证
 
-聚焦测试使用真实子进程覆盖分片就绪输出、早期失败诊断、干净停止与意外退出，纯测试覆盖精确同源导航、外部 URL 过滤，以及启动页的可见文案、应用内资源清单、动态时间线和减少动态效果状态。官方源码构建、桌面 TypeScript bundle 与运行时暂存均完成。应用内 CLI 报告仓库版本，每条暂存链接都解析在后端根内，生成的 arm64 `.app` 包含预期 CLI 资源。真实应用包启动会到达随机 loopback 就绪 URL，从该地址返回构建后的 DSH HTML，并在应用退出时关闭监听端口。
+聚焦测试使用真实子进程覆盖分片就绪输出、早期失败诊断、干净停止与意外退出，纯测试覆盖精确同源导航、外部 URL 过滤，以及启动页的可见文案、应用内资源清单、动态时间线和减少动态效果状态。桌面 TypeScript bundle 与运行时暂存均完成。应用内 CLI 报告冻结的官方运行时版本，每条暂存链接都解析在后端根内，生成的 arm64 `.app` 包含预期 CLI 资源。真实应用包启动会到达随机 loopback 就绪 URL，从该地址返回构建后的 DSH HTML，并在应用退出时关闭监听端口。
 
 ## 后果
 
-该壳不会增加任何模型可见输入、会话事件、插件行为或 Agent loop 分支。现有 `~/.dsh` 数据与 Web workspace 行为继续和 CLI 启动共享。Electron 与安装后的 DSH 闭包会让本地应用明显大于浏览器快捷方式，从源码打包也需要花时间处理发布族。loopback Web 载体仍存在于一对仅供桌面使用的进程中；改为 IPC 会改变传输与特权原生集成，不会改变客户端能力分层。未签名的本地产物可能需要由操作者控制首次启动，而且它不是公开发布产物。
+该壳不会增加任何模型可见输入、会话事件、插件行为或 Agent loop 分支。现有 `~/.dsh` 数据与 Web workspace 行为继续和 CLI 启动共享。Electron 与安装后的 DSH 闭包会让本地应用明显大于浏览器快捷方式，获取过程也必须核验完整的已安装依赖闭包。loopback Web 载体仍存在于一对仅供桌面使用的进程中；改为 IPC 会改变传输与特权原生集成，不会改变客户端能力分层。未签名的本地产物可能需要由操作者控制首次启动，而且它不是公开发布产物。

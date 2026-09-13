@@ -28,7 +28,7 @@ pnpm run desktop:app:mac
 
 Mint 仅支持 Apple Silicon；[架构决策](../../docs/decisions/20260913-mint-arm64-scope.zh.md)将 Intel 支持延后。将命令中的 `app` 替换为 `dmg` 即可生成本地 DMG。默认结果位于 `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`。
 
-打包流程从 `runtime/package-lock.json` 安装冻结的官方 npm 运行时，核对其 tarball 文件内容，再加入单独打包的 Mint 扩展。原生外壳嵌入组装凭据摘要，并在启动前拒绝缺失或变化的文件。`runtime/assembly-input.json` 标识支持的上游版本与完整性；修改本地上游源码不会改变打包运行时。
+打包流程从 `runtime/package-lock.json` 安装冻结的官方 npm 运行时，核对其 tarball 文件内容，再加入单独打包的 Mint 扩展。原生外壳嵌入组装凭据摘要，并在启动前拒绝缺失或变化的文件。`runtime/assembly-input.json` 标识支持的上游版本与完整性；修改本地上游源码不会改变打包运行时。 只有冻结依赖图证明平台排除且安装清单一致时，才允许缺少被平台排除的可选依赖。每个已安装包仍接受完整 tarball 载荷核验，包括 npm 保留的可选后代。必需或已选包缺失会拒绝组装；[平台选择](../../docs/decisions/20260913-desktop-versioned-assembly.zh.md#frozen-platform-selection)定义具体检查。
 
 本地命令会关闭签名身份自动发现，也不会发布 Release。Electron 43 无法从未签名或 ad-hoc 签名的应用发送 macOS 通知，因此本地产物和申请证书前的公开预览版都不能验证任务通知或其他依赖稳定应用身份的原生能力；这些验收必须使用经过 Developer ID 签名与公证的产物。可以使用以下命令为当前用户安装本地 Apple Silicon 版本：
 

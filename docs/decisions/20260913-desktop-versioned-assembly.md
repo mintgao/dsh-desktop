@@ -20,6 +20,18 @@ Replace source-wide packing in the existing backend preparation entry. Install t
 
 Upstream manifests, profiles and executable payloads remain unchanged. Verify payloads, contained links, native and client assets. Record necessary installation-generated files separately. Remove Mint's CLI dependency and built-in profile template. Keep the previous complete stage until the replacement passes validation; interrupted preparation must retain it or explicitly fail the build.
 
+<a id="frozen-platform-selection"></a>
+
+## Frozen platform selection
+
+Frozen lock installation paths identify dependency graph nodes, including nested and scoped packages. Required dependencies and peers must resolve; optional dependencies override matching required declarations, and optional peer metadata permits an absent peer. Platform selection cuts only optional edges to explicitly incompatible operating-system, CPU or libc selectors. Required incompatible edges reject. Shared required paths remain selected and cycles terminate.
+
+An absent entry is admitted only when it is marked optional, reachable from the root before platform selection, unreachable afterward, and absent from npm's hidden installation inventory. The hidden inventory cannot independently authorize omission. Reconcile its paths and identities with the frozen lock and installed directories; reject missing, malformed, unknown or inconsistent records. Every installed package retains required dependency resolution and integrity-authenticated complete payload comparison, including optional descendants retained by older npm. Receipts enumerate actual installed packages.
+
+Selectors use npm allow/exclude semantics. Missing selectors provide no exclusion evidence; package names do not establish libc. The current frozen lock has no libc fields and remains unchanged. Unknown host libc when required by a selector rejects. Actual platform installation evidence is required; ideal-tree analysis alone does not qualify a release.
+
+The platform clarification was authored by `assembly_architecture` and independently approved by `assembly_review`, bound to proposal SHA256 `f5c17094da5afb13f6421f50097c546da053b39dcf9189612943648ba1018e19` and source `37e92ae15712b1826b764ba49c92bd2977dd4930`. Skipping all optional packages, trusting the hidden inventory alone and downgrading npm would conceal missing-payload defects. The [release work item](../work-items/20260913-mint-rc2-release/brief.md#technical-decision-readiness) owns implementation and verification readiness.
+
 ## Profiles and extension loading
 
 Retain `desktop-mint` under the existing DSH home. Fresh initialization uses supported RC.2 profile facilities to select ordered Base, Web and Mint bundles before the user patch. The Mint Bundle contains configuration; its notification plugin owns disposable behavior.

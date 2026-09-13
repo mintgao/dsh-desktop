@@ -10,6 +10,10 @@ Independent review verifies identical persistence implementation files across of
 
 Independent native QA ran the exact public alpha.2 unsigned.2 application against private synthetic data, then the unchanged local RC.2 application and its ordinary restart. History continues across all phases; nine existing settings/profile/workspace files remain byte-identical. Three normal quits leave no process, and after-use verification accepts all 25,484 packaged files. [Digest-bound evidence](../../../.github/desktop-delivery/rc2-local-upgrade-evidence.json) states artifact identities and limits.
 
+## Platform selection verification
+
+The approved platform-selection checker accepts both actual installations of the unchanged official lock: npm 10 installs 522 packages and npm 11.19 installs 520. Every installed package passes integrity-authenticated complete payload comparison. Tampering with a retained optional package is rejected. Focused tests cover missing selected packages, malformed or inconsistent inventories, shared required paths, nested/scoped dependencies, cycles and platform selectors. The frozen lock SHA256 remains `afa439f37a8b544b3884460a10634c6b474736958942aa4543ea048a95d348df`. Independent final candidate verification and actual CI platform qualification remain separate release checks.
+
 ## Delivery acceptance
 
 Final CI artifact upgrade, protected source finalization, exact release artifact qualification, public asset verification, installed-client replacement and cleanup remain pending. This report grants no publication or installation success claim. The release owner records final public and local acceptance after observing each outcome.

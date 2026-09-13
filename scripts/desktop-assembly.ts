@@ -1,17 +1,17 @@
 /** Stage official frozen npm artifacts and separate Mint tarballs. */
+import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { createHash } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
+import { officialSelection, type RuntimeLock } from './desktop-assembly-selection.ts'
 import { capture } from './release/process.ts'
 import { assemblyDigest, assemblyFiles, type AssemblyRecord } from '../apps/desktop-mint/src/assembly.ts'
 
 /** Mint-owned packages allowed to augment the official installation. */
 export const MINT_PACKAGES = ['packages/bundle/desktop-mint', 'packages/client/ui-session-notifications'] as const
 interface AssemblyInput { runtimeVersion: string; upstreamCommit: string; cliIntegrity: string }
-interface LockPackage { version: string; resolved: string; integrity: string; optional?: boolean; os?: string[]; cpu?: string[] }
-interface RuntimeLock { packages: Record<string, LockPackage> }
 
 /** Reject upstream runtime dependencies on Mint-owned packages.
  * @param root - development checkout.
@@ -46,24 +46,26 @@ export function officialLock(bytes: string, input: AssemblyInput): RuntimeLock {
     || lock.packages['node_modules/@deepseek-ai/dsh'].version !== input.runtimeVersion) throw new Error('Official CLI lock identity differs')
   for (const [path, entry] of Object.entries(lock.packages)) {
     if (path === '') continue
-    if (!path.startsWith('node_modules/') || path.includes('..') || !/^https:\/\/registry\.npmjs\.org\//u.test(entry.resolved)
-      || !/^sha512-[A-Za-z0-9+/]+=*$/u.test(entry.integrity) || !entry.version) throw new Error(`Unfrozen official dependency: ${path}`)
+    if (!path.startsWith('node_modules/') || path.includes('..') || !/^https:\/\/registry\.npmjs\.org\//u.test(entry.resolved ?? '')
+      || !/^sha512-[A-Za-z0-9+/]+=*$/u.test(entry.integrity ?? '') || !entry.version) throw new Error(`Unfrozen official dependency: ${path}`)
   }
   return lock
 }
 
-/** Compare each installed official package to its integrity-checked npm tarball. */
-function verifyOfficial(stage: string, lock: RuntimeLock, scratch: string): AssemblyRecord['components'] {
-  const cache = capture('npm', ['config', 'get', 'cache'])
+/** Compare each selected official package to its integrity-checked npm tarball.
+ * @param stage - official-only installed backend directory.
+ * @param lock - validated frozen npm lock.
+ * @param scratch - private directory for temporary extraction.
+ * @param cache - npm content cache used during acquisition.
+ * @returns Actual installed component identities.
+ */
+export function verifyOfficial(stage: string, lock: RuntimeLock, scratch: string, cache: string): AssemblyRecord['components'] {
+  const installed = officialSelection(stage, lock)
   const components: AssemblyRecord['components'] = {}
-  for (const [path, entry] of Object.entries(lock.packages)) {
-    if (path === '') continue
-    if (!existsSync(join(stage, path))) {
-      const excluded = (entry.os !== undefined && !entry.os.includes(process.platform))
-        || (entry.cpu !== undefined && !entry.cpu.includes(process.arch))
-      if (entry.optional === true && excluded) continue
-      throw new Error(`Required official package is missing: ${path}`)
-    }
+  for (const path of installed) {
+    const entry = lock.packages[path]
+    assert(entry, `Missing frozen package: ${path}`)
+    if (!entry.integrity || !entry.version) throw new Error(`Unfrozen official dependency: ${path}`)
     const hex = Buffer.from(entry.integrity.slice(7), 'base64').toString('hex')
     const tarball = join(cache, '_cacache/content-v2/sha512', hex.slice(0, 2), hex.slice(2, 4), hex.slice(4))
     const bytes = readFileSync(tarball)
@@ -129,7 +131,7 @@ export function prepareDesktopAssembly(root: string): void {
   try {
     for (const name of ['package.json', 'package-lock.json']) cpSync(join(input, name), join(stage, name))
     capture('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: stage, env: process.env })
-    const components = verifyOfficial(stage, lock, scratch)
+    const components = verifyOfficial(stage, lock, scratch, capture('npm', ['config', 'get', 'cache']))
     for (const path of MINT_PACKAGES) {
       const manifest = JSON.parse(readFileSync(join(root, path, 'package.json'), 'utf8')) as { name: string; version: string }
       const destination = join(stage, 'node_modules', manifest.name)
