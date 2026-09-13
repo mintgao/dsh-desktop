@@ -100,7 +100,7 @@ it('runs the real source CLI for two distributions and compares owner-local Mark
 function packageEvidence(): { directory: string; candidatePath: string; names: string[] } {
   const directory = temporary()
   const candidatePath = join(directory, 'candidate.json')
-  json(candidatePath, { ...shadow, kind: 'candidate', distribution: config.id, configDigest: digest(readFileSync(configPath)), sourceLockDigest: digest(readFileSync(lockPath)), downstreamCommit: 'a'.repeat(40), upstream: lock.release, sourceDifference: { status: '', trackedDiffDigest: digest('') }, desktopVersion: '0.1.2-alpha.3', components: { '@deepseek-ai/dsh': '0.1.2-alpha.3' }, qualificationEligible: true })
+  json(candidatePath, { ...shadow, kind: 'candidate', distribution: config.id, configDigest: digest(readFileSync(configPath)), sourceLockDigest: digest(readFileSync(lockPath)), downstreamCommit: 'a'.repeat(40), upstream: lock.release, sourceDifference: { status: '', trackedDiffDigest: digest('') }, desktopVersion: '0.1.2-alpha.3', components: { '@deepseek-ai/dsh': lock.release.tag.slice('dsh-v'.length) }, assemblyInput: { runtimeVersion: lock.release.tag.slice('dsh-v'.length), descriptorDigest: digest('fixture descriptor'), lockDigest: digest('fixture lock') }, qualificationEligible: true })
   const names: string[] = []
   for (const arch of config.architectures) {
     const filename = `package-${arch}.dmg`
@@ -158,9 +158,12 @@ it('rejects source mismatches and inconsistent workspace versions before packagi
   const current = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim()
   expect(() => candidate(root, configPath, lockPath, 'a'.repeat(40))).toThrow('checkout')
   const directory = temporary()
-  for (const path of ['apps/cli', 'packages/core/example']) mkdirSync(join(directory, path), { recursive: true })
+  for (const path of ['apps/cli', 'packages/core/example', 'packages/bundle/desktop-mint', 'packages/client/ui-session-notifications', 'packages/boot/app-boot/src']) mkdirSync(join(directory, path), { recursive: true })
   json(join(directory, 'apps/cli/package.json'), { name: '@deepseek-ai/dsh', version: '1.0.0' })
   json(join(directory, 'packages/core/example/package.json'), { name: '@deepseek-ai/dsh-example', version: '2.0.0' })
+  json(join(directory, 'packages/bundle/desktop-mint/package.json'), { name: '@deepseek-ai/dsh-bundle-desktop-mint', version: '1.0.0' })
+  json(join(directory, 'packages/client/ui-session-notifications/package.json'), { name: '@deepseek-ai/dsh-client-ui-session-notifications', version: '1.0.0' })
+  writeFileSync(join(directory, 'packages/boot/app-boot/src/profile.ts'), '')
   // The repository object database is read-only; this private worktree supplies only version inputs.
   const gitDirectory = spawnSync('git', ['rev-parse', '--absolute-git-dir'], { cwd: root, encoding: 'utf8' }).stdout.trim()
   writeFileSync(join(directory, '.git'), `gitdir: ${gitDirectory}\n`)

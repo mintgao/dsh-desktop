@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/work-items/20260913-desktop-versioned-assembly/implementation-report.md
-implementation-report.md: c9c2fe92e90663dd218a871bcf9b89d8ad6d8a74
-implementation-report.zh.md: c97066d482f996304ee3003392cff880859381a6
+implementation-report.md: 86bc8fd1bf4f83ae2b274d39d9666008d04b9c9c
+implementation-report.zh.md: a52cef1436e966db423ba6a7106942c1927e8398

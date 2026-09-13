@@ -59,10 +59,13 @@ let updateDriver: ElectronUpdateDriver | undefined
 let requestUpdateCheck: (() => Promise<void>) | undefined
 
 if (process.argv.includes(PACKAGE_SMOKE_ARGUMENT)) {
-  if (process.env.DSH_HOME === undefined) throw new Error('Package smoke requires an explicit synthetic DSH_HOME')
-  const cli = resolveCliPath()
-  const root = dirname(dirname(dirname(dirname(dirname(cli)))))
-  void prepareMintProfile(cli, verifyAssembly(root, MINT_ASSEMBLY_DIGEST)).then(() => { app.exit(0) }, (error: unknown) => {
+  const initialize = async (): Promise<void> => {
+    if (process.env.DSH_HOME === undefined) throw new Error('Package smoke requires an explicit synthetic DSH_HOME')
+    const cli = resolveCliPath()
+    const root = dirname(dirname(dirname(dirname(dirname(cli)))))
+    await prepareMintProfile(cli, verifyAssembly(root, MINT_ASSEMBLY_DIGEST))
+  }
+  void initialize().then(() => { app.exit(0) }, (error: unknown) => {
     console.error(redactBackendDiagnostics(String(error)))
     app.exit(1)
   })

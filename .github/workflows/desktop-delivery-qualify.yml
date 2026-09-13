@@ -68,6 +68,7 @@ jobs:
         run: |
           pnpm run test:desktop
           pnpm run desktop:stage
+          pnpm run test:desktop:assembly
           pnpm run typecheck
           pnpm run doc-sync
           git diff --exit-code

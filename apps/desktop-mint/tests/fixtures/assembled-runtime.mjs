@@ -8,8 +8,9 @@ import { prepareMintProfile } from '../../lib/types/profile.js'
 import { BackendSupervisor } from '../../lib/types/backend.js'
 import { probeBackendPage } from '../../lib/types/backend-admission.js'
 const home = mkdtempSync(join(tmpdir(), 'mint-runtime-check-'))
-for (const key of Object.keys(process.env)) if (/KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL/u.test(key)) delete process.env[key]
-Object.assign(process.env, { DSH_HOME: join(home, '.dsh'), HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, '.config') })
+const executablePath = process.env.PATH
+for (const key of Object.keys(process.env)) delete process.env[key]
+Object.assign(process.env, { PATH: executablePath, DSH_HOME: join(home, '.dsh'), DSH_AGENTS_HOME: join(home, '.agents'), HOME: home, CFFIXED_USER_HOME: home, USERPROFILE: home, XDG_CONFIG_HOME: join(home, '.config'), DSH_TELEMETRY_DISABLED: '1' })
 const root = resolve('apps/desktop-mint/backend')
 const cli = join(root, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 const record = JSON.parse(readFileSync(join(root, 'assembly.json')))

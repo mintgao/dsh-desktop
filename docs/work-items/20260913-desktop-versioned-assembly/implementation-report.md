@@ -4,7 +4,7 @@ English | [中文](implementation-report.zh.md)
 
 ## Candidate and ownership
 
-RD implemented the [accepted brief](brief.md) within the [accepted decision](../../decisions/20260913-desktop-versioned-assembly.md). The isolated checkout is `/private/tmp/dsh-desktop-rc2-plugin-assembly`, branch `codex/desktop-rc2-plugin-assembly`, baseline `8e1df6fd25166943e6105859832b42a4da258755`. The exact upstream commit `fb2c4b9e698e30edb738bca4cf0618587db7d203` merged without conflicts; the merge remains uncommitted for the orchestrator's local commit. Original recovery changes were untouched.
+RD implemented the [accepted brief](brief.md) within the [accepted decision](../../decisions/20260913-desktop-versioned-assembly.md). The isolated checkout is `/private/tmp/dsh-desktop-rc2-plugin-assembly`, branch `codex/desktop-rc2-plugin-assembly`, baseline `8e1df6fd25166943e6105859832b42a4da258755`. The exact upstream commit `fb2c4b9e698e30edb738bca4cf0618587db7d203` merged without conflicts; the orchestrator committed the initial candidate as `024eaa1dd70cb741249e70faf15491610d041fbc`; the corrective changes await a new local commit. Original recovery changes were untouched.
 
 ## Changes
 
@@ -26,12 +26,18 @@ RD implemented the [accepted brief](brief.md) within the [accepted decision](../
 
 ## Exact local artifact
 
-The local application is `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`. Its runtime inventory digest is `5905bcfcb749533c936a0e9baa03ec3e882e7a786a701fcecdd892a13a847acc`; `Contents/Resources/app.asar` SHA256 is `469881e6f1a185d3a1cad75e2eef7d91b1130c82e66055cd53d058d6b6a31f53`. The staged and packaged assembly receipts both have SHA256 `52429c42995c1b7e14b11865acb2d7332d98483b78bf9f19dc482489768c8b2d`.
+The local application is `apps/desktop-mint/dist/mac-arm64/DSH Desktop.app`. Its runtime inventory digest is `c9b70ef0aafc9516660d9b0c60cb2d9a895c0e11d2d47ba47da742a8a9961a3e`; `Contents/Resources/app.asar` SHA256 is `d91e5a66638fa1fc64ddc1762bc27e7a4e6a6e20336fd774a238d76296d33184`. The staged and packaged assembly receipts both have SHA256 `ef5db71ff7ac3c4bba190b7b052a5c4d5ddecd9265eff89d53ac38e441b94ea2`.
 
-The shell source digest is `2cfbcfff40f44d037b04388f20978924675f6fbeb1b402de9cd1e637d020e340`. The official lock digest is `afa439f37a8b544b3884460a10634c6b474736958942aa4543ea048a95d348df`; the descriptor digest is `9157bc2a957d3bd51c93b41d5747b6a28226099de3ef215d530e2030295f9aa0`. Runtime and shell source versions are `0.1.5-rc.2`; the separately identified Mint package versions remain `0.1.5-alpha.2`, with exact tarball integrity in the receipt.
+The shell source digest is `84ebce2f2fd6af7ad541c51236987c296ca1a935b98208d3edf175420c83f3f6`. The official lock digest is `afa439f37a8b544b3884460a10634c6b474736958942aa4543ea048a95d348df`; the descriptor digest is `9157bc2a957d3bd51c93b41d5747b6a28226099de3ef215d530e2030295f9aa0`. Runtime and shell source versions are `0.1.5-rc.2`; the separately identified Mint package versions remain `0.1.5-alpha.2`, with exact tarball integrity in the receipt.
 
 ## QA handoff and limitations
 
 QA owns AC-1 through AC-7, the unchanged-candidate complete `./bin/vibe verify .` exactly once, full documentation checks, and the real packaged UI/keyless conversation/exit scenario. The installed CLI does not support `--format json`; retain its supported command output as verification evidence. Use the verified synthetic Electron isolation method supplied by the orchestrator; ordinary HOME changes alone do not prove macOS isolation. No ordinary packaged UI was launched by RD.
 
 [The source-lock proposal](source-lock.proposal.json) contains the exact RC.2 observation and no bot finalization evidence. The published `.github/desktop-delivery/source-lock.json` remains unchanged. Production qualification requires normal reviewed adoption finalization and the source-lock/assembly match; local packaging is not publication, user installation, old-data migration acceptance or product acceptance. Notifications needing signed identity, real model calls, DMG production and installed-user replacement remain unverified. No full default verification, global memory update, remote push, publication or installed-app replacement was performed.
+
+## Corrective evidence after independent QA
+
+The [QA report](verification.md) remains the factual record for `024eaa1`. RD corrected synchronous packaged-smoke failure handling by awaiting the complete initialization operation, including CLI override and embedded receipt checks. The persistent `test:desktop:packaged` fixture executes the compiled application with isolated native roots and requires normal exit 0 and forbidden-override exit 1 within 30 seconds. The real `test:desktop:assembly` fixture now runs after staging in source CI and native qualification, with an environment allowlist. Delivery fixtures explicitly supply required assembly inputs; the version-mismatch fixture includes both Mint manifests and still proves inconsistent official versions are refused.
+
+Unchanged focused catch-up provenance reproduction passed in 2.56 seconds; no timeout or reliability implementation was changed. Corrected delivery/workflow/assembly tests passed all 25 cases; existing desktop workflow tests passed all 14 cases. Changed-file oxlint, Host typecheck, final `npm run desktop:stage`, the real assembled fixture, unsigned arm64 directory packaging, and the compiled packaged positive/negative fixture passed. Sandbox IPC, loopback, DNS and Electron SIGABRT failures were retried unchanged with host access. Node was v22.22.3. The exact artifact section identifies this rebuilt corrective application. RD did not repeat the complete default matrix; QA must verify the changed candidate, including combined payload/receipt tampering and final document synchronization.

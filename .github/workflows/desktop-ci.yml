@@ -58,6 +58,9 @@ jobs:
       - name: Build desktop main process
         run: pnpm run desktop:stage
 
+      - name: Exercise assembled Host and Client
+        run: pnpm run test:desktop:assembly
+
       - name: Check TypeScript projects
         run: pnpm run typecheck
 
@@ -101,10 +104,7 @@ jobs:
           set -euo pipefail
           app_path="$(find apps/desktop-mint/dist -type d -name 'DSH Desktop.app' -print -quit)"
           test -n "$app_path"
-          smoke_home="$(mktemp -d "$RUNNER_TEMP/mint-smoke.XXXXXX")"
-          mkdir -p "$smoke_home/tmp" "$smoke_home/home"
-          env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME="$smoke_home/home" CFFIXED_USER_HOME="$smoke_home/home" TMPDIR="$smoke_home/tmp" MAC_CHROMIUM_TMPDIR="$smoke_home/tmp" DSH_HOME="$smoke_home/home/.dsh" DSH_AGENTS_HOME="$smoke_home/home/.agents" "$app_path/Contents/MacOS/DSH Desktop" --user-data-dir="$smoke_home/userdata" --dsh-package-smoke
-          rm -rf "$smoke_home"
+          pnpm run test:desktop:packaged -- "$app_path/Contents/MacOS/DSH Desktop"
 
   bootstrap:
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap == true && inputs.probe != true
