@@ -1,14 +1,18 @@
 {
   "schema_version": 1,
   "status": "complete",
-  "updated_at": "2026-09-13",
+  "updated_at": "2026-09-18",
   "evidence": [
     "README.md",
     "package.json",
     "docs/context/product.md",
     "docs/context/architecture.md",
     "docs/context/design-system.md",
+    "docs/context/downstream-policy.md",
+    "docs/context/handoff.md",
     ".github/desktop-delivery/source-lock.json",
+    ".github/desktop-delivery/activation.json",
+    ".github/desktop-delivery/migration-report.json",
     "scripts/desktop-delivery/adoption.ts",
     "docs/decisions/20260908-desktop-reviewed-delivery.md",
     "apps/desktop-mint/README.md",
@@ -17,6 +21,10 @@
     "docs/decisions/20260910-desktop-mint-target-integration.md",
     "docs/decisions/20260910-desktop-mint-migration-registry.md",
     "docs/decisions/20260913-desktop-versioned-assembly.md",
+    "docs/work-items/20260913-desktop-versioned-assembly/brief.md",
+    "docs/work-items/20260913-desktop-versioned-assembly/verification.md",
+    "docs/work-items/20260913-mint-rc2-release/brief.md",
+    "docs/work-items/20260913-mint-rc2-release/verification.md",
     "apps/desktop-mint/runtime/assembly-input.json",
     "scripts/desktop-assembly.ts"
   ]

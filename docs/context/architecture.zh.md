@@ -64,4 +64,4 @@ DeepSeek Harness 是一棵 Cordis 插件树，模型适配器、Agent 驱动器�
 
 Mint 原生代码位于 `apps/desktop-mint`；上游 `apps/desktop` 与 `apps/desktop-host` 独立拥有外壳及运行时。Mint 使用普通 `desktop-mint` CLI Profile，而非上游保留的 `desktop` profile。[已接受集成决策](../decisions/20260910-desktop-mint-target-integration.zh.md)与[迁移清单](../decisions/20260910-desktop-mint-migration-registry.zh.md)绑定目标 `b2e3b2a0125854567a4a5fcba75782e42fe84901`；源码集成不构成打包升级资格认定。已发布会话世代采用上游冻结迁移阶段并保留前代；恢复需要完整备份及已交付基线运行时。
 
-[版本化组装决策](../decisions/20260913-desktop-versioned-assembly.zh.md) 约束 RC.2 候选：原生外壳验证冻结的官方 npm 运行时和单独打包的 Mint 插件，并通过 DSH 公开 API 初始化自定义 profile。已提交的交付 source-lock 在正常采用最终确认之前仍代表已发布基线；工作项保留尚未最终确认的目标提案。
+[版本化组装决策](../decisions/20260913-desktop-versioned-assembly.zh.md) 约束 RC.2 候选：原生外壳验证冻结的官方 npm 运行时和单独打包的 Mint 插件，并通过 DSH 公开 API 初始化自定义 profile。已提交的交付 source-lock 记录了最终确认的 RC.2 catch-up 与采用种子；[RC.2 发布工作项](../work-items/20260913-mint-rc2-release/verification.zh.md)记载已发布的未签名 arm64 证据，已安装用户验收仍保留在机器私有记录中。
