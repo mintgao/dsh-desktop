@@ -27,7 +27,7 @@ English | [中文](verification.zh.md)
 
 The first QA run took the default lane once on the earlier candidate: `lint`, `typecheck` and `build` passed and the `test` check failed on the corpus sweep with `UNEXPECTED BASELINE FAILURE packages/client/ui-dockkit/lib/index.js`. That failure drove the corpus exemption correction recorded under AC-5; QA also confirmed the earlier work stayed inside the accepted boundary and found no out-of-boundary change.
 
-The candidate changed after that run (the corpus checker and its spec), so a second independent QA run of the complete default lane is required on the new candidate; its receipt and verdict are appended to this record when it returns.
+The second QA run took the default lane once on the committed candidate `7e2f9428bc` and it passed: `status: passed`, `lint`, `typecheck`, `test` and `build` all passed, summary 4 passed and 0 failed, and the test check's suite totals were 22,520 passed with 0 failed. That session ended before it could re-run the focused corpus spec under both Node lines, so the AC-5 focused evidence remains the author-run sweep and spec results above; the run recorded no deviation from the accepted boundary before it ended.
 
 ## Limitations and follow-ups
 
