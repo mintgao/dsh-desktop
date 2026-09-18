@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-18-vibe-kit-upgrade.md
-2026-09-18-vibe-kit-upgrade.md: 49e2a6cd0392bc47a0e19774b405548ecf093ea3
-2026-09-18-vibe-kit-upgrade.zh.md: 4cf86da28b4bcac6ba92c0b9cbe27c9f43cbc066
+2026-09-18-vibe-kit-upgrade.md: 65a007e418b8e542a63c4de417e1541fb8760e60
+2026-09-18-vibe-kit-upgrade.zh.md: f50733c30e0fa0e40d76b6ead887f086f9f3b844

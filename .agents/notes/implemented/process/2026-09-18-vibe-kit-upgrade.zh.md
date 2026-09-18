@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-以升级方式采纳 v0.9.0 的规范 GitHub 发行包：先校验传输归档的 SHA-256 与 payload 树摘要，再由目标 payload 自带的 CLI 负责 `plan upgrade`、`upgrade` 与首次 doctor。升级保持项目自有字节不变：根 `AGENTS.md` 的 1953 个项目词保持不变，`.vibe/onboarding.json` 字节保真，不手工接受任何托管冲突。根 `AGENTS.md` 的上限精确上移托管块的增量，由 2210 改为 2871，使该文件保持框架变更前的余量；不通过压缩项目规则来吸收框架块，也绝不手工编辑托管块，因为 kit 会认证其字节区间。安装健康由已安装 CLI 的 doctor 证明；其后的接管阶段仍归宿主所有，本次变更不主张其中任何一项。
+以升级方式采纳 v0.9.0 的规范 GitHub 发行包：先校验传输归档的 SHA-256 与 payload 树摘要，再由目标 payload 自带的 CLI 负责 `plan upgrade`、`upgrade` 与首次 doctor。升级保持项目自有字节不变：根 `AGENTS.md` 的 1953 个项目词保持不变，`.vibe/onboarding.json` 字节保真，不手工接受任何托管冲突。根 `AGENTS.md` 的上限精确上移托管块的增量，由 2210 改为 2871，使该文件保持框架变更前的余量；不通过压缩项目规则来吸收框架块，也绝不手工编辑托管块，因为 kit 会认证其字节区间。安装健康由已安装 CLI 的 doctor 证明；其后的接管阶段仍归宿主所有，产生 manual-task-start 收据的后续任务在同一 PR 中记录其适配证据。
 
 ## 考虑过的替代方案
 
@@ -21,4 +21,4 @@ Status: implemented
 
 ## 后果
 
-上限自此跟随框架块，后续每次 kit 升级都重复同样的增量计算，而不是悄悄重新给项目文案定预算。本次升级新增纳入版本控制的安装文件（`AGENT_INSTALL.md`、`agent-install.json`）、`vibe-release` 技能、`vibe-tech-lead` agent 与 `.vibe/core/technical-decision-readiness.md`。健康的安装不等于已激活：就绪仍需宿主激活收据，本次变更不产生该收据。
+上限自此跟随框架块，后续每次 kit 升级都重复同样的增量计算，而不是悄悄重新给项目文案定预算。本次升级新增纳入版本控制的安装文件（`AGENT_INSTALL.md`、`agent-install.json`）、`vibe-release` 技能、`vibe-tech-lead` agent 与 `.vibe/core/technical-decision-readiness.md`。健康的安装不等于已激活：就绪需要宿主激活收据。后续任务产生了 manual-task-start 收据，已安装 CLI 判定该接管对象结构有效，并依据证据刷新了 `.vibe/onboarding.json`，修正了[架构上下文](../../../../docs/context/architecture.zh.md)中关于 RC.2 source-lock 的过时表述。
