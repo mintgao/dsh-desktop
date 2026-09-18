@@ -47,7 +47,7 @@ DeepSeek Harness is a Cordis plugin tree whose model adapters, Agent driver, too
 
 ## Commands
 
-- `.vibe/project.yaml` records the standard install, lint, typecheck, unit-test, and build commands.
+- `.vibe/project.yaml` records the standard install, lint, typecheck, unit-test, and build commands; its test entry builds the library plane before the unit lane so the corpus import sweep reads current bundles.
 - `pnpm run test:coverage`, not `pnpm run test`, is the per-file 100% CI coverage gate.
 - Product-visible behavior may additionally require `pnpm run test:snapshot`, `pnpm run test:web`, or credentialed `pnpm run test:e2e`; [the testing policy](../testing.md) chooses the tier.
 - `pnpm run doc-sync` validates documentation, while `pnpm run hygiene` validates publication and workspace constraints.

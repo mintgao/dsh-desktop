@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs'
 import { posix, resolve } from 'node:path'
+import { mintPackageNames } from './desktop-assembly.ts'
 import {
   buildRegistryIndex,
   resolveNpmPackageLock,
@@ -56,13 +57,14 @@ function cloneForVersion(manifest: object, version: string): MutableRegistryMani
  * Replace the working release with two incompatible, internally consistent DSH releases.
  * @param index - Registry metadata containing the working release.
  * @param sourceVersion - Workspace version copied into each synthetic release.
+ * @param excludedDshPackages - Independently versioned DSH packages carried through unchanged.
  * @returns Registry metadata containing both synthetic DSH releases and unchanged external packages.
  */
-export function buildDualDshRegistry(index: RegistryIndex, sourceVersion: string): RegistryIndex {
+export function buildDualDshRegistry(index: RegistryIndex, sourceVersion: string, excludedDshPackages: ReadonlySet<string>): RegistryIndex {
   const output = new Map(index)
   let dshPackages = 0
   for (const [name, versions] of index) {
-    if (!isDshPackage(name)) {
+    if (!isDshPackage(name) || excludedDshPackages.has(name)) {
       output.set(name, versions)
       continue
     }
@@ -194,7 +196,7 @@ function workspaceVersion(root: string): string {
 
 async function main(): Promise<void> {
   const root = resolve(import.meta.dirname, '..')
-  const index = buildDualDshRegistry(buildRegistryIndex(root), workspaceVersion(root))
+  const index = buildDualDshRegistry(buildRegistryIndex(root), workspaceVersion(root), mintPackageNames(root))
   const [nestedVersion, rootVersion] = SYNTHETIC_DSH_VERSIONS
   const result = await resolveNpmPackageLock(index, {
     [DSH_PACKAGE]: rootVersion,
