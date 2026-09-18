@@ -13,11 +13,19 @@ import { assemblyDigest, assemblyFiles, type AssemblyRecord } from '../apps/desk
 export const MINT_PACKAGES = ['packages/bundle/desktop-mint', 'packages/client/ui-session-notifications'] as const
 interface AssemblyInput { runtimeVersion: string; upstreamCommit: string; cliIntegrity: string }
 
+/** Read the Mint package names from the Mint-owned manifests.
+ * @param root - development checkout.
+ * @returns The manifest names of every Mint-owned package.
+ */
+export function mintPackageNames(root: string): Set<string> {
+  return new Set(MINT_PACKAGES.map(path => (JSON.parse(readFileSync(join(root, path, 'package.json'), 'utf8')) as { name: string }).name))
+}
+
 /** Reject upstream runtime dependencies on Mint-owned packages.
  * @param root - development checkout.
  */
 export function verifyMintCoupling(root: string): void {
-  const mint = new Set(MINT_PACKAGES.map(path => (JSON.parse(readFileSync(join(root, path, 'package.json'), 'utf8')) as { name: string }).name))
+  const mint = mintPackageNames(root)
   const scan = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (!entry.isDirectory() || ['node_modules', 'lib', 'backend', 'dist'].includes(entry.name)) continue

@@ -204,7 +204,7 @@ it('runs actual CLI preparation with an isolated fixture checkout and preserves 
   store(join(fixture.root, 'packages/bundle/desktop-mint/package.json'), { name: '@deepseek-ai/dsh-desktop-mint', version: '0.4.0' })
   store(join(fixture.root, 'packages/client/ui-session-notifications/package.json'), { name: '@deepseek-ai/dsh-ui-session-notifications', version: '0.7.0' })
   // The frozen local-link fixture must not wait for pnpm's registry update check.
-  writeFileSync(join(fixture.root, 'pnpm-workspace.yaml'), 'updateNotifier: false\n')
+  writeFileSync(join(fixture.root, '.npmrc'), 'update-notifier=false\n')
   writeFileSync(join(fixture.root, 'pnpm-lock.yaml'), `lockfileVersion: '9.0'\nsettings:\n  autoInstallPeers: true\n  excludeLinksFromLockfile: false\nimporters:\n  .:\n    devDependencies:\n      tsx:\n        specifier: link:${resolve('node_modules/tsx')}\n        version: link:${resolve('node_modules/tsx')}\n`)
   writeFileSync(join(fixture.root, '.gitignore'), 'node_modules/\n')
   for (const name of ['check-workspace-constraints.ts', 'verify-package-dependencies.ts']) writeFileSync(join(fixture.root, 'scripts', name), 'import assert from "node:assert/strict"; assert.equal(process.env.GH_TOKEN, undefined)\n')

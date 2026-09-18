@@ -55,7 +55,7 @@ describe('npm install layout verifier', () => {
       }]])],
     ])
 
-    const dual = buildDualDshRegistry(index, '0.1.1-rc.2')
+    const dual = buildDualDshRegistry(index, '0.1.1-rc.2', new Set())
 
     expect([...dual.get('@deepseek-ai/dsh')?.keys() ?? []]).toEqual(['0.1.0', '0.2.0'])
     expect(dual.get('@deepseek-ai/dsh')?.get('0.1.0')).toMatchObject({
@@ -68,6 +68,28 @@ describe('npm install layout verifier', () => {
       dependencies: { '@deepseek-ai/dsh-child': '^0.2.0' },
     })
     expect(dual.get('@deepseek-ai/cordis')).toBe(index.get('@deepseek-ai/cordis'))
+  })
+
+  it('carries independently versioned Mint packages through and still rejects an official package without the workspace version', () => {
+    const index: RegistryIndex = new Map([
+      ['@deepseek-ai/dsh', new Map([['0.1.1-rc.2', {
+        name: '@deepseek-ai/dsh',
+        version: '0.1.1-rc.2',
+      }]])],
+      ['@deepseek-ai/dsh-desktop-mint', new Map([['0.4.0', {
+        name: '@deepseek-ai/dsh-desktop-mint',
+        version: '0.4.0',
+      }]])],
+    ])
+
+    const dual = buildDualDshRegistry(index, '0.1.1-rc.2', new Set(['@deepseek-ai/dsh-desktop-mint']))
+
+    expect([...dual.get('@deepseek-ai/dsh-desktop-mint')?.keys() ?? []]).toEqual(['0.4.0'])
+    expect(dual.get('@deepseek-ai/dsh-desktop-mint')).toBe(index.get('@deepseek-ai/dsh-desktop-mint'))
+    expect([...dual.get('@deepseek-ai/dsh')?.keys() ?? []]).toEqual(['0.1.0', '0.2.0'])
+    expect(() => buildDualDshRegistry(index, '0.1.1-rc.2', new Set())).toThrow(
+      '@deepseek-ai/dsh-desktop-mint has no workspace version 0.1.1-rc.2',
+    )
   })
 
   it('accepts isolated DSH releases with one shared Cordis installation', () => {

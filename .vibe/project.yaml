@@ -9,7 +9,7 @@ commands:
   install: "pnpm install"
   lint: "pnpm run lint"
   typecheck: "pnpm run typecheck"
-  test: "pnpm run test"
+  test: "pnpm run build:lib && pnpm run test"
   build: "pnpm run build"
 feedback:
   mode: "ask"

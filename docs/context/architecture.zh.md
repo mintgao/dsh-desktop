@@ -47,7 +47,7 @@ DeepSeek Harness 是一棵 Cordis 插件树，模型适配器、Agent 驱动器�
 
 ## 命令
 
-- `.vibe/project.yaml` 记录标准安装、lint、类型检查、单元测试和构建命令。
+- `.vibe/project.yaml` 记录标准安装、lint、类型检查、单元测试和构建命令；其 test 条目在单元通道前构建库平面，使语料导入扫描读取当前 bundle。
 - `pnpm run test:coverage` 而不是 `pnpm run test`，才是要求逐文件达到 100% 的 CI 覆盖率门禁。
 - 面向产品用户的行为还可能需要 `pnpm run test:snapshot`、`pnpm run test:web` 或需要凭证的 `pnpm run test:e2e`；测试层级由[测试策略](../testing.zh.md)确定。
 - `pnpm run doc-sync` 校验文档，`pnpm run hygiene` 校验发布与 workspace 约束。
