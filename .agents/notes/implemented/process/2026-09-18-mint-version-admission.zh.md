@@ -12,7 +12,7 @@ Status: implemented
 
 布局检查器把独立版本的 Mint 包视为合成发布族之外的成员：`buildDualDshRegistry` 接收被排除的包名，将其注册表条目原样带过，而官方 `@deepseek-ai/dsh*` 包保留严格的工作区版本要求。包名来自 `mintPackageNames`，由 `scripts/desktop-assembly.ts` 从 `verifyMintCoupling` 已使用的同一份 `MINT_PACKAGES` 清单派生，因此两个消费者不会漂移。单元测试把官方包拒绝保留为反例。
 
-交付 CLI 夹具把 `update-notifier=false` 写入它自己的 `.npmrc`；此前 `pnpm-workspace.yaml` 中的键在 pnpm 11 下没有阻止该检查，于是子进程的 `pnpm install` 一直等待注册表请求直到夹具期限。`.vibe/project.yaml` 中配置的验证 `test` 命令现在先运行 `pnpm run build:lib` 再运行 `pnpm run test`，这正是语料导入扫描所读取的依赖。
+交付 CLI 夹具把 `update-notifier=false` 写入它自己的 `.npmrc`；此前 `pnpm-workspace.yaml` 中的键在 pnpm 11 下没有阻止该检查，于是子进程的 `pnpm install` 一直等待注册表请求直到夹具期限。`.vibe/project.yaml` 中配置的验证 `test` 命令现在先运行 `pnpm run build:lib` 再运行 `pnpm run test`，这正是语料导入扫描所读取的依赖。语料导入扫描对 dockkit 的豁免以拒绝类型为键 —— 命名 `.css` 文件的 `ERR_UNKNOWN_FILE_EXTENSION` —— 而不是钉死的一条路径，因为 Node 在该 bundle 的 import 图中先拒绝哪条 `.css` 取决于 Node 线；分类用例仍会使因其他任何原因停止可导入的 bundle 失败。
 
 ## 考虑过的替代方案
 
@@ -22,4 +22,4 @@ Status: implemented
 
 ## 后果
 
-依赖布局作业可以在 Mint 包带独立版本的工作区上通过，而真实的 Mint 版本漂移仍会通过官方族检查、耦合检查与测试中的反例失败。夹具不再依赖机器的注册表可达性。默认验证运行现在会在单元通道前构建库平面，因此耗时增加；在带过期构建产物的树上直接运行 `pnpm run test` 仍可能使语料扫描失败，把该扫描迁移到产物通道仍是未完成项。
+依赖布局作业可以在 Mint 包带独立版本的工作区上通过，而真实的 Mint 版本漂移仍会通过官方族检查、耦合检查与测试中的反例失败。夹具不再依赖机器的注册表可达性。语料扫描在两条受支持的 Node 线下给出相同判定 —— 272 个可导入 bundle 与 5 个豁免 —— 因此验证运行不再取决于操作者 shell 解析到哪个 Node。默认验证运行现在会在单元通道前构建库平面，因此耗时增加；把语料扫描迁移到产物通道仍是未完成项。

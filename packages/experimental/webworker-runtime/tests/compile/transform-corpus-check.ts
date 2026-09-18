@@ -24,7 +24,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repositoryRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
 const DOCKKIT_BUNDLE = 'packages/client/ui-dockkit/lib/index.js'
-const DOCKKIT_CSS = join(repositoryRoot, 'packages/client/ui-dockkit/lib/components/dockkit.module.css')
+
+/**
+ * @returns Whether Node refused a `.css` import reached from the bundle.
+ * The failing path differs by Node version: which `.css` in the import graph
+ * fails first depends on how far that loader resolves before refusing, so the
+ * exemption keys on the refusal kind rather than one pinned path.
+ */
+const cssImportFailure = (reason: unknown): boolean =>
+  reason instanceof Error
+  && 'code' in reason
+  && reason.code === 'ERR_UNKNOWN_FILE_EXTENSION'
+  && reason.message.endsWith('.css')
 
 /**
  * Files Node's ESM loader cannot import in this repository. None is a finding:
@@ -111,10 +122,7 @@ if (files.length === 0) {
     try {
       await import(pathToFileURL(file).href)
     } catch (reason) {
-      const expectedDockkitCss = reason instanceof Error
-        && 'code' in reason && reason.code === 'ERR_UNKNOWN_FILE_EXTENSION'
-        && reason.message === `Unknown file extension ".css" for ${DOCKKIT_CSS}`
-      if (exemption === undefined || (key === DOCKKIT_BUNDLE && !expectedDockkitCss)) {
+      if (exemption === undefined || (key === DOCKKIT_BUNDLE && !cssImportFailure(reason))) {
         // A bundle that stopped being importable is a real finding, so it
         // fails rather than joining a tolerated total.
         fail(`- UNEXPECTED BASELINE FAILURE ${key}: ${(reason as Error).message.split('\n')[0]}`)

@@ -13,7 +13,7 @@ English | [中文](brief.zh.md)
 - Trigger evidence: the npm install layout checker changes which package versions it admits into the synthesized DSH release family, and the configured verification test command changes which artifact plane it builds before sweeping
 - Decision owner: Tech Lead `assembly_architecture`
 - Governing decision: none
-- No-new-decision rationale: the change applies the accepted independent-Mint-version rule of the versioned-assembly decision and the RC2 workspace-consistency acceptance to a second consumer; the remaining choices are local and reversible and change no shared contract
+- No-new-decision rationale: the change applies the accepted independent-Mint-version rule of the versioned-assembly decision and the RC2 workspace-consistency acceptance to a second consumer, and replaces one over-specified test-gate exemption predicate with the condition its own comment states; the remaining choices are local and reversible and change no shared contract
 - Review mode: `independent-agent`
 - Review result: `approved`
 - Review evidence: `docs/work-items/20260918-green-default-verification/technical-review.md`
@@ -31,7 +31,7 @@ The default verification lane and the dependency-layout check both pass on this 
 
 ## Context
 
-`docs/work-items/20260913-mint-rc2-release/brief.md` accepted independent Mint package versions and applied that rule to the workspace manifest checker. The npm install layout check was not updated, so `pnpm run verify-npm-install-layout` aborts with `@deepseek-ai/dsh-desktop-mint has no workspace version 0.1.5-rc.2`; the same job failed on the merged RC2-homepage pull request and on `main`. Separately, the isolated delivery CLI fixture spawns a real CLI whose `pnpm install` reaches the registry update check and exceeds the fixture's 30-second child deadline on a machine where that check is reachable. The corpus import sweep reads built bundles and reports a stale artifact as an unexpected baseline failure when the configured test command runs before any build.
+`docs/work-items/20260913-mint-rc2-release/brief.md` accepted independent Mint package versions and applied that rule to the workspace manifest checker. The npm install layout check was not updated, so `pnpm run verify-npm-install-layout` aborts with `@deepseek-ai/dsh-desktop-mint has no workspace version 0.1.5-rc.2`; the same job failed on the merged RC2-homepage pull request and on `main`. Separately, the isolated delivery CLI fixture spawns a real CLI whose `pnpm install` reaches the registry update check and exceeds the fixture's 30-second child deadline on a machine where that check is reachable. The corpus import sweep pinned one exact `.css` path per exempted bundle, so its verdict depended on the Node line: Node 24 reaches a different `.css` in the same import graph and reported an unexpected baseline failure on a tree the documented toolchain had just built.
 
 ## Scope
 
@@ -44,12 +44,13 @@ The default verification lane and the dependency-layout check both pass on this 
 - [ ] AC-2: `pnpm exec vitest run scripts/desktop-delivery/tests/operations.spec.ts` passes without environment overrides on this machine.
 - [ ] AC-3: The default `./bin/vibe verify . --format json` run reports every configured check passed, with the test lane sweeping build output it built itself.
 - [ ] AC-4: `pnpm run doc-sync` passes and the work-item, Agent Note and context records describe the changed checker rule and verification command.
+- [ ] AC-5: The corpus import sweep reports the same verdict under both supported Node lines (22 and 24), and its classification cases still fail a bundle that stops being importable for any reason other than a `.css` import.
 
 ## Design and technical notes
 
 The checker keeps its purpose: synthesize two incompatible DSH releases from the workspace and verify npm's physical placement. Independently versioned Mint packages are not members of that release family, so they are carried through the synthesized index unchanged instead of being cloned into both synthetic versions. The inventory is shared with the existing consumer rather than duplicated: `scripts/desktop-assembly.ts` exports the Mint package names derived from `MINT_PACKAGES`, and both `verifyMintCoupling` and the layout checker use it. Official `@deepseek-ai/dsh*` packages keep the strict workspace-version requirement.
 
-The delivery CLI fixture disables pnpm's registry update check in the fixture itself, so the child process no longer spends its budget on a network check that the fixture comment already intended to avoid. The verification test command in `.vibe/project.yaml` builds the library plane before running the unit lane, which is the dependency the corpus import sweep reads.
+The delivery CLI fixture disables pnpm's registry update check in the fixture itself, so the child process no longer spends its budget on a network check that the fixture comment already intended to avoid. The verification test command in `.vibe/project.yaml` builds the library plane before running the unit lane, which is the dependency the corpus import sweep reads. The corpus sweep's dockkit exemption keys on the refusal kind — `ERR_UNKNOWN_FILE_EXTENSION` naming a `.css` file — instead of one pinned path, and its classification cases keep failing a bundle that stops being importable for any other reason.
 
 ## Risks and open decisions
 

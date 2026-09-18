@@ -34,9 +34,10 @@ test('every built bundle imports under Node', (context) => {
 // The hook replaces only the chosen bundle; shared build artifacts stay intact.
 test.each([
   ['expected-css', 0, 'baselineExempt=1 unexpectedBaselineFailure=0'],
+  ['css-elsewhere', 0, 'baselineExempt=1 unexpectedBaselineFailure=0'],
   ['error', 1, '- UNEXPECTED BASELINE FAILURE'],
-  ['other-css', 1, '- UNEXPECTED BASELINE FAILURE'],
   ['other-code', 1, '- UNEXPECTED BASELINE FAILURE'],
+  ['other-extension', 1, '- UNEXPECTED BASELINE FAILURE'],
   ['clean', 1, '- STALE EXEMPTION'],
 ] as const)('classifies dockkit import: %s', (mode, status, finding) => {
   const root = new URL('../../../../../', import.meta.url)
@@ -44,7 +45,7 @@ test.each([
   const css = fileURLToPath(new URL('packages/client/ui-dockkit/lib/components/dockkit.module.css', root))
   const message = mode === 'error'
     ? 'dockkit-negative-control'
-    : `Unknown file extension ".css" for ${mode === 'other-css' ? `${css}.other.css` : css}`
+    : `Unknown file extension "${mode === 'other-extension' ? '.foo' : '.css'}" for ${mode === 'css-elsewhere' ? `${css}.other.css` : mode === 'other-extension' ? `${css}.foo` : css}`
   const source = mode === 'clean'
     ? 'export {}'
     : `throw Object.assign(new Error(${JSON.stringify(message)}), { code: ${JSON.stringify(mode === 'other-code' ? 'ERR_OTHER' : 'ERR_UNKNOWN_FILE_EXTENSION')} })`
@@ -74,7 +75,7 @@ test.each([
   expect(finished.signal).toBeNull()
   expect(finished.status, output).toBe(status)
   expect(output).toContain(finding)
-  if (mode === 'error' || mode === 'other-css' || mode === 'other-code') {
+  if (mode === 'error' || mode === 'other-code' || mode === 'other-extension') {
     expect(output).toContain(`- UNEXPECTED BASELINE FAILURE ${bundle}: ${message}\n`)
   }
 })

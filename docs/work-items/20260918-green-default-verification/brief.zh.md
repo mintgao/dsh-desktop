@@ -13,7 +13,7 @@
 - 触发证据：npm 安装布局检查器改变了它纳入合成 DSH 发布族的包版本准入规则，且配置的验证测试命令改变了它在扫描前构建的产物平面
 - 决策负责人：Tech Lead `assembly_architecture`
 - 管理决策：none
-- 无新决策理由：该变更把版本化组装决策与 RC2 工作区一致性验收中已接受的独立 Mint 版本规则应用到第二个消费者；其余选择是局部且可回退的，不改变任何共享契约
+- 无新决策理由：该变更把版本化组装决策与 RC2 工作区一致性验收中已接受的独立 Mint 版本规则应用到第二个消费者，并把一条过度指定的测试门禁豁免判定替换为其注释本身所声明的条件；其余选择是局部且可回退的，不改变任何共享契约
 - 审核模式：`independent-agent`
 - 审核结果：`approved`
 - 审核证据：`docs/work-items/20260918-green-default-verification/technical-review.md`
@@ -31,7 +31,7 @@
 
 ## 背景
 
-`docs/work-items/20260913-mint-rc2-release/brief.md` 接受了 Mint 包的独立版本，并把该规则应用到工作区 manifest 检查器。npm 安装布局检查未同步更新，因此 `pnpm run verify-npm-install-layout` 以 `@deepseek-ai/dsh-desktop-mint has no workspace version 0.1.5-rc.2` 中止；同一作业在已合并的 RC2 主页 PR 与 `main` 上也失败。另外，隔离的交付 CLI 夹具会启动真实 CLI，其 `pnpm install` 会触达注册表更新检查，在更新检查可达的机器上超出夹具 30 秒的子进程期限。语料导入扫描读取已构建产物，当配置的测试命令先于任何构建运行时，会把过期产物报告为意外的基线失败。
+`docs/work-items/20260913-mint-rc2-release/brief.md` 接受了 Mint 包的独立版本，并把该规则应用到工作区 manifest 检查器。npm 安装布局检查未同步更新，因此 `pnpm run verify-npm-install-layout` 以 `@deepseek-ai/dsh-desktop-mint has no workspace version 0.1.5-rc.2` 中止；同一作业在已合并的 RC2 主页 PR 与 `main` 上也失败。另外，隔离的交付 CLI 夹具会启动真实 CLI，其 `pnpm install` 会触达注册表更新检查，在更新检查可达的机器上超出夹具 30 秒的子进程期限。语料导入扫描为每个豁免 bundle 钉死一条确切的 `.css` 路径，因此其判定依赖 Node 线：Node 24 会在同一 import 图中撞到另一条 `.css`，从而在文档化工具链刚构建出的树上报告意外的基线失败。
 
 ## 范围
 
@@ -44,12 +44,13 @@
 - [ ] AC-2：`pnpm exec vitest run scripts/desktop-delivery/tests/operations.spec.ts` 在本机无需环境变量覆盖即通过。
 - [ ] AC-3：默认 `./bin/vibe verify . --format json` 运行报告所有配置检查通过，测试通道扫描的是它自己构建的产物。
 - [ ] AC-4：`pnpm run doc-sync` 通过，且工作项、Agent Note 与上下文记录描述了变更后的检查器规则与验证命令。
+- [ ] AC-5：语料导入扫描在两条受支持的 Node 线（22 与 24）下给出相同判定，且其分类用例仍会使"因 `.css` 导入之外的原因停止可导入"的 bundle 失败。
 
 ## 设计与技术说明
 
 检查器保持其目的：从工作区合成两个互不兼容的 DSH 发布并验证 npm 的物理放置。独立版本的 Mint 包不是该发布族的成员，因此它们按原版本原样通过合成索引，而不被克隆成两个合成版本。清单与既有消费者共享而非复制：`scripts/desktop-assembly.ts` 导出由 `MINT_PACKAGES` 派生的 Mint 包名，`verifyMintCoupling` 与布局检查器都使用它。官方 `@deepseek-ai/dsh*` 包保留严格的工作区版本要求。
 
-交付 CLI 夹具在夹具自身内部禁用 pnpm 的注册表更新检查，使子进程不再把预算花在夹具注释本就打算避免的网络检查上。`.vibe/project.yaml` 中的验证测试命令在运行单元通道前构建库平面，这正是语料导入扫描读取的依赖。
+交付 CLI 夹具在夹具自身内部禁用 pnpm 的注册表更新检查，使子进程不再把预算花在夹具注释本就打算避免的网络检查上。`.vibe/project.yaml` 中的验证测试命令在运行单元通道前构建库平面，这正是语料导入扫描读取的依赖。语料扫描对 dockkit 的豁免现在以拒绝类型为键 —— 命名 `.css` 文件的 `ERR_UNKNOWN_FILE_EXTENSION` —— 而不是钉死的一条路径；其分类用例仍会使因其他任何原因停止可导入的 bundle 失败。
 
 ## 风险与未决决策
 
