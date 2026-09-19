@@ -31,6 +31,8 @@ Channel 家族把一个 DSH Session 连接到即时通讯平台，让用户可�
 
 [远程通道连接决策](../../docs/decisions/0001-remote-channel-connections.zh.md)拥有持久契约：注册表接口、会话绑定的持久性、接纳事务的抽取、出站投递、会话命令、权限提问转发，以及每个包的所有权。
 
+[通道子系统](../../docs/subsystems/channel.zh.md)是注册表的提供方约定、其注册生命周期，以及提供方、消费方与 Remote 控制器共享值的参考资料。
+
 <a id="dev-note"></a>
 ## 开发备注
 

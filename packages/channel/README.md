@@ -31,6 +31,8 @@ The Channel family connects a DSH Session to an instant-messaging platform so a 
 
 The [remote channel connections decision](../../docs/decisions/0001-remote-channel-connections.md) owns the durable contracts: the registry interface, conversation-binding durability, the admission extraction, outbound delivery, conversation commands, the permission-question relay, and per-package ownership.
 
+The [channel subsystem](../../docs/subsystems/channel.md) is the reference for the registry's provider contract, its registration lifetime, and the values providers, the Consumer, and the Remote controller share.
+
 <a id="dev-note"></a>
 ## Dev Note
 

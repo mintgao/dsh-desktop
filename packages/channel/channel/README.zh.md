@@ -62,7 +62,7 @@ summary
 <a id="composition"></a>
 ## 组合
 
-在 Host 平面加载注册表。提供方插件注入 `channels`，并通过自己的 effect 交出 `register()` 返回的释放函数。消费方注入 `channels`，并通过 `ctx.effect` 安装其入站监听器。
+在 Host 平面加载注册表。提供方插件注入 `channels`，并通过自己的 effect 交出 `register()` 返回的释放函数。消费方注入 `channels`，并通过 `ctx.effect` 安装其入站监听器。[通道子系统](../../../docs/subsystems/channel.zh.md)是提供方约定、注册生命周期，以及本注册表所传递值的参考资料。
 
 <a id="model-experience"></a>
 ## 模型体验

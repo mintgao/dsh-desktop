@@ -594,6 +594,37 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'channels',
+    summary: 'Registry of channel providers.',
+    description: 'Registry of channel providers. Providers register during plugin apply; the registry enumerates them for a controller, forwards each provider\'s authenticated inbound messages to the Consumer, and announces provider-set and connection-state changes so a projection can refresh.',
+    methods: [
+      {
+        signature: 'register(provider: ChannelProvider): () => void',
+        description: 'Register one borrowed same-process provider and begin its inbound delivery. The provider\'s `attach` runs synchronously inside this registration\'s effect, so a throwing provider fails the registration loudly instead of half-registering.',
+        parameters: [{ name: 'provider', description: 'the platform connection to register.' }],
+        returns: 'the exact Cordis effect disposer that unregisters the provider and aborts its registration signal.',
+      },
+      {
+        signature: 'get(id: ChannelId): ChannelProvider | undefined',
+        description: 'Resolve one registered provider by identity.',
+        parameters: [{ name: 'id', description: 'the registration identity to look up.' }],
+        returns: 'the provider, or `undefined` when it is not registered.',
+      },
+      {
+        signature: 'onInbound(listener: InboundListener): () => void',
+        description: 'Observe every authenticated inbound message from every registered provider.',
+        parameters: [{ name: 'listener', description: 'called once per published message; its failures are contained and logged.' }],
+        returns: 'a disposer that removes the listener.',
+      },
+      {
+        signature: 'onChange(listener: ChangeListener): () => void',
+        description: 'Observe provider-set and connection-state changes.',
+        parameters: [{ name: 'listener', description: 'called after a registration change or a provider\'s `changed()` announcement.' }],
+        returns: 'a disposer that removes the listener.',
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -3809,6 +3840,50 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BrandedNumber',
     declaration: 'export type BrandedNumber<B extends string> = number & {\n    readonly [BRAND]: B;\n};',
+  },
+  {
+    name: 'ChannelConnectionState',
+    declaration: 'export type ChannelConnectionState = {\n    readonly status: \'idle\';\n} | {\n    readonly status: \'connecting\';\n} | {\n    readonly status: \'connected\';\n} | {\n    readonly status: \'unavailable\';\n    readonly diagnostic: string;\n};',
+  },
+  {
+    name: 'ChannelConversationId',
+    declaration: 'export type ChannelConversationId = Branded<\'ChannelConversationId\'>;',
+  },
+  {
+    name: 'ChannelEventMap',
+    declaration: 'export interface ChannelEventMap {\n}',
+  },
+  {
+    name: 'ChannelEventOf',
+    declaration: 'export type ChannelEventOf<K extends string> = K extends keyof ChannelEventMap ? ChannelEventMap[K] : JsonValue;',
+  },
+  {
+    name: 'ChannelId',
+    declaration: 'export type ChannelId = Branded<\'ChannelId\'>;',
+  },
+  {
+    name: 'ChannelInboundMessage',
+    declaration: 'export interface ChannelInboundMessage<K extends string = string> {\n    readonly channel: ChannelId;\n    readonly conversationId: ChannelConversationId;\n    readonly sender: ChannelUserId;\n    readonly messageId: ChannelMessageId;\n    readonly text: string;\n    readonly receivedAt: number;\n    readonly event: ChannelEventOf<K>;\n}',
+  },
+  {
+    name: 'ChannelMessageId',
+    declaration: 'export type ChannelMessageId = Branded<\'ChannelMessageId\'>;',
+  },
+  {
+    name: 'ChannelOutboundMessage',
+    declaration: 'export interface ChannelOutboundMessage {\n    readonly text: string;\n}',
+  },
+  {
+    name: 'ChannelProvider',
+    declaration: 'export interface ChannelProvider<K extends string = string> {\n    readonly id: ChannelId;\n    readonly kind: K;\n    readonly displayName: string;\n    readonly state: ChannelConnectionState;\n    readonly attach: (control: ChannelProviderControl) => void;\n    readonly send: (conversation: ChannelConversationId, message: ChannelOutboundMessage, signal: AbortSignal) => Promise<void>;\n}',
+  },
+  {
+    name: 'ChannelProviderControl',
+    declaration: 'export interface ChannelProviderControl {\n    readonly signal: AbortSignal;\n    readonly publish: (message: ChannelInboundMessage) => void;\n    readonly changed: () => void;\n}',
+  },
+  {
+    name: 'ChannelUserId',
+    declaration: 'export type ChannelUserId = Branded<\'ChannelUserId\'>;',
   },
   {
     name: 'ClientArtifactBaseline',

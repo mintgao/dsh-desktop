@@ -65,6 +65,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   clientModules: 'client-modules.md',
   codeRuntime: 'code-runtime.md',
   commands: 'commands.md',
+  channels: 'channel.md',
   compaction: 'compaction.md',
   cordisInspect: 'extensions.md',
   authorization: 'credentials.md',
@@ -245,6 +246,10 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  ChannelId: 'channel.md',
+  ChannelProvider: 'channel.md',
+  InboundListener: 'channel.md',
+  ChangeListener: 'channel.md',
   Agent: 'core.md',
   AgentCancelCause: 'core.md',
   AgentFactory: 'core.md',

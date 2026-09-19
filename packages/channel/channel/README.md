@@ -62,7 +62,7 @@ Adding a member is additive data, not a Session log format change: `MessageSourc
 <a id="composition"></a>
 ## Composition
 
-Load the registry on the Host plane. Provider plugins inject `channels` and yield the disposer returned by `register()` through their own effect. A Consumer injects `channels` and installs its inbound listener through `ctx.effect`.
+Load the registry on the Host plane. Provider plugins inject `channels` and yield the disposer returned by `register()` through their own effect. A Consumer injects `channels` and installs its inbound listener through `ctx.effect`. The [channel subsystem](../../../docs/subsystems/channel.md) is the reference for the provider contract, the registration lifetime, and the values this registry moves.
 
 <a id="model-experience"></a>
 ## Model Experience
