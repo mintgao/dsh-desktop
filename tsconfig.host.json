@@ -282,6 +282,7 @@
     { "path": "./packages/compaction/command-compact" },
     { "path": "./packages/compaction/compaction-tool-result-pruner" },
     { "path": "./packages/channel/channel" },
+    { "path": "./packages/session/session-admission" },
     { "path": "./packages/web/web" },
     { "path": "./packages/web/web-search-exa" },
     { "path": "./packages/web/web-search-perplexity" },

@@ -93,6 +93,8 @@
       "@deepseek-ai/dsh-channel": ["./packages/channel/channel/src"],
       "@deepseek-ai/dsh-channel/brand": ["./packages/channel/channel/src/brand.ts"],
       "@deepseek-ai/dsh-channel/types": ["./packages/channel/channel/src/types.ts"],
+      "@deepseek-ai/dsh-session-admission": ["./packages/session/session-admission/src"],
+      "@deepseek-ai/dsh-session-admission/types": ["./packages/session/session-admission/src/types.ts"],
       "@deepseek-ai/dsh-goal/types": ["./packages/goal/goal/src/types.ts"],
       "@deepseek-ai/dsh-goal/client": ["./packages/goal/goal/src/client.ts"],
       "@deepseek-ai/dsh-llm/types": ["./packages/llm/llm/src/types.ts"],

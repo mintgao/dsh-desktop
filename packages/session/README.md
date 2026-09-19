@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The session group keeps conversations durable, restores released log formats, and makes committed history available after restart. Its storage and checkpoint packages protect requests, tool side effects, and completed steps; projection packages derive client-ready values; title packages name sessions; telemetry packages report activity. Start with the shipped JSONL storage, then add checkpointing and only the projections, title policy, or telemetry your deployment needs. Each package README owns its guarantees and configuration, while a sibling query group provides independent read and tool access.
+The session group keeps conversations durable, restores released log formats, and makes committed history available after restart. Its storage and checkpoint packages protect requests, tool side effects, and completed steps; projection packages derive client-ready values; title packages name sessions; telemetry packages report activity; the admission library creates a root Session from an external trigger. Start with the shipped JSONL storage, then add checkpointing and only the projections, title policy, or telemetry your deployment needs. Each package README owns its guarantees and configuration, while a sibling query group provides independent read and tool access.
 
 ## Table of Contents
 
@@ -22,7 +22,7 @@ The session group keeps conversations durable, restores released log formats, an
 <a id="packages"></a>
 ## Packages
 
-The group splits into four families: durable storage (persistence seam, backends, checkpoint policy), projections, titles, and telemetry. Each package README owns its contract and configuration.
+The group splits into five families: durable storage (persistence seam, backends, checkpoint policy), projections, titles, telemetry, and admission. Each package README owns its contract and configuration.
 
 ### Persistence
 
@@ -62,7 +62,15 @@ The group splits into four families: durable storage (persistence seam, backends
 | [`session-telemetry/`](session-telemetry/README.md) | Captures session activity and hands records to a configured reporting backend | `ctx.sessionTelemetry` |
 | [`session-telemetry-otel/`](session-telemetry-otel/README.md) | Delivers telemetry through OpenTelemetry logs in `FEEDBACK_ONLY` or `DISABLED` mode | registers on `ctx.sessionTelemetry` |
 
-Only one title provider may register at a time; without one, the title service keeps its deterministic fallback. The subsystem pages below are the backend-neutral references for each family.
+Only one title provider may register at a time; without one, the title service keeps its deterministic fallback. The subsystem pages below are the backend-neutral references for the storage, projection, title, and telemetry families.
+
+### Admission
+
+| Package | Role | ctx key |
+|---|---|---|
+| [`session-admission/`](session-admission/README.md) | The one external-Session admission transaction every trigger shares: validate a request, resolve presets and the Workspace, create and attach the Agent, then admit the follow-up | library — no ctx key |
+
+The [remote channel connections decision](../../docs/decisions/0001-remote-channel-connections.md) owns the transaction's ordering contract and the reason it is a package of its own.
 
 -----
 
