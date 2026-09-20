@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/work-items/20260920-wechat-account-ownership/technical-review.md
+technical-review.md: 5dd25c023587918afb86f6b465283cadd045394b
+technical-review.zh.md: 2c0545ed6f864a36d643b73df255d0ff4af8aaa6
