@@ -112,4 +112,59 @@ resumeCursors(channel: ChannelId): readonly string[]
 ```
 
 Source: [`packages/channel/channel-session/src/index.ts`](../../packages/channel/channel-session/src/index.ts)
+
+<a id="ctxchannelweixin--weixinchannelservice"></a>
+
+### `ctx.channelWeixin` — `WeixinChannelService`
+
+The WeChat accounts of one composition. It restores every stored account at init, owns the one live login sequence, and gives each account's provider its own lock, poll, and registration.
+
+```ts cordis-catalog
+/**
+ * Start a QR login: fetch the first code and run the sequence in the
+ * background, replacing any sequence already live. A confirmed scan stores
+ * the account it bound and starts that account's connection.
+ * @returns the state after the first code was fetched.
+ */
+async beginLogin(): Promise<WeixinLoginState>
+
+/** Cancel a login sequence in flight; a no-op when none is. */
+cancelLogin(): void
+
+/**
+ * Stop using one account: unregister its provider once its poll stopped and
+ * its lock was released, then delete its stored login. The platform session
+ * is not released — the platform releases it only when another login replaces
+ * it — and every other account is left untouched.
+ * @param id - the account's registration identity, as {@link accounts} reports it.
+ * @returns resolution once the account is gone from this composition.
+ */
+async disconnect(id: ChannelId): Promise<void>
+```
+
+Source: [`packages/channel/channel-weixin/src/index.ts`](../../packages/channel/channel-weixin/src/index.ts)
+
+<a id="channel-weixin-events"></a>
+
+### `channel-weixin/*` events
+
+<a id="channel-weixinlogin--emit"></a>
+
+#### `channel-weixin/login` — emit
+
+One login sequence reported a new state: the code being waited on, the scan the platform observed, the confirmation that stored an account, or the failure that ended an attempt. The settings surface the platform's own controller drives is the only subscriber.
+
+```ts cordis-catalog
+/**
+ * One login sequence reported a new state: the code being waited on, the
+ * scan the platform observed, the confirmation that stored an account, or
+ * the failure that ended an attempt. The settings surface the platform's
+ * own controller drives is the only subscriber.
+ * @param state - the login sequence's observable state.
+ * @mode emit
+ */
+'channel-weixin/login'(state: WeixinLoginState): void
+```
+
+Source: [`packages/channel/channel-weixin/src/types.ts`](../../packages/channel/channel-weixin/src/types.ts)
 <!-- END GENERATED cordis-surface -->

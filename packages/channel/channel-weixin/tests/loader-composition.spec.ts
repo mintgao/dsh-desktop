@@ -1,8 +1,9 @@
 /**
- * Real Loader composition for the WeChat provider: one cordis.yml assembles the
- * provider over the real channel registry, with the iLink transport scripted —
- * the loaded tree runs the QR login, publishes one normalized message on the
- * channel event, and splits one reply across the platform's chunks.
+ * Real Loader composition for the WeChat channel: one cordis.yml assembles the
+ * account service over the real channel registry, with the iLink transport
+ * scripted — the loaded tree runs the QR login, registers the account the scan
+ * bound, publishes one normalized message on the channel event, and splits one
+ * reply across the platform's chunks.
  */
 
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -14,12 +15,13 @@ import { Context } from '@deepseek-ai/cordis'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import * as channelPlugin from '@deepseek-ai/dsh-channel'
-import { ChannelConversationId, ChannelId } from '@deepseek-ai/dsh-channel'
+import { ChannelConversationId } from '@deepseek-ai/dsh-channel'
 import type { ChannelInboundMessage } from '@deepseek-ai/dsh-channel'
 import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import type { WeixinSendRequest } from '../src/transport.ts'
 import * as weixinPlugin from '../src/index.ts'
-import type { WeixinChannelProvider } from '../src/index.ts'
+import { accountChannelId, accountRecordKey } from '../src/accounts.ts'
+import type { WeixinAccountProvider } from '../src/provider.ts'
 
 /** The scripted iLink transport the loaded provider speaks to. */
 const scripted = vi.hoisted(() => ({
@@ -100,15 +102,18 @@ describe('real Loader composition', () => {
     const configPath = join(root, 'cordis.yml')
     await writeFile(configPath, fixture.replace('{{lockRoot}}', root.replaceAll('\\', '/')))
     // A stale lock from a crashed instance is overridden, which the provider reports.
-    await writeFile(join(root, 'weixin-token.lock'), JSON.stringify({ holder: 'holder-a', heartbeatAt: 0 }))
+    await writeFile(join(root, 'weixin-user-1.lock'), JSON.stringify({ holder: 'holder-a', heartbeatAt: 0 }))
 
-    const written: Array<{ kind: string; payload: unknown }> = []
+    const written: Array<{ key: unknown; record: { kind: string; payload: unknown } }> = []
     let stored: { kind: string; payload: unknown } | undefined
+    let storedKey: unknown
     const credentials = {
+      async listRecords() { return stored === undefined ? [] : [{ key: storedKey, kind: stored.kind }] },
       async readRecord() { return stored },
-      async modifyRecord(_key: unknown, mutate: (existing: unknown) => Promise<{ kind: string; payload: unknown }>) {
+      async modifyRecord(key: unknown, mutate: (existing: unknown) => Promise<{ kind: string; payload: unknown }>) {
         const next = await mutate(stored)
-        written.push(next)
+        written.push({ key, record: next })
+        storedKey = key
         stored = next
         return next
       },
@@ -143,20 +148,25 @@ describe('real Loader composition', () => {
     await ctx.loader.await()
     expect([...ctx.loader.entries()].filter(entry => entry.fiber === undefined && !entry.disabled)).toEqual([])
 
-    const provider = ctx.channels.get(ChannelId('weixin')) as unknown as WeixinChannelProvider
-    expect(provider).toBeDefined()
-    expect(provider.displayName).toBe('WeChat (微信)')
+    // Nothing is stored yet, so the composition carries no account until a scan confirms one.
+    expect(ctx.channelWeixin.accounts).toEqual([])
 
     // The login advances through the scripted QR flow and stores its product.
     scripted.statuses.push({ status: 'confirmed', grant: GRANT })
     scripted.batches.push({ updates: [], cursor: 'cursor-1' })
-    const loginState = await provider.beginLogin()
+    const loginState = await ctx.channelWeixin.beginLogin()
     expect(loginState).toEqual({ phase: 'waiting', qrUrl: 'https://liteapp.example/1' })
     await vi.waitFor(() => { expect(written).toHaveLength(1) })
-    expect(written[0]).toEqual({ kind: 'grant', payload: GRANT })
+    expect(written[0]?.record).toEqual({ kind: 'grant', payload: GRANT })
+    expect(written[0]?.key).toBe(accountRecordKey('user-1'))
+
+    // The confirmed scan registered the account under its own identity.
+    const provider = ctx.channels.get(accountChannelId('user-1')) as unknown as WeixinAccountProvider
+    expect(provider.displayName).toBe('bot@im.bot')
+    expect(ctx.channelWeixin.accounts.map(account => account.id)).toEqual(['weixin:user-1'])
     await vi.waitFor(() => { expect(scripted.polls.length).toBeGreaterThan(0) })
     expect(scripted.polls[0]).toEqual({ cursor: 'cursor-0', timeoutMs: 1000 })
-    const lock = JSON.parse(await readFile(join(root, 'weixin-token.lock'), 'utf8')) as { holder: string }
+    const lock = JSON.parse(await readFile(join(root, 'weixin-user-1.lock'), 'utf8')) as { holder: string }
     expect(lock.holder).toMatch(/^dsh-/)
 
     // One delivered batch publishes one normalized message on the channel event.
@@ -173,7 +183,7 @@ describe('real Loader composition', () => {
     })
     await vi.waitFor(() => { expect(inbound).toHaveLength(1) })
     expect(inbound[0]).toMatchObject({
-      channel: 'weixin',
+      channel: 'weixin:user-1',
       conversationId: 'sender-1',
       sender: 'sender-1',
       messageId: 'message-1',

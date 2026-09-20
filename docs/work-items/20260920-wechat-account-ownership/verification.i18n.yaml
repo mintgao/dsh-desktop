@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/work-items/20260920-wechat-account-ownership/verification.md
-verification.md: f642f269d2e44937fd1c0cc332a77844cb30f03a
-verification.zh.md: 0a71a82aa8563a8b56d855fc2f62689963066e85
+verification.md: 112d33800852a4e3fb715572f980d3ba91e229f6
+verification.zh.md: 4238e59cba231f42048c01a4031765b59fadad20

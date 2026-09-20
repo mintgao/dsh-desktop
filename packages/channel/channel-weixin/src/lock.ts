@@ -1,18 +1,16 @@
 /**
- * The token-lock file: one polling client per bot identity. iLink serves one
- * identity to one polling client per token, so a second instance must fail
- * loudly instead of silently splitting messages. The lock is a small JSON file
- * the holder heartbeats once per poll cycle; a holder whose heartbeat is older
- * than the stale threshold is overridden, which is what makes a crashed
- * instance's lock self-healing.
+ * The token-lock file: one polling client per account. iLink serves one token
+ * to one polling client, so a second instance must fail loudly instead of
+ * silently splitting messages; each account owns its own file, named from the
+ * account's slug by its caller. The lock is a small JSON file the holder
+ * heartbeats once per poll cycle; a holder whose heartbeat is older than the
+ * stale threshold is overridden, which is what makes a crashed instance's lock
+ * self-healing.
  * @module @deepseek-ai/dsh-channel-weixin/src/lock
  */
 
 import { mkdir, open, readFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-
-/** File name of the token lock inside the configured lock directory. */
-const LOCK_FILE_NAME = 'weixin-token.lock'
 
 /** One acquired token lock; the holder heartbeats it per poll cycle and releases it at disposal. */
 export interface WeixinTokenLock {
@@ -26,6 +24,8 @@ export interface WeixinTokenLock {
 export interface WeixinTokenLockRequest {
   /** Directory the lock file lives in; the Mint bundle points it at the desktop data directory. */
   readonly directory: string
+  /** File name of this account's lock, so two accounts never contend for one file. */
+  readonly fileName: string
   /** This instance's holder identity. */
   readonly holderId: string
   /** A holder whose heartbeat is older than this is stale and gets overridden, in milliseconds. */
@@ -81,7 +81,7 @@ async function readLockFile(path: string): Promise<LockFileContent | undefined> 
  */
 export async function acquireTokenLock(request: WeixinTokenLockRequest): Promise<WeixinTokenLockResult> {
   const now = request.now ?? Date.now
-  const path = join(request.directory, LOCK_FILE_NAME)
+  const path = join(request.directory, request.fileName)
   await mkdir(request.directory, { recursive: true })
   const content = (): LockFileContent => ({ holder: request.holderId, heartbeatAt: now() })
   const lock: WeixinTokenLock = {

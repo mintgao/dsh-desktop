@@ -1,6 +1,7 @@
 /**
  * The token lock: exclusive create, the stale override, the heartbeat, and the
- * release rules.
+ * release rules. Each account names its own lock file, so every test asks for a
+ * file name of its own.
  */
 
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -28,10 +29,11 @@ async function tempRoot(): Promise<string> {
 describe('acquireTokenLock', () => {
   it('creates the lock exclusively, heartbeats it, and releases it', async () => {
     const directory = await tempRoot()
-    const result = await acquireTokenLock({ directory, holderId: 'holder-a', staleMs: 100 })
+    const fileName = 'weixin-exclusive.lock'
+    const result = await acquireTokenLock({ directory, fileName, holderId: 'holder-a', staleMs: 100 })
     expect(result.kind).toBe('acquired')
     if (result.kind !== 'acquired') return
-    const path = join(directory, 'weixin-token.lock')
+    const path = join(directory, fileName)
     expect(JSON.parse(await readFile(path, 'utf8'))).toMatchObject({ holder: 'holder-a' })
     await result.lock.heartbeat()
     await result.lock.release()
@@ -42,62 +44,97 @@ describe('acquireTokenLock', () => {
 
   it('refuses a live holder and overrides a stale one', async () => {
     const directory = await tempRoot()
-    await acquireTokenLock({ directory, holderId: 'holder-a', staleMs: 100, now: () => 1_000 })
-    const live = await acquireTokenLock({ directory, holderId: 'holder-b', staleMs: 100, now: () => 1_099 })
+    const fileName = 'weixin-live.lock'
+    await acquireTokenLock({ directory, fileName, holderId: 'holder-a', staleMs: 100, now: () => 1_000 })
+    const live = await acquireTokenLock({ directory, fileName, holderId: 'holder-b', staleMs: 100, now: () => 1_099 })
     expect(live).toEqual({ kind: 'held', holderId: 'holder-a' })
-    const stale = await acquireTokenLock({ directory, holderId: 'holder-b', staleMs: 100, now: () => 1_100 })
+    const stale = await acquireTokenLock({ directory, fileName, holderId: 'holder-b', staleMs: 100, now: () => 1_100 })
     expect(stale.kind).toBe('acquired')
     if (stale.kind !== 'acquired') return
     expect(stale.overrode).toBe('holder-a')
-    expect(JSON.parse(await readFile(join(directory, 'weixin-token.lock'), 'utf8'))).toMatchObject({ holder: 'holder-b' })
+    expect(JSON.parse(await readFile(join(directory, fileName), 'utf8'))).toMatchObject({ holder: 'holder-b' })
   })
 
   it('overrides a malformed lock file', async () => {
     const directory = await tempRoot()
-    const path = join(directory, 'weixin-token.lock')
+    const fileName = 'weixin-malformed.lock'
+    const path = join(directory, fileName)
     for (const content of ['not json', '"a string"', '{"holder":""}', '{"holder":"x"}', '{"holder":"x","heartbeatAt":"soon"}']) {
       await writeFile(path, content)
-      const result = await acquireTokenLock({ directory, holderId: 'holder-a', staleMs: 100, now: () => 1_000 })
+      const result = await acquireTokenLock({ directory, fileName, holderId: 'holder-a', staleMs: 100, now: () => 1_000 })
       expect(result.kind).toBe('acquired')
     }
   })
 
   it('rejects once another holder took the lock over', async () => {
     const directory = await tempRoot()
+    const fileName = 'weixin-takeover.lock'
     let now = 1_000
-    const first = await acquireTokenLock({ directory, holderId: 'holder-a', staleMs: 100, now: () => now })
+    const first = await acquireTokenLock({ directory, fileName, holderId: 'holder-a', staleMs: 100, now: () => now })
     if (first.kind !== 'acquired') throw new Error('the first holder did not acquire the lock')
     now = 2_000
     await first.lock.heartbeat()
-    expect(JSON.parse(await readFile(join(directory, 'weixin-token.lock'), 'utf8'))).toMatchObject({ heartbeatAt: 2_000 })
-    const second = await acquireTokenLock({ directory, holderId: 'holder-b', staleMs: 100, now: () => 3_000 })
+    expect(JSON.parse(await readFile(join(directory, fileName), 'utf8'))).toMatchObject({ heartbeatAt: 2_000 })
+    const second = await acquireTokenLock({ directory, fileName, holderId: 'holder-b', staleMs: 100, now: () => 3_000 })
     expect(second.kind).toBe('acquired')
     await expect(first.lock.heartbeat()).rejects.toThrow('taken over by holder-b')
   })
 
   it('releases only the lock it holds', async () => {
     const directory = await tempRoot()
-    const first = await acquireTokenLock({ directory, holderId: 'holder-a', staleMs: 100, now: () => 1_000 })
+    const fileName = 'weixin-release.lock'
+    const first = await acquireTokenLock({ directory, fileName, holderId: 'holder-a', staleMs: 100, now: () => 1_000 })
     if (first.kind !== 'acquired') throw new Error('the first holder did not acquire the lock')
-    const second = await acquireTokenLock({ directory, holderId: 'holder-b', staleMs: 100, now: () => 2_000 })
+    const second = await acquireTokenLock({ directory, fileName, holderId: 'holder-b', staleMs: 100, now: () => 2_000 })
     if (second.kind !== 'acquired') throw new Error('the second holder did not acquire the lock')
     await first.lock.release()
-    expect(JSON.parse(await readFile(join(directory, 'weixin-token.lock'), 'utf8'))).toMatchObject({ holder: 'holder-b' })
+    expect(JSON.parse(await readFile(join(directory, fileName), 'utf8'))).toMatchObject({ holder: 'holder-b' })
     await second.lock.release()
-    await expect(readFile(join(directory, 'weixin-token.lock'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(join(directory, fileName), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('holds two different lock files in one directory without contending', async () => {
+    const directory = await tempRoot()
+    const first = await acquireTokenLock({
+      directory,
+      fileName: 'weixin-account-a.lock',
+      holderId: 'holder-a',
+      staleMs: 100,
+      now: () => 1_000,
+    })
+    const second = await acquireTokenLock({
+      directory,
+      fileName: 'weixin-account-b.lock',
+      holderId: 'holder-b',
+      staleMs: 100,
+      now: () => 1_000,
+    })
+    expect(first.kind).toBe('acquired')
+    expect(second.kind).toBe('acquired')
+    if (first.kind !== 'acquired' || second.kind !== 'acquired') return
+    // Neither request reported `held`: the two accounts never share a file.
+    expect(JSON.parse(await readFile(join(directory, 'weixin-account-a.lock'), 'utf8'))).toMatchObject({ holder: 'holder-a' })
+    expect(JSON.parse(await readFile(join(directory, 'weixin-account-b.lock'), 'utf8'))).toMatchObject({ holder: 'holder-b' })
+    // Each holder heartbeats only its own file instead of being taken over.
+    await first.lock.heartbeat()
+    await second.lock.heartbeat()
+    expect(JSON.parse(await readFile(join(directory, 'weixin-account-a.lock'), 'utf8'))).toMatchObject({ holder: 'holder-a' })
+    expect(JSON.parse(await readFile(join(directory, 'weixin-account-b.lock'), 'utf8'))).toMatchObject({ holder: 'holder-b' })
   })
 
   it('rejects a filesystem failure that is not an existing lock', async () => {
     const directory = await tempRoot()
     await mkdir(join(directory, 'locks'))
     await chmod(join(directory, 'locks'), 0o500)
-    await expect(acquireTokenLock({ directory: join(directory, 'locks'), holderId: 'holder-a', staleMs: 100 }))
-      .rejects.toMatchObject({ code: 'EACCES' })
+    await expect(
+      acquireTokenLock({ directory: join(directory, 'locks'), fileName: 'weixin-eacces.lock', holderId: 'holder-a', staleMs: 100 }),
+    ).rejects.toMatchObject({ code: 'EACCES' })
   })
 
   it('reports a release failure that is not an absent lock', async () => {
     const directory = await tempRoot()
-    const result = await acquireTokenLock({ directory, holderId: 'holder-a', staleMs: 100 })
+    const fileName = 'weixin-release-failure.lock'
+    const result = await acquireTokenLock({ directory, fileName, holderId: 'holder-a', staleMs: 100 })
     if (result.kind !== 'acquired') throw new Error('the holder did not acquire the lock')
     await chmod(directory, 0o500)
     await expect(result.lock.release()).rejects.toMatchObject({ code: 'EACCES' })

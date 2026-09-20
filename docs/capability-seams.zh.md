@@ -224,6 +224,8 @@ flowchart LR
   svc_channels["ctx.channels<br/>Channel provider registry"]
   pkg_channel_session["channel-session"]
   svc_channelSession["ctx.channelSession<br/>Channel Session consumer"]
+  pkg_channel_weixin["channel-weixin"]
+  svc_channelWeixin["ctx.channelWeixin<br/>WeChat account service"]
   pkg_lsp["lsp"]
   svc_lsp["ctx.lsp<br/>Language-server navigation seam"]
   pkg_tool_lsp["tool-lsp"]
@@ -250,6 +252,7 @@ flowchart LR
   pkg_bash_sandbox --> svc_shell
   pkg_channel --> svc_channels
   pkg_channel_session --> svc_channelSession
+  pkg_channel_weixin --> svc_channelWeixin
   pkg_client_file_upload --> svc_fileUploads
   pkg_client_modules --> svc_clientModules
   pkg_code_runtime --> svc_codeRuntime
@@ -553,6 +556,7 @@ flowchart LR
 | `ctx.webhookRuntime` | `core` | [`webhook`](../packages/webhook/webhook) | - | [`webhook-github`](../packages/webhook/webhook-github) | - | 提供方适配器分派已认证交付；可信插件注册独立的进程本地规则，runtime 把非 null 结果转换为普通的 Workspace-backed Session，不保留交付或完成状态。 |
 | `ctx.channels` | `seam` | [`channel`](../packages/channel/channel) | - | - | - | 提供方各自拥有一个平台连接并在插件 apply 期间注册；注册表拥有提供方集合、控制器所投影的枚举、消费方订阅的入站扇出，以及它们共享的带品牌标记的身份，不持有连接、重试策略、游标或会话绑定。 |
 | `ctx.channelSession` | `core` | [`channel-session`](../packages/channel/channel-session) | - | - | - | 为通道接缝创建或延续会话的唯一组件：它拥有持久会话绑定、发送者授权与拒绝留下的记录、经会话准入事务的入站接纳，以及每个已绑定会话的完成回复在带界重试下的外发投递；不持有平台连接、会话命令或权限提问中继。 |
+| `ctx.channelWeixin` | `core` | [`channel-weixin`](../packages/channel/channel-weixin) | - | - | - | 一个组合的微信账号：它在初始化时从凭据库恢复每个已存账号，拥有唯一的在线扫码登录序列、由平台身份派生的账号键，以及重新扫码所执行的有序交接，并为每个账号建立各自的提供方（各有自己的令牌锁、轮询与注册）；它不持有自己的平台连接、会话绑定或设置页。 |
 | `ctx.lsp` | `seam` | [`lsp`](../packages/lsp/lsp) | [`lsp-stdio`](../packages/lsp/lsp-stdio) | [`tool-lsp`](../packages/lsp/tool-lsp) | - | 提供方注册与选择，加上恰好四种操作的标准化查询执行；该 seam 不提供协议逃生口，后端必须转换为标准化请求和结果。 |
 | `ctx.dynamicCordisRunner` | `core` | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | - | [`tool-cordis`](../packages/extensions/tool-cordis) | - | 拥有内存定义注册表、Host 半的 vm 沙箱和 request-run 往返流程；浏览器页面通过其 Remote 命名空间在线访问同一服务。 |
 | `ctx.cordisInspect` | `core` | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | - | [`tool-cordis`](../packages/extensions/tool-cordis) | - | 注册 Host inspect 提供方、镜像 Client 提供方 manifest，并通过动态 Cordis 传输路由 Client 查询。 |

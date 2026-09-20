@@ -650,6 +650,30 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'channelWeixin',
+    summary: 'The WeChat accounts of one composition.',
+    description: 'The WeChat accounts of one composition. It restores every stored account at init, owns the one live login sequence, and gives each account\'s provider its own lock, poll, and registration.',
+    methods: [
+      {
+        signature: 'async beginLogin(): Promise<WeixinLoginState>',
+        description: 'Start a QR login: fetch the first code and run the sequence in the background, replacing any sequence already live. A confirmed scan stores the account it bound and starts that account\'s connection.',
+        parameters: [],
+        returns: 'the state after the first code was fetched.',
+      },
+      {
+        signature: 'cancelLogin(): void',
+        description: 'Cancel a login sequence in flight; a no-op when none is.',
+        parameters: [],
+      },
+      {
+        signature: 'async disconnect(id: ChannelId): Promise<void>',
+        description: 'Stop using one account: unregister its provider once its poll stopped and its lock was released, then delete its stored login. The platform session is not released — the platform releases it only when another login replaces it — and every other account is left untouched.',
+        parameters: [{ name: 'id', description: 'the account\'s registration identity, as {@link accounts} reports it.' }],
+        returns: 'resolution once the account is gone from this composition.',
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -3249,6 +3273,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'One authorization attempt has finished and released its key.',
     description: 'One authorization attempt has finished and released its key. Fires for every terminal outcome, failures included, so a surface watching a key it did not start (a second browser tab) learns the attempt is over.',
     parameters: [{ name: 'key', description: 'the credential record the finished attempt was authorizing.' }, { name: 'settlement', description: 'how it ended, including the `failed` case its caller sees as a thrown error.' }],
+  },
+  {
+    name: 'channel-weixin/login',
+    mode: 'emit',
+    signature: '\'channel-weixin/login\'(state: WeixinLoginState): void',
+    summary: 'One login sequence reported a new state: the code being waited on, the scan the platform observed, the confirmation that stored an account, or the failure that ended an attempt.',
+    description: 'One login sequence reported a new state: the code being waited on, the scan the platform observed, the confirmation that stored an account, or the failure that ended an attempt. The settings surface the platform\'s own controller drives is the only subscriber.',
+    parameters: [{ name: 'state', description: 'the login sequence\'s observable state.' }],
   },
   {
     name: 'commands/change',
@@ -6469,6 +6501,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WebUpgradeRoute',
     declaration: 'export interface WebUpgradeRoute {\n    path: string;\n    handler: (req: IncomingMessage, socket: Duplex, head: Buffer) => void | Promise<void>;\n}',
+  },
+  {
+    name: 'WeixinLoginPhase',
+    declaration: 'export type WeixinLoginPhase = \'idle\' | \'waiting\' | \'scanned\' | \'confirmed\' | \'failed\';',
+  },
+  {
+    name: 'WeixinLoginState',
+    declaration: 'export interface WeixinLoginState {\n    readonly phase: WeixinLoginPhase;\n    readonly qrUrl?: string | undefined;\n    readonly diagnostic?: string | undefined;\n}',
   },
   {
     name: 'WorkflowAgentEndInfo',

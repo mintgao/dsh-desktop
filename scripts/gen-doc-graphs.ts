@@ -677,6 +677,13 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The only component that creates or continues a Session for the channel seam: it owns the durable conversation bindings, sender authorization with the record a refusal leaves, the inbound admission through the session-admission transaction, and the outbound delivery of each bound Session\u2019s settled reply under a bounded retry, and owns no platform connection, command surface, or permission-question relay.',
   },
   {
+    key: 'channelWeixin',
+    pkg: 'channel-weixin',
+    title: 'WeChat account service',
+    mode: 'core',
+    note: 'One composition\u2019s WeChat accounts: it restores every stored account from the credential store at init, owns the one live QR login sequence, the account keys derived from the platform identity, and the ordered handover a re-scan performs, and gives each account its own provider with its own token lock, poll, and registration, and owns no platform connection of its own, Session binding, or settings surface.',
+  },
+  {
     key: 'lsp',
     pkg: 'lsp',
     title: 'Language-server navigation seam',

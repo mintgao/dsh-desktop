@@ -153,6 +153,24 @@ describe('WeixinPollLoop', () => {
     ])
   })
 
+  it('keeps the configured timeout when a batch suggests a larger one', async () => {
+    const test = harness({ timeoutMs: 35_000, script: [{ updates: [], longPollTimeoutMs: 60_000 }] })
+    await test.loop.run(test.controller.signal)
+    expect(test.calls).toEqual([
+      { cursor: '', timeoutMs: 35_000 },
+      { cursor: '', timeoutMs: 35_000 },
+    ])
+  })
+
+  it('adopts a suggested timeout below the configured bound', async () => {
+    const test = harness({ timeoutMs: 35_000, script: [{ updates: [], longPollTimeoutMs: 10_000 }] })
+    await test.loop.run(test.controller.signal)
+    expect(test.calls).toEqual([
+      { cursor: '', timeoutMs: 35_000 },
+      { cursor: '', timeoutMs: 10_000 },
+    ])
+  })
+
   it('retries a transient failure inside the cycle without reporting it', async () => {
     const test = harness({ attempts: 2, script: [new Error('flaky'), { updates: [] }] })
     await test.loop.run(test.controller.signal)
