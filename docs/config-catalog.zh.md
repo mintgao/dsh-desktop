@@ -341,6 +341,35 @@ export type Config = LocalConfig
 
 来源：[`packages/shell/bash-sandbox/src/index.ts:36`](../packages/shell/bash-sandbox/src/index.ts)
 
+<a id="deepseek-aidsh-channel-session"></a>
+
+## `@deepseek-ai/dsh-channel-session`
+
+需要：`channels` · `storageDomain` · `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `workspaceRegistry`
+
+```ts config-catalog
+/**
+ * Deployment choices of the consumer. Every bound is stated by the composition:
+ * the workspace a conversation's Sessions run in, the agent composition they
+ * mount, the sandbox and approval preset they run under, and the bounds of the
+ * outbound retry.
+ */
+export interface Config {
+  /** Workspace a Session created for a conversation runs in. */
+  readonly defaultWorkspacePath: string
+  /** Agent composition mounted on a Session this consumer creates. */
+  readonly agentPreset: string
+  /** Sandbox and approval preset applied before the first prompt is admitted. */
+  readonly permissionPreset: string
+  /** Total attempts one outbound reply gets, including the first. */
+  readonly deliveryAttempts: number
+  /** Wait between two outbound attempts, in milliseconds. */
+  readonly deliveryBackoffMs: number
+}
+```
+
+来源：[`packages/channel/channel-session/src/index.ts:78`](../packages/channel/channel-session/src/index.ts)
+
 <a id="deepseek-aidsh-client-connection"></a>
 
 ## `@deepseek-ai/dsh-client-connection`

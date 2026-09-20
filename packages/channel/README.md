@@ -25,6 +25,7 @@ The Channel family connects a DSH Session to an instant-messaging platform so a 
 | Package | Role | ctx key |
 |---|---|---|
 | [`channel/`](channel/README.md) | Provider registry, branded identities, inbound provenance | `ctx.channels` |
+| [`channel-session/`](channel-session/README.md) | Conversation bindings, sender authorization, inbound admission, outbound delivery | `ctx.channelSession` |
 
 <a id="related-documentation"></a>
 ## Related documentation

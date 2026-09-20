@@ -2,7 +2,7 @@
 
 [English](channel.md) | 中文
 
-Channel 子系统把一段即时通讯会话与一个 DSH Session 相互连接。[远程通道连接决策](../decisions/0001-remote-channel-connections.zh.md)持有各项持久约定——绑定的持久性、发送方授权、外发投递、会话命令、权限提问中继，以及各包归属；本页是 Service Definition 的参考：提供方约定、其注册生命周期、入站扇出，以及提供方、消费方与 Remote 控制器共享的值。
+Channel 子系统把一段即时通讯会话与一个 DSH Session 相互连接。[远程通道连接决策](../decisions/0001-remote-channel-connections.zh.md)持有各项持久约定——绑定的持久性、发送者授权、外发投递、会话命令、权限提问中继，以及各包归属；本页是 Service Definition 的参考：提供方约定、其注册生命周期、入站扇出，以及提供方、消费方与 Remote 控制器共享的值。
 
 ## 共享值
 
@@ -75,4 +75,31 @@ onChange(listener: ChangeListener): () => void
 ```
 
 Source: [`packages/channel/channel/src/index.ts`](../../packages/channel/channel/src/index.ts)
+
+<a id="ctxchannelsession--channelsession"></a>
+
+### `ctx.channelSession` — `ChannelSession`
+
+The channel Session consumer. It opens the conversation-binding, pending-request, and outbound-delivery domains at init, observes every provider's authenticated inbound messages, delivers each bound Session's settled turn back to its conversation, and disposes its registrations with the plugin.
+
+```ts cordis-catalog
+/**
+ * Set one conversation up: write its binding record before any Session or
+ * message exists, with the Session association left absent. The settings
+ * surface calls this once per conversation.
+ * @param request - what the client collected, with the deployment defaults applied to omissions.
+ * @returns resolution after the record is durable.
+ */
+async setupConversation(request: ConversationSetupRequest): Promise<void>
+
+/**
+ * The binding record of one conversation.
+ * @param channel - registered provider that owns the conversation.
+ * @param conversationId - platform-owned conversation identity.
+ * @returns the record, or `undefined` when the conversation was never set up.
+ */
+bindingFor(channel: ChannelId, conversationId: ChannelConversationId): ChannelBindingRecord | undefined
+```
+
+Source: [`packages/channel/channel-session/src/index.ts`](../../packages/channel/channel-session/src/index.ts)
 <!-- END GENERATED cordis-surface -->

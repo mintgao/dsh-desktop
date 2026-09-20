@@ -25,6 +25,7 @@ Channel 家族把一个 DSH Session 连接到即时通讯平台，让用户可�
 | 包 | 角色 | ctx 键 |
 |---|---|---|
 | [`channel/`](channel/README.zh.md) | 提供方注册表、品牌化身份、入站来源 | `ctx.channels` |
+| [`channel-session/`](channel-session/README.zh.md) | 会话绑定、发送者授权、入站接纳、出站投递 | `ctx.channelSession` |
 
 <a id="related-documentation"></a>
 ## 相关文档

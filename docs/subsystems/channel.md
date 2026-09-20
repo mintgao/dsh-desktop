@@ -75,4 +75,31 @@ onChange(listener: ChangeListener): () => void
 ```
 
 Source: [`packages/channel/channel/src/index.ts`](../../packages/channel/channel/src/index.ts)
+
+<a id="ctxchannelsession--channelsession"></a>
+
+### `ctx.channelSession` — `ChannelSession`
+
+The channel Session consumer. It opens the conversation-binding, pending-request, and outbound-delivery domains at init, observes every provider's authenticated inbound messages, delivers each bound Session's settled turn back to its conversation, and disposes its registrations with the plugin.
+
+```ts cordis-catalog
+/**
+ * Set one conversation up: write its binding record before any Session or
+ * message exists, with the Session association left absent. The settings
+ * surface calls this once per conversation.
+ * @param request - what the client collected, with the deployment defaults applied to omissions.
+ * @returns resolution after the record is durable.
+ */
+async setupConversation(request: ConversationSetupRequest): Promise<void>
+
+/**
+ * The binding record of one conversation.
+ * @param channel - registered provider that owns the conversation.
+ * @param conversationId - platform-owned conversation identity.
+ * @returns the record, or `undefined` when the conversation was never set up.
+ */
+bindingFor(channel: ChannelId, conversationId: ChannelConversationId): ChannelBindingRecord | undefined
+```
+
+Source: [`packages/channel/channel-session/src/index.ts`](../../packages/channel/channel-session/src/index.ts)
 <!-- END GENERATED cordis-surface -->

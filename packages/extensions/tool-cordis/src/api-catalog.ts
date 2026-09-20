@@ -625,6 +625,25 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'channelSession',
+    summary: 'The channel Session consumer.',
+    description: 'The channel Session consumer. It opens the conversation-binding, pending-request, and outbound-delivery domains at init, observes every provider\'s authenticated inbound messages, delivers each bound Session\'s settled turn back to its conversation, and disposes its registrations with the plugin.',
+    methods: [
+      {
+        signature: 'async setupConversation(request: ConversationSetupRequest): Promise<void>',
+        description: 'Set one conversation up: write its binding record before any Session or message exists, with the Session association left absent. The settings surface calls this once per conversation.',
+        parameters: [{ name: 'request', description: 'what the client collected, with the deployment defaults applied to omissions.' }],
+        returns: 'resolution after the record is durable.',
+      },
+      {
+        signature: 'bindingFor(channel: ChannelId, conversationId: ChannelConversationId): ChannelBindingRecord | undefined',
+        description: 'The binding record of one conversation.',
+        parameters: [{ name: 'channel', description: 'registered provider that owns the conversation.' }, { name: 'conversationId', description: 'platform-owned conversation identity.' }],
+        returns: 'the record, or `undefined` when the conversation was never set up.',
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -3842,6 +3861,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type BrandedNumber<B extends string> = number & {\n    readonly [BRAND]: B;\n};',
   },
   {
+    name: 'ChannelBindingRecord',
+    declaration: 'export type ChannelBindingRecord = z.infer<typeof channelBindingRecord>;',
+  },
+  {
     name: 'ChannelConnectionState',
     declaration: 'export type ChannelConnectionState = {\n    readonly status: \'idle\';\n} | {\n    readonly status: \'connecting\';\n} | {\n    readonly status: \'connected\';\n} | {\n    readonly status: \'unavailable\';\n    readonly diagnostic: string;\n};',
   },
@@ -3875,11 +3898,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChannelProvider',
-    declaration: 'export interface ChannelProvider<K extends string = string> {\n    readonly id: ChannelId;\n    readonly kind: K;\n    readonly displayName: string;\n    readonly state: ChannelConnectionState;\n    readonly attach: (control: ChannelProviderControl) => void;\n    readonly send: (conversation: ChannelConversationId, message: ChannelOutboundMessage, signal: AbortSignal) => Promise<void>;\n}',
+    declaration: 'export interface ChannelProvider<K extends string = string> {\n    readonly id: ChannelId;\n    readonly kind: K;\n    readonly displayName: string;\n    readonly state: ChannelConnectionState;\n    readonly attach: (control: ChannelProviderControl) => void;\n    readonly send: (conversation: ChannelConversationId, message: ChannelOutboundMessage, signal: AbortSignal) => Promise<ChannelSendReceipt>;\n}',
   },
   {
     name: 'ChannelProviderControl',
     declaration: 'export interface ChannelProviderControl {\n    readonly signal: AbortSignal;\n    readonly publish: (message: ChannelInboundMessage) => void;\n    readonly changed: () => void;\n}',
+  },
+  {
+    name: 'ChannelSendReceipt',
+    declaration: 'export interface ChannelSendReceipt {\n    readonly platformMessageId?: string;\n}',
   },
   {
     name: 'ChannelUserId',
@@ -4020,6 +4047,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ContinuableSubagentDescriptorData',
     declaration: 'export interface ContinuableSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'continuable\';\n    readonly label: string;\n    readonly agentProvider?: string;\n    readonly agentModel?: string;\n    readonly agentReasoningEffort?: ReasoningEffortId;\n    readonly persona?: string;\n    readonly toolFilter?: ToolRestriction;\n}',
+  },
+  {
+    name: 'ConversationSetupRequest',
+    declaration: 'export interface ConversationSetupRequest {\n    readonly channel: ChannelId;\n    readonly conversationId: ChannelConversationId;\n    readonly title: string;\n    readonly authorizedSenderIds: readonly ChannelUserId[];\n    readonly workspacePath?: string;\n    readonly agentPreset?: string;\n    readonly permissionPreset?: string;\n}',
   },
   {
     name: 'CordisDynamicPackageId',
