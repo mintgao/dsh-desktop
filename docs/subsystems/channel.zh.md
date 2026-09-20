@@ -99,6 +99,16 @@ async setupConversation(request: ConversationSetupRequest): Promise<void>
  * @returns the record, or `undefined` when the conversation was never set up.
  */
 bindingFor(channel: ChannelId, conversationId: ChannelConversationId): ChannelBindingRecord | undefined
+
+/**
+ * The resume positions one channel's conversations recorded, for the provider
+ * that owns the poll. A token-level platform stream feeds every conversation,
+ * so the provider reconciles these into the position it resumes from — the
+ * earliest recorded cursor, whose replays `lastAdmittedMessageId` suppresses.
+ * @param channel - registered provider whose recorded cursors are wanted.
+ * @returns every cursor the channel's bindings carry, in no particular order.
+ */
+resumeCursors(channel: ChannelId): readonly string[]
 ```
 
 Source: [`packages/channel/channel-session/src/index.ts`](../../packages/channel/channel-session/src/index.ts)
