@@ -10,7 +10,7 @@
 
 import { z } from 'zod'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { ChannelMessageId, ChannelUserId } from '@deepseek-ai/dsh-channel'
+import { ChannelConversationId, ChannelId, ChannelMessageId, ChannelUserId } from '@deepseek-ai/dsh-channel'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 import type {
@@ -45,14 +45,19 @@ export const CHANNEL_DISPLAY_OPTIONS_OFF: ChannelDisplayOptions = {
 }
 
 /**
- * Durable shape of one conversation binding. `sessionId` alone decides which
- * Session the conversation continues and is absent while the conversation is
- * unbound; `workspacePath`, `agentPreset`, `permissionPreset`, `title`, and
- * `displayOptions` are setup values applied when a Session is created;
- * `providerCursor` is the value the provider resumes its poll from, and
- * `lastAdmittedMessageId` suppresses an exact platform redelivery.
+ * Durable shape of one conversation binding. `channel` and `conversationId`
+ * repeat the table key so a writer holding only the Session identity — the
+ * outbound observer — resolves its conversation without parsing an opaque key.
+ * `sessionId` alone decides which Session the conversation continues and is
+ * absent while the conversation is unbound; `workspacePath`, `agentPreset`,
+ * `permissionPreset`, `title`, and `displayOptions` are setup values applied
+ * when a Session is created; `providerCursor` is the value the provider resumes
+ * its poll from, and `lastAdmittedMessageId` suppresses an exact platform
+ * redelivery.
  */
 export const channelBindingRecord = z.object({
+  channel: z.string().transform(value => ChannelId(value)),
+  conversationId: z.string().transform(value => ChannelConversationId(value)),
   sessionId: z.string().transform(value => brandString<SessionId>(value)).optional(),
   workspacePath: z.string(),
   agentPreset: z.string(),

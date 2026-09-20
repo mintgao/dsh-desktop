@@ -9,7 +9,15 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { describe, expect, it } from 'vitest'
-import { channelBindingKey, channelPendingRequestKey, createChannelBinding, readChannelBinding, withAdmittedMessage } from '../src/binding.ts'
+import {
+  bindingForSession,
+  channelBindingKey,
+  channelDeliveryKey,
+  channelPendingRequestKey,
+  createChannelBinding,
+  readChannelBinding,
+  withAdmittedMessage,
+} from '../src/binding.ts'
 import type { ChannelBindingKey } from '../src/brand.ts'
 import {
   CHANNEL_DISPLAY_OPTIONS_OFF,
@@ -62,6 +70,8 @@ const conversationId = ChannelConversationId('conversation-1')
 
 function setup(): Parameters<typeof createChannelBinding>[0] {
   return {
+    channel,
+    conversationId,
     workspacePath: '/work/project',
     agentPreset: 'standard',
     permissionPreset: 'read-only',
@@ -93,6 +103,15 @@ describe('channel binding key', () => {
     expect(key.split('_')).toHaveLength(3)
     expect(channelPendingRequestKey(channel, conversationId, ChannelMessageId('message-2'))).not.toBe(key)
   })
+
+  it('composes the delivery key from the conversation and the delivery identity', () => {
+    const key = channelDeliveryKey(channel, conversationId, 'channel-1:3')
+
+    expect(key).toMatch(/^[a-zA-Z0-9_-]+$/)
+    expect(key.split('_')).toHaveLength(3)
+    expect(channelDeliveryKey(channel, conversationId, 'channel-1:4')).not.toBe(key)
+    expect(channelDeliveryKey(ChannelId('feishu'), conversationId, 'channel-1:3')).not.toBe(key)
+  })
 })
 
 describe('conversation setup', () => {
@@ -100,6 +119,8 @@ describe('conversation setup', () => {
     const record = createChannelBinding(setup())
 
     expect(record).toEqual({
+      channel: 'weixin',
+      conversationId: 'conversation-1',
       workspacePath: '/work/project',
       agentPreset: 'standard',
       permissionPreset: 'read-only',
@@ -155,11 +176,29 @@ describe('binding reads', () => {
     await table.put(key, createChannelBinding(setup()))
     expect(readChannelBinding(table, key)?.title).toBe('Project chat')
   })
+
+  it('resolves the conversation a Session is bound to, and nothing for an unbound Session', async () => {
+    const table = new MemoryTable<ChannelBindingKey, ChannelBindingRecord>()
+    const key = channelBindingKey(channel, conversationId)
+    const sessionId = brandString<SessionId>('channel-1')
+
+    // An unbound conversation holds no Session association, so no Session
+    // resolves to it; the outbound observer then has no conversation to reply to.
+    await table.put(key, createChannelBinding(setup()))
+    expect(bindingForSession(table, sessionId)).toBeUndefined()
+
+    const bound = { ...createChannelBinding(setup()), sessionId }
+    await table.put(key, bound)
+    expect(bindingForSession(table, sessionId)).toEqual({ key, record: bound })
+    expect(bindingForSession(table, brandString<SessionId>('channel-2'))).toBeUndefined()
+  })
 })
 
 describe('record schemas', () => {
   it('accepts a stored binding and brands its identities', () => {
     const parsed = channelBindingRecord.parse({
+      channel: 'weixin',
+      conversationId: 'conversation-1',
       sessionId: 'channel-1',
       workspacePath: '/work/project',
       agentPreset: 'standard',
@@ -172,6 +211,8 @@ describe('record schemas', () => {
       schemaVersion: CHANNEL_SESSION_RECORD_VERSION,
     })
 
+    expect(parsed.channel).toBe('weixin')
+    expect(parsed.conversationId).toBe('conversation-1')
     expect(parsed.sessionId).toBe('channel-1')
     expect(parsed.authorizedSenderIds).toEqual(['sender-1'])
     expect(parsed.lastAdmittedMessageId).toBe('message-1')

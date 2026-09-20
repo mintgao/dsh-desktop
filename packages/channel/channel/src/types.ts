@@ -45,6 +45,16 @@ export interface ChannelOutboundMessage {
   readonly text: string
 }
 
+/** What one platform reported about an accepted outbound message. */
+export interface ChannelSendReceipt {
+  /**
+   * Platform-assigned identity of the accepted message, when the platform
+   * reports one. A send path that returns no identity leaves it absent, and
+   * the Consumer's delivery record then carries no platform id.
+   */
+  readonly platformMessageId?: string
+}
+
 /**
  * Registration-scoped capability the registry borrows to one provider. The provider
  * owns its connection; the registry owns only the provider set and the fan-out.
@@ -79,13 +89,13 @@ export interface ChannelProvider<K extends string = string> {
    * @param conversation - platform-owned conversation to deliver to.
    * @param message - complete text to send.
    * @param signal - cancels the send when its owner unloads.
-   * @returns a promise that resolves when the platform accepted the message, not when the recipient read it.
+   * @returns a promise that resolves with the platform's receipt once the platform accepted the message, not when the recipient read it.
    */
   readonly send: (
     conversation: ChannelConversationId,
     message: ChannelOutboundMessage,
     signal: AbortSignal,
-  ) => Promise<void>
+  ) => Promise<ChannelSendReceipt>
 }
 
 declare module '@deepseek-ai/dsh-llm' {

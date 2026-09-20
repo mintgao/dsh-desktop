@@ -16,20 +16,30 @@ import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-presets'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-permission-presets'
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { admitSession } from '@deepseek-ai/dsh-session-admission'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type {} from '@deepseek-ai/dsh-workspace'
-import type { ChannelBindingKey, ChannelPendingRequestKey } from './brand.ts'
-import { channelBindingKey, channelPendingRequestKey, createChannelBinding, readChannelBinding, withAdmittedMessage } from './binding.ts'
+import type { ChannelBindingKey, ChannelDeliveryKey, ChannelPendingRequestKey } from './brand.ts'
+import {
+  bindingForSession,
+  channelBindingKey,
+  channelPendingRequestKey,
+  createChannelBinding,
+  readChannelBinding,
+  withAdmittedMessage,
+} from './binding.ts'
 import type { ChannelBindingSetup } from './binding.ts'
+import { deliverReply, turnReplyText } from './outbound.ts'
 import {
   CHANNEL_DISPLAY_OPTIONS_OFF,
   CHANNEL_SESSION_RECORD_VERSION,
   channelBindingDomainSpec,
+  channelDeliveryDomainSpec,
   channelPendingRequestDomainSpec,
 } from './spec.ts'
-import type { ChannelBindingRecord, ChannelPendingRequestRecord } from './spec.ts'
+import type { ChannelBindingRecord, ChannelDeliveryRecord, ChannelPendingRequestRecord } from './spec.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -62,7 +72,8 @@ export interface ConversationSetupRequest {
 /**
  * Deployment choices of the consumer. Every bound is stated by the composition:
  * the workspace a conversation's Sessions run in, the agent composition they
- * mount, and the sandbox and approval preset they run under.
+ * mount, the sandbox and approval preset they run under, and the bounds of the
+ * outbound retry.
  */
 export interface Config {
   /** Workspace a Session created for a conversation runs in. */
@@ -71,6 +82,10 @@ export interface Config {
   readonly agentPreset: string
   /** Sandbox and approval preset applied before the first prompt is admitted. */
   readonly permissionPreset: string
+  /** Total attempts one outbound reply gets, including the first. */
+  readonly deliveryAttempts: number
+  /** Wait between two outbound attempts, in milliseconds. */
+  readonly deliveryBackoffMs: number
 }
 
 /** Config schema of {@link Config}. */
@@ -78,12 +93,16 @@ export const Config: z<Config> = z.object({
   defaultWorkspacePath: z.string().required(),
   agentPreset: z.string().required(),
   permissionPreset: z.string().required(),
+  deliveryAttempts: z.number().step(1).min(1).required(),
+  deliveryBackoffMs: z.number().step(1).min(0).required(),
 })
 
 /**
- * The channel Session consumer. It opens the conversation-binding and
- * pending-request domains at init, observes every provider's authenticated
- * inbound messages, and disposes its registrations with the plugin.
+ * The channel Session consumer. It opens the conversation-binding,
+ * pending-request, and outbound-delivery domains at init, observes every
+ * provider's authenticated inbound messages, delivers each bound Session's
+ * settled turn back to its conversation, and disposes its registrations with
+ * the plugin.
  */
 export class ChannelSession extends Service {
   static inject = ['channels', 'storageDomain', 'agents', 'agentDefaultModel', 'agentPresets', 'permissionPresets', 'workspaceRegistry']
@@ -92,23 +111,31 @@ export class ChannelSession extends Service {
 
   private bindings!: KvTable<ChannelBindingKey, ChannelBindingRecord>
   private pendingRequests!: KvTable<ChannelPendingRequestKey, ChannelPendingRequestRecord>
+  private deliveries!: KvTable<ChannelDeliveryKey, ChannelDeliveryRecord>
   private readonly lifecycle = new AbortController()
 
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'channelSession')
   }
 
-  /** Open the durable domains and observe inbound messages for this registration's lifetime. */
+  /**
+   * Open the durable domains and observe inbound messages and settled turns for
+   * this registration's lifetime. Disposal aborts the lifecycle signal first, so
+   * a send in flight stops before the delivery domain closes.
+   */
   protected async [Service.init](): Promise<void> {
     const bindings = await this.ctx.storageDomain.open(channelBindingDomainSpec)
     const pendingRequests = await this.ctx.storageDomain.open(channelPendingRequestDomainSpec)
+    const deliveries = await this.ctx.storageDomain.open(channelDeliveryDomainSpec)
     this.bindings = bindings.table('bindings')
     this.pendingRequests = pendingRequests.table('requests')
+    this.deliveries = deliveries.table('deliveries')
     this.ctx.effect(() => () => {
       this.lifecycle.abort(new Error('channel Session consumer disposed'))
-      return Promise.all([bindings.close(), pendingRequests.close()]).then(() => undefined)
+      return Promise.all([bindings.close(), pendingRequests.close(), deliveries.close()]).then(() => undefined)
     }, 'channelSession.lifecycle')
     this.ctx.effect(() => this.ctx.channels.onInbound((message) => { this.observe(message) }), 'channelSession.inbound')
+    this.ctx.on('session/event', (session, event) => { this.observeTurn(session, event) })
   }
 
   /**
@@ -136,6 +163,8 @@ export class ChannelSession extends Service {
   /** Apply the deployment defaults to the values a client omitted. */
   private resolveSetup(request: ConversationSetupRequest): ChannelBindingSetup {
     return {
+      channel: request.channel,
+      conversationId: request.conversationId,
       workspacePath: request.workspacePath ?? this.config.defaultWorkspacePath,
       agentPreset: request.agentPreset ?? this.config.agentPreset,
       permissionPreset: request.permissionPreset ?? this.config.permissionPreset,
@@ -153,6 +182,44 @@ export class ChannelSession extends Service {
   private observe(message: ChannelInboundMessage): void {
     this.handleInbound(message).catch((error: unknown) => {
       this.ctx.logger.warn(`channel Session inbound failed: ${String(error)}`)
+    })
+  }
+
+  /**
+   * Contain one settled turn's delivery. Only a bound Session has a conversation
+   * to reply to, so an unbound Session's turn is not this consumer's work and
+   * leaves no record.
+   */
+  private observeTurn(session: Session, event: SessionEvent): void {
+    if (event.type !== 'turn/end') return
+    this.deliverTurn(session, event.data.turn).catch((error: unknown) => {
+      this.ctx.logger.warn(`channel Session outbound failed: ${String(error)}`)
+    })
+  }
+
+  /**
+   * Deliver one settled turn of a bound Session: resolve the conversation, take
+   * the turn's final assistant text, resolve the provider, and hand the reply to
+   * the bounded retry.
+   */
+  private async deliverTurn(session: Session, turn: number): Promise<void> {
+    const bound = bindingForSession(this.bindings, session.id)
+    if (bound === undefined) return
+    const text = turnReplyText(session, turn)
+    if (text === undefined) return
+    await deliverReply({
+      deliveries: this.deliveries,
+      provider: this.ctx.channels.get(bound.record.channel),
+      attempts: this.config.deliveryAttempts,
+      backoffMs: this.config.deliveryBackoffMs,
+      signal: this.lifecycle.signal,
+      warn: (message) => { this.ctx.logger.warn(message) },
+    }, {
+      channel: bound.record.channel,
+      conversationId: bound.record.conversationId,
+      sessionId: session.id,
+      turn,
+      text,
     })
   }
 

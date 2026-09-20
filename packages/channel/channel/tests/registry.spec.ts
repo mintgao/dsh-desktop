@@ -39,7 +39,10 @@ function provider(id = 'weixin-primary'): {
     displayName: 'WeChat fixture',
     get state() { return state.current },
     attach(control) { captured = control },
-    async send(conversation, message) { sent.push({ conversation, text: message.text }) },
+    async send(conversation, message) {
+      sent.push({ conversation, text: message.text })
+      return { platformMessageId: 'platform-fixture' }
+    },
   }
   return { provider: built, control: () => captured, state, sent }
 }
@@ -187,7 +190,7 @@ describe('ChannelRegistry', () => {
       displayName: 'Exploding fixture',
       state: { status: 'idle' },
       attach(control) { captured = control; throw new Error('attach refused') },
-      send: async () => {},
+      send: async () => ({}),
     }
 
     expect(() => registry.register(exploding)).toThrow('attach refused')
@@ -203,11 +206,14 @@ describe('ChannelRegistry', () => {
     fixture.state.current = { status: 'unavailable', diagnostic: 'token expired' }
     expect(registry.list[0]?.state).toEqual({ status: 'unavailable', diagnostic: 'token expired' })
 
-    await registry.list[0]?.send(
+    const receipt = await registry.list[0]?.send(
       ChannelConversationId('conversation-1'),
       { text: 'reply' },
       new AbortController().signal,
     )
     expect(fixture.sent).toEqual([{ conversation: 'conversation-1', text: 'reply' }])
+    // The provider's receipt reaches its caller unchanged, so the Consumer can
+    // record the platform's identity for the delivered message.
+    expect(receipt).toEqual({ platformMessageId: 'platform-fixture' })
   })
 })

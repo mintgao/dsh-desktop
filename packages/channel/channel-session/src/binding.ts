@@ -1,9 +1,9 @@
 /**
- * Conversation-binding keys, reads, and the pure transforms every writer of the
- * binding domain shares. A transform is a total function from the record
- * current at its queue slot to the next record, so a writer applies it inside
- * the domain's own `update` and no read-modify-write can lose a concurrent
- * admission write.
+ * Durable keys of the consumer's three domains, the binding reads, and the
+ * pure transforms every writer of the binding domain shares. A transform is a
+ * total function from the record current at its queue slot to the next record,
+ * so a writer applies it inside the domain's own `update` and no
+ * read-modify-write can lose a concurrent admission write.
  * @module @deepseek-ai/dsh-channel-session/src/binding
  */
 
@@ -11,7 +11,7 @@ import type { ChannelConversationId, ChannelId, ChannelMessageId, ChannelUserId 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
-import type { ChannelBindingKey, ChannelPendingRequestKey } from './brand.ts'
+import type { ChannelBindingKey, ChannelDeliveryKey, ChannelPendingRequestKey } from './brand.ts'
 import { CHANNEL_SESSION_RECORD_VERSION } from './spec.ts'
 import type { ChannelBindingRecord, ChannelDisplayOptions } from './spec.ts'
 
@@ -56,6 +56,23 @@ export function channelPendingRequestKey(
 }
 
 /**
+ * Compose the durable key of one outbound delivery record.
+ * @param channel - registered provider that owns the conversation.
+ * @param conversationId - platform-owned conversation identity.
+ * @param deliveryId - Consumer-minted identity of the delivery.
+ * @returns the branded table key.
+ */
+export function channelDeliveryKey(
+  channel: ChannelId,
+  conversationId: ChannelConversationId,
+  deliveryId: string,
+): ChannelDeliveryKey {
+  return brandString<ChannelDeliveryKey>(
+    `${keySegment(channel)}_${keySegment(conversationId)}_${keySegment(deliveryId)}`,
+  )
+}
+
+/**
  * The binding record of one conversation.
  * @param table - the binding domain's table handle.
  * @param key - key composed by {@link channelBindingKey}.
@@ -68,8 +85,31 @@ export function readChannelBinding(
   return table.get(key)
 }
 
+/**
+ * The conversation a Session belongs to. The outbound observer holds only the
+ * Session identity a settled turn reports, so it matches the binding records on
+ * the Session they recorded rather than parsing a table key. A conversation
+ * holds one binding, so the first match is the only one.
+ * @param table - the binding domain's table handle.
+ * @param sessionId - Session whose conversation is wanted.
+ * @returns the binding key and record, or `undefined` when no conversation is bound to that Session.
+ */
+export function bindingForSession(
+  table: KvTable<ChannelBindingKey, ChannelBindingRecord>,
+  sessionId: SessionId,
+): { readonly key: ChannelBindingKey; readonly record: ChannelBindingRecord } | undefined {
+  for (const [key, record] of table.entries()) {
+    if (record.sessionId === sessionId) return { key, record }
+  }
+  return undefined
+}
+
 /** The values conversation setup writes into a new binding record. */
 export interface ChannelBindingSetup {
+  /** Registered provider that owns the conversation. */
+  readonly channel: ChannelId
+  /** Platform-owned conversation identity. */
+  readonly conversationId: ChannelConversationId
   /** Existing local directory a created Session runs in. */
   readonly workspacePath: string
   /** Agent composition mounted on a created Session. */
@@ -93,6 +133,8 @@ export interface ChannelBindingSetup {
  */
 export function createChannelBinding(setup: ChannelBindingSetup): ChannelBindingRecord {
   return {
+    channel: setup.channel,
+    conversationId: setup.conversationId,
     workspacePath: setup.workspacePath,
     agentPreset: setup.agentPreset,
     permissionPreset: setup.permissionPreset,
