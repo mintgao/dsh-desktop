@@ -75,6 +75,7 @@ export class ChannelRegistry extends Service {
       throw new Error(`channel provider "${id}" is already registered`)
     }
     const controller = new AbortController()
+    // oxlint-disable-next-line typescript/no-misused-promises -- synchronous cleanup; direct return preserves disposer identity
     return this.ctx.effect(() => {
       /* v8 ignore next -- the public liveness check and this initializer have no await between them. */
       if (this.registrations.has(id)) throw new Error(`channel provider "${id}" is already registered`)
