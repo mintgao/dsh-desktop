@@ -10,7 +10,6 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ChannelConversationId, ChannelId, ChannelInboundMessage, ChannelUserId } from '@deepseek-ai/dsh-channel'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
@@ -22,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-storage-domain'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type { ChannelBindingKey, ChannelPendingRequestKey } from './brand.ts'
-import { channelBindingKey, createChannelBinding, readChannelBinding, withAdmittedMessage } from './binding.ts'
+import { channelBindingKey, channelPendingRequestKey, createChannelBinding, readChannelBinding, withAdmittedMessage } from './binding.ts'
 import type { ChannelBindingSetup } from './binding.ts'
 import {
   CHANNEL_DISPLAY_OPTIONS_OFF,
@@ -91,8 +90,8 @@ export class ChannelSession extends Service {
 
   static Config: z<Config> = Config
 
-  private bindings?: KvTable<ChannelBindingKey, ChannelBindingRecord>
-  private pendingRequests?: KvTable<ChannelPendingRequestKey, ChannelPendingRequestRecord>
+  private bindings!: KvTable<ChannelBindingKey, ChannelBindingRecord>
+  private pendingRequests!: KvTable<ChannelPendingRequestKey, ChannelPendingRequestRecord>
   private readonly lifecycle = new AbortController()
 
   constructor(ctx: Context, public config: Config) {
@@ -121,7 +120,7 @@ export class ChannelSession extends Service {
    */
   async setupConversation(request: ConversationSetupRequest): Promise<void> {
     const key = channelBindingKey(request.channel, request.conversationId)
-    await this.requireBindings().put(key, createChannelBinding(this.resolveSetup(request)))
+    await this.bindings.put(key, createChannelBinding(this.resolveSetup(request)))
   }
 
   /**
@@ -131,7 +130,7 @@ export class ChannelSession extends Service {
    * @returns the record, or `undefined` when the conversation was never set up.
    */
   bindingFor(channel: ChannelId, conversationId: ChannelConversationId): ChannelBindingRecord | undefined {
-    return readChannelBinding(this.requireBindings(), channelBindingKey(channel, conversationId))
+    return readChannelBinding(this.bindings, channelBindingKey(channel, conversationId))
   }
 
   /** Apply the deployment defaults to the values a client omitted. */
@@ -165,7 +164,7 @@ export class ChannelSession extends Service {
    */
   private async handleInbound(message: ChannelInboundMessage): Promise<void> {
     const key = channelBindingKey(message.channel, message.conversationId)
-    const binding = readChannelBinding(this.requireBindings(), key)
+    const binding = readChannelBinding(this.bindings, key)
     if (binding === undefined) {
       this.ctx.logger.warn(`channel Session refused a message for an unconfigured conversation on ${message.channel}`)
       return
@@ -184,7 +183,7 @@ export class ChannelSession extends Service {
       content: [{ type: 'text', text: message.text }],
       source: this.provenance(message),
     }))
-    await this.requireBindings().update(key, record => withAdmittedMessage(record, {
+    await this.bindings.update(key, record => withAdmittedMessage(record, {
       sessionId: bound.session.id,
       messageId: message.messageId,
     }))
@@ -212,7 +211,7 @@ export class ChannelSession extends Service {
       errorSubject: 'channel Session request',
       signal: this.lifecycle.signal,
     }, async (sessionId) => {
-      await this.requireBindings().update(key, record => withAdmittedMessage(record, {
+      await this.bindings.update(key, record => withAdmittedMessage(record, {
         sessionId,
         messageId: message.messageId,
       }))
@@ -225,10 +224,8 @@ export class ChannelSession extends Service {
    * event.
    */
   private async recordRefusal(message: ChannelInboundMessage): Promise<void> {
-    const key = brandString<ChannelPendingRequestKey>(
-      JSON.stringify([message.channel, message.conversationId, message.messageId]),
-    )
-    await this.requirePendingRequests().put(key, {
+    const key = channelPendingRequestKey(message.channel, message.conversationId, message.messageId)
+    await this.pendingRequests.put(key, {
       senderId: message.sender,
       text: message.text,
       receivedAt: message.receivedAt,
@@ -257,16 +254,6 @@ export class ChannelSession extends Service {
       form: 'notice',
       summary: boundContextSummary(`${message.channel} conversation ${message.conversationId}`),
     }
-  }
-
-  private requireBindings(): KvTable<ChannelBindingKey, ChannelBindingRecord> {
-    if (this.bindings === undefined) throw new Error('channel Session consumer is not initialized')
-    return this.bindings
-  }
-
-  private requirePendingRequests(): KvTable<ChannelPendingRequestKey, ChannelPendingRequestRecord> {
-    if (this.pendingRequests === undefined) throw new Error('channel Session consumer is not initialized')
-    return this.pendingRequests
   }
 }
 

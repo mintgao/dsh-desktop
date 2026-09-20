@@ -9,7 +9,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { describe, expect, it } from 'vitest'
-import { channelBindingKey, createChannelBinding, readChannelBinding, withAdmittedMessage } from '../src/binding.ts'
+import { channelBindingKey, channelPendingRequestKey, createChannelBinding, readChannelBinding, withAdmittedMessage } from '../src/binding.ts'
 import type { ChannelBindingKey } from '../src/brand.ts'
 import {
   CHANNEL_DISPLAY_OPTIONS_OFF,
@@ -72,12 +72,26 @@ function setup(): Parameters<typeof createChannelBinding>[0] {
 }
 
 describe('channel binding key', () => {
-  it('composes an unambiguous key from both identities', () => {
+  it('composes a path-safe key from both identities', () => {
     const key = channelBindingKey(channel, conversationId)
 
-    expect(JSON.parse(key)).toEqual(['weixin', 'conversation-1'])
+    // The json backend rejects any key outside [a-zA-Z0-9_-]+, so the encoding
+    // is what keeps a platform identifier with punctuation storable.
+    expect(key).toMatch(/^[a-zA-Z0-9_-]+$/)
+    expect(key).toBe(`${Buffer.from('weixin').toString('hex')}_${Buffer.from('conversation-1').toString('hex')}`)
     expect(channelBindingKey(ChannelId('weixin'), ChannelConversationId('conversation-2'))).not.toBe(key)
     expect(channelBindingKey(ChannelId('feishu'), conversationId)).not.toBe(key)
+    expect(channelBindingKey(ChannelId('wei_xin'), ChannelConversationId('1'))).not.toBe(
+      channelBindingKey(ChannelId('wei'), ChannelConversationId('xin_1')),
+    )
+  })
+
+  it('composes the pending-request key from all three identities', () => {
+    const key = channelPendingRequestKey(channel, conversationId, ChannelMessageId('message-1'))
+
+    expect(key).toMatch(/^[a-zA-Z0-9_-]+$/)
+    expect(key.split('_')).toHaveLength(3)
+    expect(channelPendingRequestKey(channel, conversationId, ChannelMessageId('message-2'))).not.toBe(key)
   })
 })
 

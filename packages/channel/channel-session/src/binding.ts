@@ -11,20 +11,48 @@ import type { ChannelConversationId, ChannelId, ChannelMessageId, ChannelUserId 
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
-import type { ChannelBindingKey } from './brand.ts'
+import type { ChannelBindingKey, ChannelPendingRequestKey } from './brand.ts'
 import { CHANNEL_SESSION_RECORD_VERSION } from './spec.ts'
 import type { ChannelBindingRecord, ChannelDisplayOptions } from './spec.ts'
 
 /**
- * Compose the durable key of one conversation's binding record. The pair is
- * JSON-encoded rather than concatenated, so no separator character can collide
- * with a platform identifier; the key is opaque and never parsed by a client.
+ * Encode one identity as a path-safe key segment. The json backend turns a
+ * record key into a path segment and rejects anything outside
+ * `[a-zA-Z0-9_-]+`, and a platform identifier may contain any character, so
+ * every part is hex-encoded before it reaches the key.
+ * @param value - one identity to encode.
+ * @returns the hex encoding of the value's UTF-8 bytes.
+ */
+function keySegment(value: string): string {
+  return Buffer.from(value, 'utf8').toString('hex')
+}
+
+/**
+ * Compose the durable key of one conversation's binding record. The separator
+ * cannot occur in a hex segment, so distinct conversations can never collide.
  * @param channel - registered provider that owns the conversation.
  * @param conversationId - platform-owned conversation identity.
  * @returns the branded table key.
  */
 export function channelBindingKey(channel: ChannelId, conversationId: ChannelConversationId): ChannelBindingKey {
-  return brandString<ChannelBindingKey>(JSON.stringify([channel, conversationId]))
+  return brandString<ChannelBindingKey>(`${keySegment(channel)}_${keySegment(conversationId)}`)
+}
+
+/**
+ * Compose the durable key of one refused message's pending request.
+ * @param channel - registered provider that owns the conversation.
+ * @param conversationId - platform-owned conversation identity.
+ * @param messageId - platform message identity of the refused message.
+ * @returns the branded table key.
+ */
+export function channelPendingRequestKey(
+  channel: ChannelId,
+  conversationId: ChannelConversationId,
+  messageId: ChannelMessageId,
+): ChannelPendingRequestKey {
+  return brandString<ChannelPendingRequestKey>(
+    `${keySegment(channel)}_${keySegment(conversationId)}_${keySegment(messageId)}`,
+  )
 }
 
 /**
