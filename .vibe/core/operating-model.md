@@ -114,6 +114,24 @@ verification. Static contracts and distribution tests prove only their encoded
 behavior; without comparable host telemetry they do not prove live isolation or
 a token, cost, or percentage reduction.
 
+### Constrained runs when the host's subagent budget is smaller than the lane
+
+A host whose subagents exist but cannot cover the lane still needs a compliant
+record. The canonical owner completes the run: the orchestrator runs the
+complete default `./bin/vibe verify . --format json` itself, and an independent
+bounded subagent re-runs a pre-chosen focused subset of that same candidate.
+Record the path in the work item's verification record with exactly these
+labelled lines:
+
+- `- limitation:` the host limitation in plain terms;
+- `- complete run:` the command, its result, and the candidate state;
+- `- independent focused re-run:` the subset, the runner, and its result.
+
+A host that cannot provide the independent re-run records that fact and leaves
+the unverified scope explicitly not passing; the limitation is recorded, never
+silently dropped. Work performed under this path is `sequential-perspective` or
+host-declared; it must not be described as `independent-agent` review or QA.
+
 Apply the size-aware readiness rules in
 `.vibe/core/technical-decision-readiness.md`. A shaped requirement is not by
 itself implementation-ready.
@@ -157,4 +175,4 @@ Completion reports should state:
 
 ## Upgrade takeover
 
-Vibe Kit version changes use the host-orchestrated lifecycle in the installed, framework-managed `AGENT_INSTALL.md` and `agent-install.json`. The CLI owns offline materialization, diagnostics, configured check execution, installed-contract authentication, and structural `validate-takeover`; it never authenticates host receipts or derives runtime activation/readiness. Preserve one owner for an unfinished goal across same-task reload, automatic successor handoff, or the portable manual new-task fallback. Only a structurally valid result plus positive target-content activation evidence permits onboarding adaptation and target-rule re-evaluation. Current repository Codex metadata claims manual fallback only unless a running host supplies a conforming live receipt.
+Vibe Kit version changes use the host-orchestrated lifecycle in the installed, framework-managed `AGENT_INSTALL.md` and `agent-install.json`. The CLI owns offline materialization, diagnostics, configured check execution, installed-contract authentication, and structural `validate-takeover`; it never authenticates host receipts or derives runtime activation/readiness. Preserve one owner for an unfinished goal across same-task reload, automatic successor handoff, or the portable manual new-task fallback. Only a structurally valid result plus positive target-content activation evidence permits onboarding adaptation and target-rule re-evaluation. Current repository host-adapter metadata claims manual fallback only unless a running host supplies a conforming live receipt.
