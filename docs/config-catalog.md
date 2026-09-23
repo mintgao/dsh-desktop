@@ -339,6 +339,35 @@ Depends on: [`LocalConfig`](#deepseek-aidsh-bash-local)
 
 Source: [`packages/shell/bash-sandbox/src/index.ts:36`](../packages/shell/bash-sandbox/src/index.ts)
 
+<a id="deepseek-aidsh-channel-session"></a>
+
+## `@deepseek-ai/dsh-channel-session`
+
+Requires: `channels` · `storageDomain` · `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `workspaceRegistry`
+
+```ts config-catalog
+/**
+ * Deployment choices of the consumer. Every bound is stated by the composition:
+ * the workspace a conversation's Sessions run in, the agent composition they
+ * mount, the sandbox and approval preset they run under, and the bounds of the
+ * outbound retry.
+ */
+export interface Config {
+  /** Workspace a Session created for a conversation runs in. */
+  readonly defaultWorkspacePath: string
+  /** Agent composition mounted on a Session this consumer creates. */
+  readonly agentPreset: string
+  /** Sandbox and approval preset applied before the first prompt is admitted. */
+  readonly permissionPreset: string
+  /** Total attempts one outbound reply gets, including the first. */
+  readonly deliveryAttempts: number
+  /** Wait between two outbound attempts, in milliseconds. */
+  readonly deliveryBackoffMs: number
+}
+```
+
+Source: [`packages/channel/channel-session/src/index.ts:78`](../packages/channel/channel-session/src/index.ts)
+
 <a id="deepseek-aidsh-client-connection"></a>
 
 ## `@deepseek-ai/dsh-client-connection`
@@ -3480,6 +3509,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-api-remotes` — requires `typertGateway` ([`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts))
 - `@deepseek-ai/dsh-api-workspace-controller` — requires `typert` · `workspaceRegistry` ([`packages/api/workspace-controller/src/index.ts`](../packages/api/workspace-controller/src/index.ts))
 - `@deepseek-ai/dsh-authorization` — requires `credentials` ([`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts))
+- `@deepseek-ai/dsh-channel` ([`packages/channel/channel/src/index.ts`](../packages/channel/channel/src/index.ts))
 - `@deepseek-ai/dsh-client-file-upload` — requires `agents` · `attachments` · `commands` · `connection` ([`packages/client/file-upload/src/index.ts`](../packages/client/file-upload/src/index.ts))
 - `@deepseek-ai/dsh-client-locale` ([`packages/client/locale/src/index.ts`](../packages/client/locale/src/index.ts))
 - `@deepseek-ai/dsh-client-modules` — requires `loader` ([`packages/client/modules/src/index.ts`](../packages/client/modules/src/index.ts))
@@ -3618,6 +3648,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-sdk-client` ([`packages/sdk/client/src/index.ts`](../packages/sdk/client/src/index.ts))
 - `@deepseek-ai/dsh-sdk-minimal` ([`packages/bundle/sdk-minimal/src/index.ts`](../packages/bundle/sdk-minimal/src/index.ts))
 - `@deepseek-ai/dsh-sdk-protocol` ([`packages/sdk/protocol/src/index.ts`](../packages/sdk/protocol/src/index.ts))
+- `@deepseek-ai/dsh-session-admission` ([`packages/session/session-admission/src/index.ts`](../packages/session/session-admission/src/index.ts))
 - `@deepseek-ai/dsh-session-format` ([`packages/session/session-format/src/index.ts`](../packages/session/session-format/src/index.ts))
 - `@deepseek-ai/dsh-session-format-catalog` ([`packages/session/session-format-catalog/src/index.ts`](../packages/session/session-format-catalog/src/index.ts))
 - `@deepseek-ai/dsh-session-format-v0-to-v1` ([`packages/session/session-format-v0-to-v1/src/index.ts`](../packages/session/session-format-v0-to-v1/src/index.ts))

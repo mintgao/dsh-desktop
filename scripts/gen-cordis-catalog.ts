@@ -65,6 +65,8 @@ export const SERVICE_PAGE: Record<string, string> = {
   clientModules: 'client-modules.md',
   codeRuntime: 'code-runtime.md',
   commands: 'commands.md',
+  channels: 'channel.md',
+  channelSession: 'channel.md',
   compaction: 'compaction.md',
   cordisInspect: 'extensions.md',
   authorization: 'credentials.md',
@@ -245,6 +247,11 @@ export const EVENT_WALK_EXEMPTIONS: Record<string, string> = {
  * appear on more than one page.
  */
 export const LINK_MAP: Readonly<Record<string, string>> = {
+  ChannelId: 'channel.md',
+  ChannelConversationId: 'channel.md',
+  ChannelProvider: 'channel.md',
+  InboundListener: 'channel.md',
+  ChangeListener: 'channel.md',
   Agent: 'core.md',
   AgentCancelCause: 'core.md',
   AgentFactory: 'core.md',
@@ -698,6 +705,8 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   AgentPresetDocument: 'preset composition view is owned by packages/preset/agent-presets/README.md',
   AgentPresetComposition: 'flattened composition rows are owned by packages/preset/agent-presets/README.md',
   PresetMetadata: 'preset display text is owned by packages/preset/agent-presets/README.md',
+  ChannelBindingRecord: 'conversation binding record is owned by packages/channel/channel-session/src/spec.ts',
+  ConversationSetupRequest: 'channel Session setup request is owned by packages/channel/channel-session/src/index.ts',
   BashEnvContributor: 'service-local extension type is owned by packages/shell/tool-bash/src/index.ts',
   BashEnvVariableInfo: 'service-local metadata type is owned by packages/shell/tool-bash/src/index.ts',
   CompactionAgentContext: 'compaction service input is owned by packages/compaction/compaction/src/index.ts',

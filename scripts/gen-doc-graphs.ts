@@ -80,6 +80,7 @@ const GROUP_ORDER = [
   'tasks',
   'workflow',
   'web',
+  'channel',
   'webhook',
   'spill',
   'todo',
@@ -660,6 +661,20 @@ const SERVICE_ROLES: ServiceRole[] = [
     mode: 'core',
     consumers: ['webhook-github'],
     note: 'Provider adapters dispatch authenticated deliveries; trusted plugins register independent process-local rules, and the runtime turns non-null results into ordinary Workspace-backed Sessions without delivery or completion state.',
+  },
+  {
+    key: 'channels',
+    pkg: 'channel',
+    title: 'Channel provider registry',
+    mode: 'seam',
+    note: 'Providers own one platform connection each and register during plugin apply; the registry owns the provider set, the enumeration a controller projects, the inbound fan-out a Consumer subscribes to, and the branded identities shared across them, and owns no connection, retry policy, cursor, or Session binding.',
+  },
+  {
+    key: 'channelSession',
+    pkg: 'channel-session',
+    title: 'Channel Session consumer',
+    mode: 'core',
+    note: 'The only component that creates or continues a Session for the channel seam: it owns the durable conversation bindings, sender authorization with the record a refusal leaves, the inbound admission through the session-admission transaction, and the outbound delivery of each bound Session\u2019s settled reply under a bounded retry, and owns no platform connection, command surface, or permission-question relay.',
   },
   {
     key: 'lsp',

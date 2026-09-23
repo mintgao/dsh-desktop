@@ -65,6 +65,7 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/sandbox/sandbox-windows-acl': 'Windows ACL sandbox library consumed by sandbox-local.',
   'packages/sdk/client': 'Client-process library; the spawned runtime owns plugin behavior.',
   'packages/sdk/protocol': 'Wire-protocol library with type declarations only.',
+  'packages/session/session-admission': 'The external-Session admission transaction a trigger imports; plain async function export with no plugin entry.',
   'packages/session/session-format': 'Pure Session format planning, codec dispatch, and lossless JSON library.',
   'packages/session/session-format-catalog': 'Generated build-static Session format inventory with no plugin registration.',
   'packages/session/session-format-v0-to-v1': 'Pure released-v0 codec and adjacent migration library.',
