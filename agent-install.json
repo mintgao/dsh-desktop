@@ -1,25 +1,67 @@
 {
-  "schema_version": 3,
-  "protocol_version": 3,
-  "kit_version": "0.9.0",
+  "schema_version": 4,
+  "protocol_version": 4,
+  "kit_version": "0.10.1",
   "adapter": {
     "name": "codex",
-    "protocol": 7,
-    "capabilities": {
-      "same_task_reload": {
-        "status": "conditional",
-        "current_claim": false,
-        "required_receipt": "host-reload"
+    "protocol": 7
+  },
+  "hosts": {
+    "codex": {
+      "protocol": 7,
+      "capabilities": {
+        "same_task_reload": {
+          "status": "conditional",
+          "current_claim": false,
+          "required_receipt": "host-reload"
+        },
+        "automatic_successor_handoff": {
+          "status": "conditional",
+          "current_claim": false,
+          "required_receipt": "host-successor-start"
+        },
+        "manual_new_task": {
+          "status": "supported",
+          "required_receipt": "manual-task-start"
+        }
       },
-      "automatic_successor_handoff": {
-        "status": "conditional",
-        "current_claim": false,
-        "required_receipt": "host-successor-start"
+      "conformance": {
+        "label": "verified",
+        "evidence": [
+          "docs/decisions/0005-bootstrap-plugin-capabilities.md",
+          "docs/releases/0.9.0.md"
+        ]
       },
-      "manual_new_task": {
-        "status": "supported",
-        "required_receipt": "manual-task-start"
-      }
+      "payload": [
+        ".codex/agents/vibe-*.toml",
+        ".agents/skills/vibe-*/agents/**"
+      ]
+    },
+    "hermes": {
+      "protocol": 1,
+      "capabilities": {
+        "same_task_reload": {
+          "status": "conditional",
+          "current_claim": false,
+          "required_receipt": "host-reload"
+        },
+        "automatic_successor_handoff": {
+          "status": "conditional",
+          "current_claim": false,
+          "required_receipt": "host-successor-start"
+        },
+        "manual_new_task": {
+          "status": "supported",
+          "required_receipt": "manual-task-start"
+        }
+      },
+      "conformance": {
+        "label": "verified",
+        "evidence": [
+          "docs/work-items/20260921-host-adapters/conformance.md"
+        ]
+      },
+      "payload": []
     }
   },
   "maintenance_bridge": {
@@ -34,13 +76,13 @@
       3
     ],
     "minimum_installed_kit_version": "0.2.0",
-    "maximum_installed_kit_version_exclusive": "0.9.0",
-    "target_agent_install_schema": 3,
-    "target_agent_install_protocol": 3,
+    "maximum_installed_kit_version_exclusive": "0.10.1",
+    "target_agent_install_schema": 4,
+    "target_agent_install_protocol": 4,
     "target_cli_result_schema": 2,
     "predecessor_migrations": {
       "schema_version": 2,
-      "registry_sha256": "42b28f7e13a86b39b2a88136613cdcbeed62b3302ae0a7ba3238612114c11314",
+      "registry_sha256": "7cedd9fbabd84ab1b51b029a5e679765a1e79efd2d09d5edaa42f9ccf2e47bd3",
       "authority": "target-cli-compiled",
       "modes": [
         "create-pending-onboarding-if-absent",
@@ -158,8 +200,11 @@
       "agent-install.json",
       "bin/vibe"
     ],
+    "selected_hosts": [
+      "codex"
+    ],
     "activation_set_algorithm": "sha256-canonical-json-fingerprint-and-normalized-path-hashes-v2",
-    "activation_set_sha256": "ba3491c13759649f917938bee0259a43906fd0a63aad653dbf5e21f01c1c081a",
+    "activation_set_sha256": "a4f4ff79b85e63c39c8963c35da7fcc747b1329468bb30665809cd2deb0b8549",
     "runtime_discovery_roots": [
       "AGENT_INSTALL.md",
       "agent-install.json",
@@ -178,7 +223,8 @@
     "receipt_kinds": [
       "host-reload",
       "host-successor-start",
-      "manual-task-start"
+      "manual-task-start",
+      "existing-install-admission"
     ],
     "stale_runtime_diagnostic": "stale-runtime-path-preserved",
     "stale_nonruntime_diagnostic": "stale-nonruntime-path-preserved",
@@ -484,7 +530,8 @@
         "receipt_kinds": [
           "host-reload",
           "host-successor-start",
-          "manual-task-start"
+          "manual-task-start",
+          "existing-install-admission"
         ],
         "goal_kinds": [
           "maintenance-only",
@@ -828,6 +875,15 @@
             "manual-task-start"
           ],
           "required_custody_at_ready": "manual-successor-owned"
+        },
+        "existing-install-admission": {
+          "path": "manual-new-task",
+          "active_task_relation": "differs-from-source-task",
+          "handoff_idempotency_key": "must-be-null",
+          "required_evidence": [
+            "manual-task-start"
+          ],
+          "required_custody_at_ready": "manual-successor-owned"
         }
       },
       "custody_transitions": {
@@ -879,7 +935,7 @@
         "successor-custody-terminal"
       ]
     },
-    "contract_registry_sha256": "4ecfb5e8932122654c13dce8ea2e78c17b5beced35c6b2dfd669f68b5d708d7b",
+    "contract_registry_sha256": "6697a332b7f7200c1fdf04828b97878e6c1c99e39910e283c5ade87f6219821f",
     "unknown_or_inconsistent_state": "fail-closed"
   },
   "cli": {
@@ -987,6 +1043,7 @@
         "agent-contract-invalid",
         "agent-install-guide-invalid",
         "agent-install-contract-invalid",
+        "host-selection-incoherent",
         "diagnostic-internal-error"
       ],
       "non_blocking_warning_allowlist": [
@@ -1010,7 +1067,8 @@
         "passed",
         "failed",
         "unconfigured",
-        "skipped"
+        "skipped",
+        "environment-limited"
       ],
       "skipped_reasons": [
         "host-permission-denied",
@@ -1076,9 +1134,9 @@
     "ordinary_upgrade_auto_recovers": false
   },
   "publication": {
-    "intent_schema": 3,
-    "receipt_schema": 3,
-    "issue_closeout_intent_schema": 2,
+    "intent_schema": 5,
+    "receipt_schema": 5,
+    "issue_closeout_intent_schema": 3,
     "commands": [
       "publication-plan",
       "validate-publication"
