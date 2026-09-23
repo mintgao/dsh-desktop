@@ -45,6 +45,13 @@ state. A run against a different candidate or for a distinct specialized gate is
 not a duplicate. The command complements task-specific validation; it does not
 replace it.
 
+## Verification declaration and receipts
+
+- A repository may declare check dependencies in `.vibe/project.yaml` (`checks.requires`); the effective order is derived deterministically from that declaration and recorded in the receipt's `default_order`. An undeclared repository keeps the default `lint → typecheck → test → build` order exactly. An unknown key, an unknown check name, or a dependency cycle fails closed and names the offending entry.
+- A receipt preserves the output needed to diagnose a failure: the per-check 16 KB tail stays the floor, `checks.output_limit_bytes` may raise it, and a failed or environment-limited check's complete sanitized output is written under `.vibe/local/verify/` and referenced from the receipt by path plus digest.
+- A verdict that depends on the host environment is recorded as `environment-limited` with a reason and the observed toolchain. It applies only to a non-zero exit whose declared toolchain expectation the host does not meet, so it never reclassifies a passing check and never launders a real failure.
+- The receipt records the observed toolchain (`python`, `node`, `pnpm`), so a later reader can tell which environment produced the verdict.
+
 ## Post-upgrade takeover gate
 
 - A safe apply plus target doctor proves `upgraded`, never `activated` or `ready`.
@@ -52,7 +59,7 @@ replace it.
 - The installed Agent-install guide/contract raw hashes, compiled registry digest, core declaration and independently recomputed activation v2 identity match before `validate-takeover` trusts structural rules.
 - The production takeover validator accepts the exact closed result and rejects invalid dependencies, reason/action pairs, receipt bindings, custody transitions and ready claims without echoing takeover values.
 - Only the activated task may adapt project context, run final default verification, re-evaluate target rules, resume the original goal, or announce completion.
-- A default structured verify receipt must cover every configured check. Failed, skipped, malformed, unknown, or partial coverage blocks readiness.
+- A default structured verify receipt must cover every configured check. Failed, skipped, environment-limited, malformed, unknown, or partial coverage blocks readiness.
 - Unconditional “ready to continue development” language requires upgraded, activated, adapted, verified, re-evaluated/no-goal-applicable, and no blocker.
 
 

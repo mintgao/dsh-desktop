@@ -40,8 +40,8 @@ FEEDBACK_MODES = ("ask", "local", "off")
 RELEASE_MANIFEST_SCHEMA = 2
 RELEASE_STATUSES = ("release-candidate-unpublished", "prerelease", "stable")
 AGENT_RESULT_SCHEMA = 2
-AGENT_INSTALL_SCHEMA = 3
-AGENT_INSTALL_PROTOCOL = 3
+AGENT_INSTALL_SCHEMA = 4
+AGENT_INSTALL_PROTOCOL = 4
 SOURCE_TYPES = ("local-payload", "github-release", "plugin-bundled", "offline-bundle")
 ONBOARDING_STATUSES = ("pending", "complete", "refresh-needed")
 DERIVED_ONBOARDING_STATUSES = ("review-required", "invalid")
@@ -69,16 +69,17 @@ AGENT_COMMAND_STATUSES = {
 }
 CORE_PROTOCOL = 7
 CODEX_ADAPTER_PROTOCOL = 7
+HERMES_ADAPTER_PROTOCOL = 1
 TAKEOVER_SCHEMA_VERSION = 2
 MAINTENANCE_BRIDGE_SCHEMA_VERSION = 2
 COMPATIBILITY_MIGRATION_REGISTRY_SCHEMA = 2
 TRANSACTION_JOURNAL_SCHEMA = 1
 TRANSACTION_COMMIT_SCHEMA = 1
-PUBLICATION_INTENT_SCHEMA = 3
-PUBLICATION_RECEIPT_SCHEMA = 3
+PUBLICATION_INTENT_SCHEMA = 5
+PUBLICATION_RECEIPT_SCHEMA = 5
 HISTORICAL_PUBLICATION_INTENT_SCHEMA = 1
 HISTORICAL_PUBLICATION_RECEIPT_SCHEMA = 1
-ISSUE_CLOSEOUT_INTENT_SCHEMA = 2
+ISSUE_CLOSEOUT_INTENT_SCHEMA = 3
 TRANSACTION_ACTIVE_PATH = Path(".vibe/local/upgrade-transactions/active")
 TRANSACTION_ROOT_PATH = TRANSACTION_ACTIVE_PATH.parent
 LEAF_ATOMICITY_PLAN_PATH = ".vibe/local/upgrade-leaf-atomicity"
@@ -92,6 +93,77 @@ ACTIVATION_SET_ALGORITHM = (
     "sha256-canonical-json-fingerprint-and-normalized-path-hashes-v2"
 )
 ACTIVATION_DIGEST_SENTINEL = "0" * 64
+
+
+HOST_PAYLOAD_SELECTORS = {
+    "codex": (".codex/agents/vibe-*.toml", ".agents/skills/vibe-*/agents/**"),
+    "hermes": (),
+}
+HOST_CAPABILITY_CLAIMS = {
+    "same_task_reload": {
+        "status": "conditional",
+        "current_claim": False,
+        "required_receipt": "host-reload",
+    },
+    "automatic_successor_handoff": {
+        "status": "conditional",
+        "current_claim": False,
+        "required_receipt": "host-successor-start",
+    },
+    "manual_new_task": {
+        "status": "supported",
+        "required_receipt": "manual-task-start",
+    },
+}
+HOST_CONFORMANCE_LABELS = ("verified", "supported-unverified")
+HOST_REGISTRY = {
+    "codex": {
+        "protocol": CODEX_ADAPTER_PROTOCOL,
+        "capabilities": HOST_CAPABILITY_CLAIMS,
+        "conformance": {
+            "label": "verified",
+            "evidence": [
+                "docs/decisions/0005-bootstrap-plugin-capabilities.md",
+                "docs/releases/0.9.0.md",
+            ],
+        },
+        "payload": list(HOST_PAYLOAD_SELECTORS["codex"]),
+    },
+    "hermes": {
+        "protocol": HERMES_ADAPTER_PROTOCOL,
+        "capabilities": HOST_CAPABILITY_CLAIMS,
+        "conformance": {
+            "label": "verified",
+            "evidence": [
+                "docs/work-items/20260921-host-adapters/conformance.md",
+            ],
+        },
+        "payload": list(HOST_PAYLOAD_SELECTORS["hermes"]),
+    },
+}
+
+
+def host_payload_owner(relative: str) -> Optional[str]:
+    """Return the host that owns a payload path, or None when it is host-neutral."""
+    if relative.startswith(".codex/agents/vibe-"):
+        return "codex"
+    if relative.startswith(".agents/skills/vibe-") and "/agents/" in relative:
+        return "codex"
+    return None
+
+
+def parse_host_argument(value: str) -> List[str]:
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def validate_host_selection(hosts: Sequence[str]) -> List[str]:
+    value = list(dict.fromkeys(str(item) for item in hosts))
+    if not value:
+        raise VibeError("host selection must name at least one declared host")
+    for host in value:
+        if host not in HOST_REGISTRY:
+            raise VibeError(f"unknown host in selection: {host}")
+    return value
 LEGACY_030_MANAGED_FILES = {
     ".agents/skills/vibe-debug-flow/SKILL.md": "d8749aa5494266dbafab5caeec6626451f4e7f3359e2886b3becd2e4fa4f7019",
     ".agents/skills/vibe-design-flow/SKILL.md": "1fe7c5ddbca5c124986086dcbfb54f94c1efd990bd303d346312925f59623502",
@@ -193,7 +265,7 @@ PREDECESSOR_MIGRATION_REGISTRY = {
                 "manifest_schema": 1,
             },
             "target": {
-                "framework_version": "0.9.0",
+                "framework_version": "0.10.1",
                 "source_types": list(SOURCE_TYPES),
             },
         },
@@ -208,7 +280,7 @@ PREDECESSOR_MIGRATION_REGISTRY_SHA256 = hashlib.sha256(
     ).encode("utf-8")
 ).hexdigest()
 EXPECTED_PREDECESSOR_MIGRATION_REGISTRY_SHA256 = (
-    "42b28f7e13a86b39b2a88136613cdcbeed62b3302ae0a7ba3238612114c11314"
+    "7cedd9fbabd84ab1b51b029a5e679765a1e79efd2d09d5edaa42f9ccf2e47bd3"
 )
 if PREDECESSOR_MIGRATION_REGISTRY_SHA256 != (
     EXPECTED_PREDECESSOR_MIGRATION_REGISTRY_SHA256
@@ -498,7 +570,7 @@ def build_takeover_contract_registry() -> Dict[str, object]:
             "stage_states": list(TAKEOVER_STAGE_STATES),
             "evidence_kinds": list(TAKEOVER_EVIDENCE_KINDS),
             "activation_paths": ["none", "same-task-reload", "automatic-successor-handoff", "manual-new-task"],
-            "receipt_kinds": ["host-reload", "host-successor-start", "manual-task-start"],
+            "receipt_kinds": ["host-reload", "host-successor-start", "manual-task-start", "existing-install-admission"],
             "goal_kinds": ["maintenance-only", "unfinished"],
             "goal_custody": list(TAKEOVER_GOAL_CUSTODY),
             "goal_continuation": ["not-applicable", "paused", "ready-to-resume", "resumed", "blocked"],
@@ -587,6 +659,12 @@ def build_takeover_contract_registry() -> Dict[str, object]:
                 "required_evidence": ["manual-task-start"],
                 "required_custody_at_ready": "manual-successor-owned",
             },
+            "existing-install-admission": {
+                "path": "manual-new-task", "active_task_relation": "differs-from-source-task",
+                "handoff_idempotency_key": "must-be-null",
+                "required_evidence": ["manual-task-start"],
+                "required_custody_at_ready": "manual-successor-owned",
+            },
         },
         "custody_transitions": copy.deepcopy(TAKEOVER_CUSTODY_TRANSITIONS),
         "ready_invariants": list(TAKEOVER_READY_INVARIANTS),
@@ -622,6 +700,7 @@ DIAGNOSTIC_REGISTRY = {
     "agent-contract-invalid": ("error", "blocking"),
     "agent-install-guide-invalid": ("error", "blocking"),
     "agent-install-contract-invalid": ("error", "blocking"),
+    "host-selection-incoherent": ("error", "blocking"),
     "diagnostic-internal-error": ("error", "blocking"),
 }
 DOCTOR_NON_BLOCKING_WARNING_CODES = ("stale-nonruntime-path-preserved",)
@@ -756,7 +835,128 @@ def atomic_write_json(path: Path, value: object) -> None:
     )
 
 
+RECEIPT_CONTEXT: List[Optional[Tuple[Path, Path]]] = [None]
+
+MANUAL_TRANSFER_SCHEMA_VERSION = 1
+MANUAL_TRANSFER_LIMITS = {"decisions": 16, "unfinished": 16, "evidence": 32}
+
+
+def root_relative_receipt(value: object, root: Path) -> object:
+    """Rewrite strings rooted at the resolved project root to root-relative form."""
+    root_text = str(root)
+
+    def rewrite(item: object) -> object:
+        if isinstance(item, str):
+            if item == root_text:
+                return "."
+            if item.startswith(root_text + "/"):
+                return item[len(root_text) + 1 :]
+            return item
+        if isinstance(item, dict):
+            return {key: rewrite(sub) for key, sub in item.items()}
+        if isinstance(item, list):
+            return [rewrite(sub) for sub in item]
+        return item
+
+    return rewrite(value)
+
+
+def write_receipt_artifact(value: object, receipt_path: Path, root: Path) -> None:
+    """Write the exact result envelope as a byte-stable root-relative receipt."""
+    payload = root_relative_receipt(value, root)
+    data = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    try:
+        receipt_path.write_text(data, encoding="utf-8")
+    except OSError as error:
+        print(f"error: could not write receipt artifact: {error}", file=sys.stderr)
+        sys.exit(2)
+
+
+def validate_manual_transfer_payload(value: object, root: Path) -> List[Dict[str, str]]:
+    """Validate the host-neutral minimal manual-transfer payload (schema 1)."""
+    findings: List[Dict[str, str]] = []
+
+    def add(code: str, path: str) -> None:
+        item = takeover_validation_error(code, path)
+        if item not in findings:
+            findings.append(item)
+
+    def opaque(value: object, maximum: int, allow_newlines: bool = False) -> bool:
+        if not isinstance(value, str) or not 1 <= len(value) <= maximum:
+            return False
+        for character in value:
+            code = ord(character)
+            if code >= 32 and character != "\x7f":
+                continue
+            if allow_newlines and character in "\r\n\t":
+                continue
+            return False
+        return True
+
+    shape = [
+        "transfer_schema_version",
+        "transfer_id",
+        "goal",
+        "decisions",
+        "unfinished",
+        "evidence",
+    ]
+    if not isinstance(value, dict) or set(value) != set(shape):
+        add("manual-transfer-shape", "$")
+        return findings
+    if value.get("transfer_schema_version") != MANUAL_TRANSFER_SCHEMA_VERSION:
+        add("manual-transfer-shape", "$.transfer_schema_version")
+    if not opaque(value.get("transfer_id"), 256):
+        add("manual-transfer-shape", "$.transfer_id")
+    if not opaque(value.get("goal"), 4096, allow_newlines=True):
+        add("manual-transfer-shape", "$.goal")
+    for key in ("decisions", "unfinished"):
+        items = value.get(key)
+        if not isinstance(items, list) or len(items) > int(MANUAL_TRANSFER_LIMITS[key]):
+            add("manual-transfer-shape", f"$.{key}")
+            continue
+        for index, item in enumerate(items):
+            if not opaque(item, 512):
+                add("manual-transfer-shape", f"$.{key}[{index}]")
+    evidence = value.get("evidence")
+    if not isinstance(evidence, list) or len(evidence) > int(MANUAL_TRANSFER_LIMITS["evidence"]):
+        add("manual-transfer-shape", "$.evidence")
+        return findings
+    resolved_root = root.resolve()
+    for index, item in enumerate(evidence):
+        item_path = f"$.evidence[{index}]"
+        if not isinstance(item, dict) or set(item) != {"ref", "sha256"}:
+            add("manual-transfer-shape", item_path)
+            continue
+        ref = item.get("ref")
+        digest_value = item.get("sha256")
+        if not opaque(ref, 4096):
+            add("manual-transfer-shape", f"{item_path}.ref")
+            continue
+        if not isinstance(digest_value, str) or re.fullmatch(
+            r"[0-9a-f]{64}", digest_value
+        ) is None:
+            add("manual-transfer-shape", f"{item_path}.sha256")
+            continue
+        if ref.startswith("./"):
+            candidate_path = (resolved_root / ref[2:]).resolve()
+            try:
+                candidate_path.relative_to(resolved_root)
+            except ValueError:
+                add("manual-transfer-evidence", f"{item_path}.ref")
+                continue
+            if not candidate_path.is_file():
+                add("manual-transfer-evidence", f"{item_path}.ref")
+                continue
+            if sha256(candidate_path) != digest_value:
+                add("manual-transfer-evidence", f"{item_path}.sha256")
+    return findings
+
+
 def print_json(value: object) -> None:
+    if RECEIPT_CONTEXT[0] is not None:
+        receipt_path, receipt_root = RECEIPT_CONTEXT[0]
+        write_receipt_artifact(value, receipt_path, receipt_root)
     print(json.dumps(value, ensure_ascii=False, sort_keys=True))
 
 
@@ -933,7 +1133,10 @@ def onboarding_result(target: Path) -> Dict[str, object]:
     return {"status": status, "kind": kind}
 
 
-def managed_source_files(root: Path) -> List[Path]:
+def managed_source_files(
+    root: Path, hosts: Optional[Sequence[str]] = None
+) -> List[Path]:
+    selection = None if hosts is None else set(validate_host_selection(hosts))
     files: List[Path] = []
     for relative in ("AGENT_INSTALL.md", "agent-install.json", "bin/vibe"):
         explicit = root / relative
@@ -955,7 +1158,17 @@ def managed_source_files(root: Path) -> List[Path]:
                 files.extend(path for path in directory.rglob("*") if path.is_file())
 
     unique = {path.relative_to(root): path for path in files}
-    return [unique[key] for key in sorted(unique, key=lambda item: item.as_posix())]
+    result = [unique[key] for key in sorted(unique, key=lambda item: item.as_posix())]
+    if selection is not None:
+        result = [
+            path
+            for path in result
+            if (
+                host_payload_owner(path.relative_to(root).as_posix()) is None
+                or host_payload_owner(path.relative_to(root).as_posix()) in selection
+            )
+        ]
+    return result
 
 
 def extract_agents_block(text: str) -> Optional[str]:
@@ -1143,8 +1356,8 @@ def predecessor_migration_evidence(phase: str) -> Dict[str, object]:
 
 
 def validate_target_predecessor_migration_contract(root: Path) -> None:
-    if framework_version(root) != "0.9.0":
-        raise VibeError("predecessor migration is supported only by target 0.9.0")
+    if framework_version(root) != "0.10.1":
+        raise VibeError("predecessor migration is supported only by target 0.10.1")
     contract = load_agent_install_contract(root)
     try:
         protocol = load_json_object_strict(root / ".vibe/core/protocol.json")
@@ -1485,10 +1698,10 @@ def reference_activation_identity_from_entries(
     return paths, dict(sorted(hashes.items())), hashlib.sha256(canonical).hexdigest()
 
 
-def activation_paths(root: Path) -> List[str]:
+def activation_paths(root: Path, hosts: Optional[Sequence[str]] = None) -> List[str]:
     paths = [
         path.relative_to(root).as_posix()
-        for path in managed_source_files(root)
+        for path in managed_source_files(root, hosts)
     ]
     paths.append("AGENTS.md#managed-block")
     return sorted(paths)
@@ -1550,6 +1763,140 @@ def source_activation_identity(root: Path) -> Dict[str, object]:
         "path_hashes": path_hashes,
         "activation_set_sha256": digest,
     }
+
+
+def selection_from_manifest(manifest: Dict[str, object]) -> List[str]:
+    raw = manifest.get("hosts")
+    if raw is None:
+        return ["codex"]
+    if (
+        not isinstance(raw, list)
+        or not raw
+        or any(not isinstance(item, str) for item in raw)
+    ):
+        raise VibeError("installed host selection is invalid")
+    return validate_host_selection(raw)
+
+
+def installed_contract_or_none(target: Path) -> Optional[Dict[str, object]]:
+    try:
+        return load_agent_install_contract(target)
+    except VibeError:
+        return None
+
+
+def installed_selection(
+    manifest: Dict[str, object], contract: Optional[Dict[str, object]]
+) -> List[str]:
+    """The recorded selection: the manifest and the installed contract must agree."""
+    selection = selection_from_manifest(manifest)
+    if isinstance(contract, dict):
+        activation = contract.get("activation")
+        recorded = (
+            activation.get("selected_hosts") if isinstance(activation, dict) else None
+        )
+        if recorded is not None and recorded != selection:
+            raise VibeError(
+                "installed host selection is incoherent: the manifest records "
+                f"{selection} while the installed contract records {recorded}; "
+                "restore one recorded selection before continuing"
+            )
+    return selection
+
+
+def target_contract_bytes(
+    contract: Dict[str, object],
+    selection: Sequence[str],
+    paths: Sequence[str],
+    digest: str,
+) -> bytes:
+    """The contract as an installation must carry it: host provenance and selection recorded."""
+    value = copy.deepcopy(contract)
+    adapter = value.get("adapter")
+    activation = value.get("activation")
+    if not isinstance(adapter, dict) or not isinstance(activation, dict):
+        raise VibeError("Agent-install contract is missing its adapter or activation block")
+    host = selection[0]
+    adapter["name"] = host
+    adapter["protocol"] = HOST_REGISTRY[host]["protocol"]
+    activation["selected_hosts"] = list(selection)
+    activation["activation_paths"] = list(paths)
+    activation["activation_set_sha256"] = digest
+    return (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
+def installed_contract_and_activation(
+    contract: Dict[str, object],
+    selection: Sequence[str],
+    managed_hashes: Dict[str, str],
+    agents_block_hash: str,
+    kit_version: str,
+) -> Tuple[bytes, Dict[str, object]]:
+    """Derive the installed contract bytes and activation identity for one selection.
+
+    The contract's own normalized hash zeroes its activation-set digest, so the
+    placeholder pass converges: the digest computed over the placeholder is the
+    digest the final file carries.
+    """
+    paths = sorted(
+        set(managed_hashes) | {"agent-install.json", "AGENTS.md#managed-block"}
+    )
+    base = {
+        key: value
+        for key, value in managed_hashes.items()
+        if key != "agent-install.json"
+    }
+    base["AGENTS.md#managed-block"] = agents_block_hash
+    placeholder = target_contract_bytes(
+        contract, selection, paths, ACTIVATION_DIGEST_SENTINEL
+    )
+    base["agent-install.json"] = normalized_agent_install_bytes_sha256(placeholder)
+    path_hashes = dict(sorted(base.items()))
+    host = selection[0]
+    fingerprint: Dict[str, object] = {
+        "kit_version": kit_version,
+        "core_protocol": CORE_PROTOCOL,
+        "agent_install_schema": AGENT_INSTALL_SCHEMA,
+        "agent_install_protocol": AGENT_INSTALL_PROTOCOL,
+        "adapter_name": host,
+        "adapter_protocol": HOST_REGISTRY[host]["protocol"],
+    }
+    digest = activation_set_digest(fingerprint, path_hashes)
+    contract_bytes = target_contract_bytes(contract, selection, paths, digest)
+    identity: Dict[str, object] = {
+        "fingerprint": {
+            **fingerprint,
+            "manifest_sha256": None,
+            "activation_set_sha256": digest,
+        },
+        "paths": paths,
+        "path_hashes": path_hashes,
+        "activation_set_sha256": digest,
+    }
+    return contract_bytes, identity
+
+
+def valid_host_adapter(adapter: object) -> bool:
+    if not isinstance(adapter, dict) or set(adapter) != {"name", "protocol"}:
+        return False
+    host = adapter.get("name")
+    if not isinstance(host, str) or host not in HOST_REGISTRY:
+        return False
+    return adapter.get("protocol") == HOST_REGISTRY[host]["protocol"]
+
+
+def valid_protocol_adapters_mirror(adapters: object) -> bool:
+    if not isinstance(adapters, dict):
+        return False
+    for host, entry in HOST_REGISTRY.items():
+        mirror = adapters.get(host)
+        if not isinstance(mirror, dict):
+            return False
+        if mirror.get("version") != entry["protocol"]:
+            return False
+        if mirror.get("core_protocol") != CORE_PROTOCOL:
+            return False
+    return True
 
 
 def merge_agents_text(current: str, incoming_block: str) -> str:
@@ -1766,14 +2113,16 @@ def manifest_value(
     managed_hashes: Dict[str, str],
     agents_block_hash: str,
     provenance: Dict[str, object],
+    hosts: Sequence[str],
+    activation: Dict[str, object],
 ) -> Dict[str, object]:
-    activation = source_activation_identity(source_root())
     return {
         "schema_version": 1,
         "framework_version": version,
         "managed_files": dict(sorted(managed_hashes.items())),
         "agents_block_hash": agents_block_hash,
         "source": provenance,
+        "hosts": list(hosts),
         "target_fingerprint": activation["fingerprint"],
         "activation": {
             "algorithm": ACTIVATION_SET_ALGORITHM,
@@ -1791,9 +2140,11 @@ def write_manifest(
     managed_hashes: Dict[str, str],
     agents_block_hash: str,
     provenance: Dict[str, object],
+    hosts: Sequence[str],
+    activation: Dict[str, object],
 ) -> None:
     manifest = manifest_value(
-        version, managed_hashes, agents_block_hash, provenance
+        version, managed_hashes, agents_block_hash, provenance, hosts, activation
     )
     atomic_write_text(
         target / MANIFEST_PATH,
@@ -1882,6 +2233,7 @@ def install(
     source_type: str,
     source_ref: Optional[str],
     artifact_sha256: Optional[str],
+    hosts: str = "codex",
 ) -> int:
     source = source_root()
     version = framework_version(source)
@@ -1894,7 +2246,8 @@ def install(
     if (target / MANIFEST_PATH).exists():
         raise VibeError("Vibe Kit is already installed; use upgrade instead.")
 
-    files = managed_source_files(source)
+    selection = validate_host_selection(parse_host_argument(hosts))
+    files = managed_source_files(source, selection)
     if not files:
         raise VibeError("No managed framework files were found in the source checkout.")
     collisions: List[str] = []
@@ -1919,25 +2272,37 @@ def install(
     block = incoming_agents_block(source)
     try:
         target.mkdir(parents=True, exist_ok=True)
+        contract_relative = "agent-install.json"
         for incoming in files:
+            if incoming.relative_to(source).as_posix() == contract_relative:
+                continue
             atomic_copy(incoming, target / incoming.relative_to(source))
+
+        managed_hashes = {
+            incoming.relative_to(source).as_posix(): sha256(incoming)
+            for incoming in files
+            if incoming.relative_to(source).as_posix() != contract_relative
+        }
+        contract = load_agent_install_contract(source)
+        contract_bytes, identity = installed_contract_and_activation(
+            contract, selection, managed_hashes, sha256_text(block), version
+        )
+        atomic_write_bytes(target / contract_relative, contract_bytes, 0o644)
+        managed_hashes[contract_relative] = sha256(target / contract_relative)
 
         atomic_write_text(agents_path, merge_agents_text(current_agents, block))
         lifecycle = "new" if command == "init" else "existing"
         created = ensure_project_owned_files(source, target, lifecycle, name)
 
-        managed_hashes = {
-            incoming.relative_to(source).as_posix(): sha256(
-                target / incoming.relative_to(source)
-            )
-            for incoming in files
-        }
-        write_manifest(target, version, managed_hashes, sha256_text(block), provenance)
+        write_manifest(
+            target, version, managed_hashes, sha256_text(block), provenance,
+            selection, identity,
+        )
     except (OSError, UnicodeError) as error:
         raise mutation_filesystem_error(command, target, error) from error
     if output_format == "json":
         write_state = "project-files-written"
-        activation = source_activation_identity(source)
+        activation = identity
         print_json(
             result_envelope(
                 command,
@@ -1962,7 +2327,7 @@ def install(
                 handoff={
                     "required": True,
                     "action": "create-new-project-task",
-                    "instruction": "Open one new Codex task in this project; the new task loads the installed rules.",
+                    "instruction": "Open one new task in this project; the new task loads the installed rules.",
                 },
             )
         )
@@ -1970,7 +2335,7 @@ def install(
     print(f"Vibe Kit {version} {command} complete: {target}")
     print(f"Managed files installed: {len(managed_hashes)}")
     print(f"Project-owned files created: {len(created)}")
-    print("Start a new Codex task so AGENTS.md and repository skills are loaded.")
+    print("Start a new task in this project so AGENTS.md and repository skills are loaded.")
     print("In the new task, state the development goal normally; onboarding is automatic.")
     return 0
 
@@ -5167,7 +5532,9 @@ def execute_upgrade_transaction(
         }
 
 
-def install_plan(operation: str, target: Path) -> Tuple[List[Dict[str, str]], str, str]:
+def install_plan(
+    operation: str, target: Path, hosts: str = "codex"
+) -> Tuple[List[Dict[str, str]], str, str]:
     source = source_root()
     target = target.resolve()
     version = framework_version(source)
@@ -5180,8 +5547,9 @@ def install_plan(operation: str, target: Path) -> Tuple[List[Dict[str, str]], st
     if (target / MANIFEST_PATH).exists():
         raise VibeError("Vibe Kit is already installed; use plan upgrade instead.")
 
+    selection = validate_host_selection(parse_host_argument(hosts))
     entries: List[Dict[str, str]] = []
-    for incoming in managed_source_files(source):
+    for incoming in managed_source_files(source, selection):
         relative = incoming.relative_to(source).as_posix()
         existing = target / relative
         if not existing.exists():
@@ -5243,7 +5611,7 @@ def upgrade_plan(
             )],
             "<transaction-active>", version, [], bridge,
         )
-    if version == "0.9.0":
+    if version == "0.10.1":
         validate_target_predecessor_migration_contract(source)
         migration_decision = predecessor_migration_decision(target)
     else:
@@ -5282,7 +5650,8 @@ def upgrade_plan(
             ONBOARDING_PATH.as_posix(), "project-owned onboarding state",
         )
     previous = {str(key): str(value) for key, value in manifest["managed_files"].items()}
-    incoming_files = managed_source_files(source)
+    selection = installed_selection(manifest, installed_contract_or_none(target))
+    incoming_files = managed_source_files(source, selection)
     incoming_by_relative = {
         path.relative_to(source).as_posix(): path for path in incoming_files
     }
@@ -5492,13 +5861,14 @@ def plan(
     source_type: str,
     source_ref: Optional[str],
     artifact_sha256: Optional[str],
+    hosts: str = "codex",
 ) -> int:
     version = framework_version(source_root())
     provenance = validate_source_provenance(
         source_type, source_ref, artifact_sha256, version
     )
     if operation in ("init", "adopt"):
-        entries, current, target_version = install_plan(operation, target)
+        entries, current, target_version = install_plan(operation, target, hosts)
         compatibility_migrations: List[Dict[str, object]] = []
         onboarding_bridge = None
     else:
@@ -5700,7 +6070,7 @@ def upgrade(
             None, "inspect-upgrade-transaction" if active_kind == "invalid" else "recover-upgrade",
             output_format,
         )
-    if version == "0.9.0":
+    if version == "0.10.1":
         validate_target_predecessor_migration_contract(source)
         migration_decision = predecessor_migration_decision(target)
     else:
@@ -5731,7 +6101,8 @@ def upgrade(
             "predecessor", bridge, "resolve-project-context", output_format,
         )
     previous = {str(key): str(value) for key, value in manifest["managed_files"].items()}
-    incoming_files = managed_source_files(source)
+    selection = installed_selection(manifest, installed_contract_or_none(target))
+    incoming_files = managed_source_files(source, selection)
     incoming_by_relative = {
         path.relative_to(source).as_posix(): path for path in incoming_files
     }
@@ -5834,6 +6205,11 @@ def upgrade(
                 for relative in ordered_relatives
                 if relative not in PREDECESSOR_MIGRATION_PATHS
             ]
+        ordered_relatives = [
+            relative
+            for relative in ordered_relatives
+            if relative != "agent-install.json"
+        ]
         with ProjectRootFD(target) as project:
             for relative in ordered_relatives:
                 incoming = incoming_by_relative[relative]
@@ -5891,9 +6267,23 @@ def upgrade(
                     project, len(changes), ONBOARDING_PATH.as_posix(),
                     ONBOARDING_PENDING_BYTES, 0o644,
                 ))
+            contract = load_agent_install_contract(source)
+            contract_bytes, identity = installed_contract_and_activation(
+                contract, selection, new_hashes, new_block_hash, version
+            )
+            contract_state, current_contract_bytes, _ = project.read("agent-install.json")
+            new_hashes["agent-install.json"] = hashlib.sha256(contract_bytes).hexdigest()
+            if contract_state != "regular" or current_contract_bytes != contract_bytes:
+                changes.append(upgrade_change(
+                    project, len(changes), "agent-install.json", contract_bytes, 0o644
+                ))
+                updated += 1
             manifest_bytes = (
                 json.dumps(
-                    manifest_value(version, new_hashes, new_block_hash, provenance),
+                    manifest_value(
+                        version, new_hashes, new_block_hash, provenance,
+                        selection, identity,
+                    ),
                     ensure_ascii=False, indent=2,
                 ) + "\n"
             ).encode("utf-8")
@@ -5917,7 +6307,7 @@ def upgrade(
     if bridge["state"] == "planned" and transaction_result["installation_state"] == "target":
         bridge = {**bridge, "state": "applied"}
     if output_format == "json":
-        activation = source_activation_identity(source)
+        activation = identity
         values: Dict[str, object] = {
             "operation": "upgrade",
             "target": str(target),
@@ -6545,6 +6935,9 @@ def doctor(target: Path, output_format: str) -> int:
         contract_activation = (
             contract_value.get("activation") if isinstance(contract_value, dict) else None
         )
+        installed_adapter = (
+            contract_value.get("adapter") if isinstance(contract_value, dict) else None
+        )
         contract_expected = managed_files.get("agent-install.json")
         contract_valid = (
             isinstance(contract_value, dict)
@@ -6569,6 +6962,32 @@ def doctor(target: Path, output_format: str) -> int:
                 "installed Agent-install machine contract is missing, modified, or inconsistent",
                 "agent-install.json",
             )
+
+        recorded_selection = (
+            contract_activation.get("selected_hosts")
+            if isinstance(contract_activation, dict)
+            else None
+        )
+        if isinstance(recorded_selection, list):
+            try:
+                declared_selection: Optional[List[str]] = selection_from_manifest(
+                    manifest
+                )
+            except VibeError:
+                declared_selection = None
+            if declared_selection != recorded_selection:
+                add(
+                    "host-selection-incoherent",
+                    (
+                        "installed host selection is incoherent: the manifest records "
+                        f"{declared_selection} while the installed contract records "
+                        f"{recorded_selection}"
+                        if declared_selection is not None
+                        else "installed host selection is invalid: the manifest records "
+                        "an unknown or malformed host selection"
+                    ),
+                    MANIFEST_PATH.as_posix(),
+                )
 
         activation = manifest.get("activation")
         fingerprint_value = manifest.get("target_fingerprint")
@@ -6606,14 +7025,15 @@ def doctor(target: Path, output_format: str) -> int:
                 and re.fullmatch(r"[0-9a-f]{64}", expected_digest) is not None
                 and activation.get("algorithm") == ACTIVATION_SET_ALGORITHM
                 and roots == list(RUNTIME_DISCOVERY_ROOTS)
+                and isinstance(installed_adapter, dict)
                 and base_fingerprint
                 == {
                     "kit_version": manifest_version,
                     "core_protocol": CORE_PROTOCOL,
                     "agent_install_schema": AGENT_INSTALL_SCHEMA,
                     "agent_install_protocol": AGENT_INSTALL_PROTOCOL,
-                    "adapter_name": "codex",
-                    "adapter_protocol": CODEX_ADAPTER_PROTOCOL,
+                    "adapter_name": installed_adapter.get("name"),
+                    "adapter_protocol": installed_adapter.get("protocol"),
                 }
                 and activation_set_digest(base_fingerprint, expected_hashes)
                 == expected_digest
@@ -6941,7 +7361,7 @@ def parse_commands(path: Path) -> Dict[str, str]:
     return commands
 
 
-def sanitize_verify_stream(target: Path, content: bytes) -> Tuple[str, bool]:
+def sanitize_verify_text(target: Path, content: bytes) -> str:
     text = content.decode("utf-8", errors="replace")
     text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
     text = "".join(
@@ -6957,10 +7377,17 @@ def sanitize_verify_stream(target: Path, content: bytes) -> Tuple[str, bool]:
         text = text.replace(root_alias, ".")
     for pattern in SECRET_PATTERNS:
         text = pattern.sub("[REDACTED]", text)
+    return text
+
+
+def sanitize_verify_stream(
+    target: Path, content: bytes, limit: int = VERIFY_OUTPUT_LIMIT
+) -> Tuple[str, bool]:
+    text = sanitize_verify_text(target, content)
     encoded = text.encode("utf-8", errors="replace")
-    truncated = len(encoded) > VERIFY_OUTPUT_LIMIT
+    truncated = len(encoded) > limit
     if truncated:
-        encoded = encoded[-VERIFY_OUTPUT_LIMIT:]
+        encoded = encoded[-limit:]
         while True:
             try:
                 text = encoded.decode("utf-8")
@@ -6973,15 +7400,229 @@ def sanitize_verify_stream(target: Path, content: bytes) -> Tuple[str, bool]:
 
 
 def verify_output(
-    stdout: bytes, stderr: bytes, target: Path
+    stdout: bytes, stderr: bytes, target: Path, limit: int = VERIFY_OUTPUT_LIMIT
 ) -> Dict[str, object]:
-    stdout_tail, stdout_truncated = sanitize_verify_stream(target, stdout)
-    stderr_tail, stderr_truncated = sanitize_verify_stream(target, stderr)
+    stdout_tail, stdout_truncated = sanitize_verify_stream(target, stdout, limit)
+    stderr_tail, stderr_truncated = sanitize_verify_stream(target, stderr, limit)
     return {
         "stdout_tail": stdout_tail,
         "stderr_tail": stderr_tail,
         "stdout_truncated": stdout_truncated,
         "stderr_truncated": stderr_truncated,
+    }
+
+
+CHECK_BLOCK_KEYS = ("requires", "output_limit_bytes")
+TOOLCHAIN_KEYS = ("python", "node", "pnpm")
+VERIFY_LOCAL_DIRECTORY = Path(".vibe/local/verify")
+
+
+def project_section_entries(path: Path, section: str) -> List[Tuple[int, str, str]]:
+    if not path.is_file():
+        return []
+    entries: List[Tuple[int, str, str]] = []
+    in_section = False
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        if raw_line.strip() == section + ":":
+            in_section = True
+            continue
+        if not in_section:
+            continue
+        if raw_line and not raw_line.startswith(" "):
+            break
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = re.match(r"^([A-Za-z0-9_-]+):\s*(.*)$", stripped)
+        if not match:
+            raise VibeError(
+                f"{section} entries must use the `key: value` form in {path}"
+            )
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+        entries.append((indent, match.group(1), match.group(2).strip()))
+    return entries
+
+
+def require_known_check(name: str, path: Path) -> str:
+    if name not in VERIFY_ORDER:
+        raise VibeError(
+            f"unknown check name `{name}` in {path}; expected one of "
+            + ", ".join(VERIFY_ORDER)
+        )
+    return name
+
+
+def normalized_dependencies(value: object, path: Path) -> List[str]:
+    if not isinstance(value, list) or not all(
+        isinstance(item, str) for item in value
+    ):
+        raise VibeError(
+            f"check dependencies must be a JSON list of names in {path}"
+        )
+    return [require_known_check(str(item), path) for item in value]
+
+
+def parse_checks_config(path: Path) -> Dict[str, object]:
+    requires: Dict[str, List[str]] = {}
+    limit: Optional[int] = None
+    active = ""
+    for indent, key, raw_value in project_section_entries(path, "checks"):
+        if indent == 2:
+            if key not in CHECK_BLOCK_KEYS:
+                raise VibeError(
+                    f"checks must only declare {', '.join(CHECK_BLOCK_KEYS)} in {path}"
+                )
+            active = key
+            if key == "output_limit_bytes":
+                try:
+                    parsed = int(raw_value)
+                except ValueError:
+                    raise VibeError(
+                        f"checks.output_limit_bytes must be an integer in {path}"
+                    )
+                if parsed < VERIFY_OUTPUT_LIMIT:
+                    raise VibeError(
+                        "checks.output_limit_bytes must not be lower than "
+                        f"{VERIFY_OUTPUT_LIMIT} bytes in {path}"
+                    )
+                limit = parsed
+                continue
+            if raw_value:
+                try:
+                    inline = json.loads(raw_value)
+                except json.JSONDecodeError:
+                    raise VibeError(
+                        "checks.requires must be a JSON mapping or nested "
+                        f"entries in {path}"
+                    )
+                if not isinstance(inline, dict):
+                    raise VibeError(
+                        f"checks.requires must be a mapping of check names in {path}"
+                    )
+                for name, value in inline.items():
+                    requires[require_known_check(str(name), path)] = (
+                        normalized_dependencies(value, path)
+                    )
+            continue
+        if indent == 4 and active == "requires":
+            try:
+                parsed = json.loads(raw_value) if raw_value else []
+            except json.JSONDecodeError:
+                raise VibeError(
+                    f"check dependencies must be a JSON list in {path}"
+                )
+            requires[require_known_check(key, path)] = normalized_dependencies(
+                parsed, path
+            )
+            continue
+        raise VibeError(
+            f"checks entries must use two-space indentation in {path}"
+        )
+    return {"requires": requires, "output_limit_bytes": limit or VERIFY_OUTPUT_LIMIT}
+
+
+def parse_toolchain_config(path: Path) -> Dict[str, str]:
+    expectation: Dict[str, str] = {}
+    for indent, key, raw_value in project_section_entries(path, "toolchain"):
+        if indent != 2:
+            raise VibeError(
+                f"toolchain entries must use two-space indentation in {path}"
+            )
+        if key not in TOOLCHAIN_KEYS:
+            raise VibeError(
+                f"toolchain must only declare {', '.join(TOOLCHAIN_KEYS)} in {path}"
+            )
+        if not raw_value:
+            raise VibeError(
+                f"toolchain.{key} must name an expected version in {path}"
+            )
+        try:
+            decoded = json.loads(raw_value)
+        except json.JSONDecodeError:
+            decoded = raw_value
+        expectation[key] = str(decoded)
+    return expectation
+
+
+def derive_check_order(requires: Dict[str, List[str]], path: Path) -> List[str]:
+    for name in requires:
+        require_known_check(name, path)
+    placed: List[str] = []
+    remaining = list(VERIFY_ORDER)
+    while remaining:
+        progressed = False
+        for name in list(remaining):
+            if all(dependency in placed for dependency in requires.get(name, [])):
+                placed.append(name)
+                remaining.remove(name)
+                progressed = True
+        if not progressed:
+            raise VibeError(
+                "checks.requires contains a dependency cycle among: "
+                + ", ".join(remaining)
+            )
+    return placed
+
+
+def observe_toolchain(target: Path) -> Dict[str, Optional[str]]:
+    observed: Dict[str, Optional[str]] = {"python": platform.python_version()}
+    for tool in ("node", "pnpm"):
+        observed[tool] = None
+        try:
+            result = subprocess.run(
+                [tool, "--version"],
+                cwd=str(target),
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if result.returncode != 0:
+            continue
+        text = result.stdout.decode("utf-8", errors="replace").strip()
+        observed[tool] = text or None
+    return observed
+
+
+def version_components(value: str) -> Tuple[int, ...]:
+    return tuple(int(number) for number in re.findall(r"\d+", value)) or (0,)
+
+
+def toolchain_expectation_met(expectation: str, actual: str) -> bool:
+    pattern = expectation.strip()
+    if pattern.startswith(">="):
+        return version_components(actual) >= version_components(pattern[2:])
+    expected = version_components(pattern)
+    return version_components(actual)[: len(expected)] == expected
+
+
+def unmet_toolchain_expectations(
+    expectations: Dict[str, str], observed: Dict[str, Optional[str]]
+) -> Dict[str, Dict[str, Optional[str]]]:
+    unmet: Dict[str, Dict[str, Optional[str]]] = {}
+    for tool, expectation in expectations.items():
+        actual = observed.get(tool)
+        if actual is None or not toolchain_expectation_met(expectation, actual):
+            unmet[tool] = {"expected": expectation, "observed": actual}
+    return unmet
+
+
+def write_verify_full_output(
+    target: Path, name: str, stdout: bytes, stderr: bytes
+) -> Dict[str, str]:
+    directory = target / VERIFY_LOCAL_DIRECTORY
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    path = directory / f"{stamp}-{name}.log"
+    payload = sanitize_verify_text(target, stdout) + sanitize_verify_text(
+        target, stderr
+    )
+    data = payload.encode("utf-8", errors="replace")
+    path.write_bytes(data)
+    return {
+        "path": str(path.relative_to(target)),
+        "sha256": hashlib.sha256(data).hexdigest(),
     }
 
 
@@ -6991,8 +7632,19 @@ def verify(target: Path, only: Sequence[str], output_format: str) -> int:
     if not config.is_file():
         raise VibeError(f"Project configuration is missing: {config}")
     commands = parse_commands(config)
-    requested = [key for key in VERIFY_ORDER if key in set(only)] if only else []
-    selected = requested if only else list(VERIFY_ORDER)
+    checks_config = parse_checks_config(config)
+    check_requires = checks_config["requires"]
+    output_limit = int(checks_config["output_limit_bytes"])
+    effective_order = derive_check_order(check_requires, config)
+    toolchain_expectations = parse_toolchain_config(config)
+    observed_toolchain = observe_toolchain(target)
+    unmet_toolchain = unmet_toolchain_expectations(
+        toolchain_expectations, observed_toolchain
+    )
+    requested = (
+        [key for key in effective_order if key in set(only)] if only else []
+    )
+    selected = requested if only else list(effective_order)
     checks: List[Dict[str, object]] = []
     for key in selected:
         command = commands.get(key, "")
@@ -7011,7 +7663,7 @@ def verify(target: Path, only: Sequence[str], output_format: str) -> int:
                         "task_id": None,
                         "operation_id": None,
                     },
-                    "output": verify_output(b"", b"", target),
+                    "output": verify_output(b"", b"", target, output_limit),
                 }
             )
             continue
@@ -7026,7 +7678,9 @@ def verify(target: Path, only: Sequence[str], output_format: str) -> int:
                 capture_output=True,
             )
         except OSError as error:
-            captured = verify_output(b"", str(error).encode("utf-8"), target)
+            captured = verify_output(
+                b"", str(error).encode("utf-8"), target, output_limit
+            )
             checks.append(
                 {
                     "name": key,
@@ -7047,25 +7701,34 @@ def verify(target: Path, only: Sequence[str], output_format: str) -> int:
             if output_format == "text":
                 print(captured["stderr_tail"], file=sys.stderr, end="")
             continue
-        captured = verify_output(result.stdout, result.stderr, target)
-        outcome = "passed" if result.returncode == 0 else "failed"
-        checks.append(
-            {
-                "name": key,
-                "configured": True,
-                "applicability": "applicable",
-                "required": True,
-                "outcome": outcome,
-                "exit_code": result.returncode,
-                "reason_code": None,
-                "provenance": {
-                    "kind": "cli",
-                    "task_id": None,
-                    "operation_id": None,
-                },
-                "output": captured,
+        captured = verify_output(result.stdout, result.stderr, target, output_limit)
+        record: Dict[str, object] = {
+            "name": key,
+            "configured": True,
+            "applicability": "applicable",
+            "required": True,
+            "outcome": "passed" if result.returncode == 0 else "failed",
+            "exit_code": result.returncode,
+            "reason_code": None,
+            "provenance": {
+                "kind": "cli",
+                "task_id": None,
+                "operation_id": None,
+            },
+            "output": captured,
+        }
+        if result.returncode != 0 and unmet_toolchain:
+            record["outcome"] = "environment-limited"
+            record["reason_code"] = "toolchain-mismatch"
+            record["environment"] = {
+                "expectations": unmet_toolchain,
+                "observed": observed_toolchain,
             }
-        )
+        if record["outcome"] in ("failed", "environment-limited"):
+            captured["full"] = write_verify_full_output(
+                target, key, result.stdout, result.stderr
+            )
+        checks.append(record)
         if output_format == "text":
             if captured["stdout_tail"]:
                 print(captured["stdout_tail"], end="")
@@ -7074,9 +7737,15 @@ def verify(target: Path, only: Sequence[str], output_format: str) -> int:
 
     summary = {
         outcome: sum(1 for check in checks if check["outcome"] == outcome)
-        for outcome in ("passed", "failed", "unconfigured", "skipped")
+        for outcome in (
+            "passed",
+            "failed",
+            "unconfigured",
+            "skipped",
+            "environment-limited",
+        )
     }
-    if summary["skipped"]:
+    if summary["skipped"] or summary["environment-limited"]:
         status = "blocked"
         exit_code = 2
     elif summary["failed"]:
@@ -7098,6 +7767,8 @@ def verify(target: Path, only: Sequence[str], output_format: str) -> int:
                 },
                 producer="cli",
                 cli_invoked=True,
+                default_order=list(effective_order),
+                toolchain=observed_toolchain,
                 checks=checks,
                 summary=summary,
             )
@@ -7118,12 +7789,14 @@ def verify(target: Path, only: Sequence[str], output_format: str) -> int:
         ]
         print("\nVerification failed: " + ", ".join(failures), file=sys.stderr)
     else:
-        skipped = [
+        blocked_names = [
             str(check["name"])
             for check in checks
-            if check["outcome"] == "skipped"
+            if check["outcome"] in ("skipped", "environment-limited")
         ]
-        print("\nVerification blocked: " + ", ".join(skipped), file=sys.stderr)
+        print(
+            "\nVerification blocked: " + ", ".join(blocked_names), file=sys.stderr
+        )
     return exit_code
 
 
@@ -7138,7 +7811,7 @@ def work_item(target: Path, slug_value: str, size: str, title: Optional[str]) ->
     target = target.resolve()
     slug = normalized_slug(slug_value)
     date = dt.date.today().isoformat()
-    identifier = dt.date.today().strftime("%Y%m%d") + "-" + slug
+    identifier = slug if re.fullmatch(r"\d{8}-[a-z0-9-]+", slug) else dt.date.today().strftime("%Y%m%d") + "-" + slug
     destination = target / "docs/work-items" / identifier
     if destination.exists():
         raise VibeError(f"Work item already exists: {destination}")
@@ -7557,6 +8230,7 @@ def validate_agent_install_contract_shape(contract: Dict[str, object]) -> List[s
         "protocol_version",
         "kit_version",
         "adapter",
+        "hosts",
         "maintenance_bridge",
         "canonical_source",
         "release_channels",
@@ -7575,24 +8249,25 @@ def validate_agent_install_contract_shape(contract: Dict[str, object]) -> List[s
     if set(contract) != expected_top_level:
         errors.append("agent install contract top-level fields are unknown or incomplete")
     adapter = contract.get("adapter")
-    expected_capabilities = {
-        "same_task_reload": {
-            "status": "conditional",
-            "current_claim": False,
-            "required_receipt": "host-reload",
-        },
-        "automatic_successor_handoff": {
-            "status": "conditional",
-            "current_claim": False,
-            "required_receipt": "host-successor-start",
-        },
-        "manual_new_task": {
-            "status": "supported",
-            "required_receipt": "manual-task-start",
-        },
-    }
-    if not isinstance(adapter, dict) or adapter.get("capabilities") != expected_capabilities:
-        errors.append("agent install adapter capability claims are unsupported")
+    if not valid_host_adapter(adapter):
+        errors.append("agent install adapter provenance is unsupported")
+    hosts = contract.get("hosts")
+    if not isinstance(hosts, dict) or set(hosts) != set(HOST_REGISTRY):
+        errors.append("agent install host registry is unsupported")
+    else:
+        for host_name, expected_entry in HOST_REGISTRY.items():
+            entry = hosts.get(host_name)
+            if (
+                not isinstance(entry, dict)
+                or set(entry) != {"protocol", "capabilities", "conformance", "payload"}
+                or entry.get("protocol") != expected_entry["protocol"]
+                or entry.get("capabilities") != expected_entry["capabilities"]
+                or entry.get("conformance") != expected_entry["conformance"]
+                or entry.get("payload") != expected_entry["payload"]
+            ):
+                errors.append(
+                    f"agent install host registry entry is unsupported: {host_name}"
+                )
 
     bridge = contract.get("maintenance_bridge")
     expected_bridge = {
@@ -7600,7 +8275,7 @@ def validate_agent_install_contract_shape(contract: Dict[str, object]) -> List[s
         "supported_installed_manifest_schemas": [1],
         "supported_installed_agent_protocols": [0, 1, 2, 3],
         "minimum_installed_kit_version": "0.2.0",
-        "maximum_installed_kit_version_exclusive": "0.9.0",
+        "maximum_installed_kit_version_exclusive": "0.10.1",
         "target_agent_install_schema": AGENT_INSTALL_SCHEMA,
         "target_agent_install_protocol": AGENT_INSTALL_PROTOCOL,
         "target_cli_result_schema": AGENT_RESULT_SCHEMA,
@@ -7679,6 +8354,7 @@ def validate_agent_install_contract_shape(contract: Dict[str, object]) -> List[s
                 "host-reload",
                 "host-successor-start",
                 "manual-task-start",
+                "existing-install-admission",
             ],
             "stale_runtime_diagnostic": "stale-runtime-path-preserved",
             "stale_nonruntime_diagnostic": "stale-nonruntime-path-preserved",
@@ -7692,6 +8368,18 @@ def validate_agent_install_contract_shape(contract: Dict[str, object]) -> List[s
             set(declared_paths)
         ):
             errors.append("agent install activation paths are invalid")
+        selected_hosts = activation.get("selected_hosts")
+        if (
+            not isinstance(selected_hosts, list)
+            or not selected_hosts
+            or any(
+                not isinstance(item, str) or item not in HOST_REGISTRY
+                for item in selected_hosts
+            )
+            or len(set(selected_hosts)) != len(selected_hosts)
+            or selected_hosts != sorted(selected_hosts)
+        ):
+            errors.append("agent install activation host selection is invalid")
         if not re.fullmatch(
             r"[0-9a-f]{64}", str(activation.get("activation_set_sha256", ""))
         ):
@@ -7779,7 +8467,13 @@ def validate_agent_install_contract_shape(contract: Dict[str, object]) -> List[s
     if not isinstance(verify_contract, dict) or verify_contract != {
         "statuses": list(AGENT_COMMAND_STATUSES["verify"]),
         "default_order": list(VERIFY_ORDER),
-        "outcomes": ["passed", "failed", "unconfigured", "skipped"],
+        "outcomes": [
+            "passed",
+            "failed",
+            "unconfigured",
+            "skipped",
+            "environment-limited",
+        ],
         "skipped_reasons": [
             "host-permission-denied",
             "host-capability-unavailable",
@@ -7954,9 +8648,6 @@ def installed_takeover_contract_context(
     except VibeError:
         protocol = {}
     adapter = contract.get("adapter")
-    codex = protocol.get("adapters", {}).get("codex", {}) if isinstance(
-        protocol.get("adapters"), dict
-    ) else {}
     if (
         protocol.get("core_protocol") != CORE_PROTOCOL
         or protocol.get("agent_install_protocol") != AGENT_INSTALL_PROTOCOL
@@ -7965,12 +8656,8 @@ def installed_takeover_contract_context(
         or not valid_predecessor_migration_mirror(
             protocol.get("predecessor_migrations")
         )
-        or not isinstance(adapter, dict)
-        or adapter.get("name") != "codex"
-        or adapter.get("protocol") != CODEX_ADAPTER_PROTOCOL
-        or not isinstance(codex, dict)
-        or codex.get("version") != CODEX_ADAPTER_PROTOCOL
-        or codex.get("core_protocol") != CORE_PROTOCOL
+        or not valid_host_adapter(adapter)
+        or not valid_protocol_adapters_mirror(protocol.get("adapters"))
     ):
         add("installed-core-contract-mismatch", ".vibe/core/protocol.json")
 
@@ -8026,6 +8713,8 @@ def installed_takeover_contract_context(
     if errors:
         return None, errors
     raw_manifest_sha256 = sha256(root / MANIFEST_PATH)
+    adapter_value = contract.get("adapter") if isinstance(contract, dict) else None
+    adapter_value = adapter_value if isinstance(adapter_value, dict) else {}
     context = {
         "project_root": str(root),
         "manifest_sha256": raw_manifest_sha256,
@@ -8035,8 +8724,8 @@ def installed_takeover_contract_context(
             "core_protocol": CORE_PROTOCOL,
             "agent_install_schema": AGENT_INSTALL_SCHEMA,
             "agent_install_protocol": AGENT_INSTALL_PROTOCOL,
-            "adapter_name": "codex",
-            "adapter_protocol": CODEX_ADAPTER_PROTOCOL,
+            "adapter_name": adapter_value.get("name"),
+            "adapter_protocol": adapter_value.get("protocol"),
             "manifest_sha256": raw_manifest_sha256,
             "activation_set_sha256": actual_digest,
         },
@@ -8203,14 +8892,19 @@ def validate_takeover_object(
             "core_protocol": CORE_PROTOCOL,
             "agent_install_schema": AGENT_INSTALL_SCHEMA,
             "agent_install_protocol": AGENT_INSTALL_PROTOCOL,
-            "adapter_name": "codex",
-            "adapter_protocol": CODEX_ADAPTER_PROTOCOL,
         }
         if not strict_semver(fingerprint.get("kit_version")):
             add("exact-result-shape", "$.target_fingerprint.kit_version")
         for key, expected in expected_static.items():
             if fingerprint.get(key) != expected:
                 add("activation-identities-match-target", f"$.target_fingerprint.{key}")
+        if not valid_host_adapter(
+            {
+                "name": fingerprint.get("adapter_name"),
+                "protocol": fingerprint.get("adapter_protocol"),
+            }
+        ):
+            add("activation-identities-match-target", "$.target_fingerprint.adapter_name")
         if not nullable_digest(fingerprint.get("manifest_sha256")):
             add("exact-result-shape", "$.target_fingerprint.manifest_sha256")
         if not nullable_digest(fingerprint.get("activation_set_sha256")):
@@ -8431,6 +9125,44 @@ def validate_takeover_object(
     ):
         add("custody-history-strictly-increasing", "$.goal.custody_history")
 
+    # Existing-install admission (ADR 0018): a distinct receipt kind that claims
+    # no transaction in this directory and cites the historical one as evidence.
+    is_admission = isinstance(activation, dict) and activation.get(
+        "receipt_kind"
+    ) == "existing-install-admission"
+    if is_admission:
+        transaction = upgrade_transaction if isinstance(upgrade_transaction, dict) else {}
+        if (
+            transaction.get("transaction_id") is not None
+            or transaction.get("outcome") not in ("not-started", "not-applied")
+            or transaction.get("commit_marker") not in ("not-applicable", "invalid")
+        ):
+            add("admission-claims-no-transaction", "$.upgrade_transaction")
+        if activation.get("observed_manifest_sha256") != context.get("manifest_sha256"):
+            add(
+                "admission-identities-recomputed",
+                "$.activation.observed_manifest_sha256",
+            )
+        if activation.get("observed_activation_set_sha256") != context.get(
+            "activation_set_sha256"
+        ):
+            add(
+                "admission-identities-recomputed",
+                "$.activation.observed_activation_set_sha256",
+            )
+        referenced_history = [
+            item
+            for stage_name in ("applied", "upgraded")
+            for item in evidence_by_stage.get(stage_name, [])
+            if item.get("kind") in ("apply-receipt", "doctor-receipt")
+            and item.get("ref") is not None
+            and item.get("sha256") is not None
+        ]
+        if not referenced_history:
+            add("admission-references-historical-upgrade", "$.stages.applied")
+        if result.get("write_state") != "none":
+            add("admission-writes-nothing", "$.write_state")
+
     source_task = activation.get("source_task_id") if isinstance(activation, dict) else None
     active_task = activation.get("active_task_id") if isinstance(activation, dict) else None
     if isinstance(goal, dict):
@@ -8589,17 +9321,22 @@ def validate_takeover_object(
                     ):
                         add("successor-custody-terminal", "$.goal.custody_history")
 
-    if stage_values.get("applied", {}).get("state") == "satisfied" and result.get(
-        "write_state"
-    ) != "project-files-written":
+    if (
+        stage_values.get("applied", {}).get("state") == "satisfied"
+        and result.get("write_state") != "project-files-written"
+        and not is_admission
+    ):
         add("write-state-project-files-written", "$.write_state")
-    if stage_values.get("applied", {}).get("state") == "satisfied" and isinstance(
-        upgrade_transaction, dict
-    ) and not (
-        upgrade_transaction.get("outcome") == "committed"
-        and upgrade_transaction.get("commit_marker") == "valid"
-        and upgrade_transaction.get("installation_state") == "target"
-        and upgrade_transaction.get("active_state_present") is False
+    if (
+        stage_values.get("applied", {}).get("state") == "satisfied"
+        and isinstance(upgrade_transaction, dict)
+        and not is_admission
+        and not (
+            upgrade_transaction.get("outcome") == "committed"
+            and upgrade_transaction.get("commit_marker") == "valid"
+            and upgrade_transaction.get("installation_state") == "target"
+            and upgrade_transaction.get("active_state_present") is False
+        )
     ):
         add("upgrade-transaction-outcome-committed", "$.upgrade_transaction")
     if result.get("write_state") in ("rolled-back", "recovery-required", "unknown-partial"):
@@ -8634,7 +9371,9 @@ def validate_takeover_object(
     if (overall == "ready") != ready_satisfied:
         add("overall-ready-iff-ready-stage-satisfied", "$.overall_status")
     if ready_satisfied:
-        if blocked_stages or result.get("write_state") != "project-files-written":
+        if blocked_stages or (
+            result.get("write_state") != "project-files-written" and not is_admission
+        ):
             add("no-blocking-diagnostic", "$.stages.ready")
         if result.get("completion_owner_task_id") != active_task or active_task is None:
             add("completion-owner-is-active-task", "$.completion_owner_task_id")
@@ -8667,7 +9406,9 @@ def validate_takeover_object(
     return errors
 
 
-def validate_takeover(root: Path, output_format: str) -> int:
+def validate_takeover(
+    root: Path, output_format: str, transfer_path: Optional[Path] = None
+) -> int:
     try:
         context, authentication_errors = installed_takeover_contract_context(root)
     except (OSError, UnicodeError, VibeError):
@@ -8699,6 +9440,35 @@ def validate_takeover(root: Path, output_format: str) -> int:
         validation_errors = [takeover_validation_error("exact-result-shape", "$")]
     else:
         validation_errors = validate_takeover_object(candidate, context)
+    if transfer_path is not None:
+        try:
+            payload = json.loads(
+                transfer_path.read_text(encoding="utf-8"),
+                object_pairs_hook=reject_duplicate_json_keys,
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+            payload = None
+            validation_errors.append(
+                takeover_validation_error("manual-transfer-shape", "$")
+            )
+        else:
+            validation_errors.extend(validate_manual_transfer_payload(payload, root))
+            if isinstance(payload, dict) and isinstance(candidate, dict):
+                goal_value = candidate.get("goal")
+                transfer_id = (
+                    goal_value.get("transfer_id") if isinstance(goal_value, dict) else None
+                )
+                if transfer_id is not None and payload.get("transfer_id") != transfer_id:
+                    validation_errors.append(
+                        takeover_validation_error(
+                            "manual-transfer-identity-consistent", "$.goal.transfer_id"
+                        )
+                    )
+        deduped: List[Dict[str, str]] = []
+        for item in validation_errors:
+            if item not in deduped:
+                deduped.append(item)
+        validation_errors = deduped
     status = "invalid" if validation_errors else "valid"
     result = result_envelope(
         "validate-takeover",
@@ -8706,6 +9476,18 @@ def validate_takeover(root: Path, output_format: str) -> int:
         structural_only=True,
         host_evidence_authenticated=False,
         ready_claim=False,
+        manual_transfer_status=(
+            "absent"
+            if transfer_path is None
+            else (
+                "invalid"
+                if any(
+                    item.get("code", "").startswith("manual-transfer")
+                    for item in validation_errors
+                )
+                else "valid"
+            )
+        ),
         errors=validation_errors,
     )
     if output_format == "json":
@@ -9086,6 +9868,29 @@ def validate_release(release_dir: Path, output_format: str = "text") -> int:
         }
     ):
         errors.append("release Codex adapter activation capability is unsupported")
+    release_adapters = (
+        release_protocol_value.get("adapters", {})
+        if isinstance(release_protocol_value.get("adapters"), dict)
+        else {}
+    )
+    for host_name in HOST_REGISTRY:
+        if host_name == "codex":
+            continue
+        host_mirror = release_adapters.get(host_name)
+        if (
+            not isinstance(host_mirror, dict)
+            or host_mirror.get("version") != HOST_REGISTRY[host_name]["protocol"]
+            or host_mirror.get("core_protocol") != CORE_PROTOCOL
+            or host_mirror.get("upgrade_activation")
+            != {
+                "same_task_reload": "conditional-unclaimed",
+                "automatic_successor_handoff": "conditional-unclaimed",
+                "manual_new_task": "supported",
+            }
+        ):
+            errors.append(
+                f"release host adapter activation capability is unsupported: {host_name}"
+            )
     for required in (
         "bin/vibe",
         "AGENTS.md",
@@ -9132,12 +9937,20 @@ def validate_release(release_dir: Path, output_format: str = "text") -> int:
         ):
             errors.append("agent install contract canonical source is invalid")
         adapter = install_contract.get("adapter")
-        codex = release_protocol_value.get("adapters", {}).get("codex", {}) if isinstance(
-            release_protocol_value.get("adapters"), dict
-        ) else {}
-        if not isinstance(adapter, dict) or (
-            adapter.get("name") != "codex"
-            or adapter.get("protocol") != codex.get("version")
+        release_adapters = (
+            release_protocol_value.get("adapters", {})
+            if isinstance(release_protocol_value.get("adapters"), dict)
+            else {}
+        )
+        adapter_mirror = (
+            release_adapters.get(adapter.get("name"))
+            if isinstance(adapter, dict) and isinstance(adapter.get("name"), str)
+            else None
+        )
+        if (
+            not valid_host_adapter(adapter)
+            or not isinstance(adapter_mirror, dict)
+            or adapter.get("protocol") != adapter_mirror.get("version")
         ):
             errors.append("agent install contract adapter does not match payload protocol")
         channels = install_contract.get("release_channels")
@@ -9204,8 +10017,12 @@ def validate_release(release_dir: Path, output_format: str = "text") -> int:
                 "core_protocol": CORE_PROTOCOL,
                 "agent_install_schema": AGENT_INSTALL_SCHEMA,
                 "agent_install_protocol": AGENT_INSTALL_PROTOCOL,
-                "adapter_name": "codex",
-                "adapter_protocol": CODEX_ADAPTER_PROTOCOL,
+                "adapter_name": adapter.get("name") if isinstance(adapter, dict) else "codex",
+                "adapter_protocol": (
+                    adapter.get("protocol")
+                    if isinstance(adapter, dict)
+                    else CODEX_ADAPTER_PROTOCOL
+                ),
                 "manifest_sha256": "1" * 64,
                 "activation_set_sha256": actual_activation_digest,
             },
@@ -9404,6 +10221,30 @@ PUBLICATION_PROFILES = {
         "authorization_fields": ("authorization_source_ref", "bound_at"),
         "issue_policy": {"mode": "after-public-verification", "issues": [6, 7], "allowed_operations": ["create-exact-evidence-comment", "close-issue"]},
         "kinds": {"prepublication-qa": "vibe-kit-v0.9-prepublication-qa", "configured-checks": "vibe-kit-v0.9-configured-checks", "python-3.9": "vibe-kit-v0.9-python-3.9", "clean-build": "vibe-kit-v0.9-clean-build", "release-gate-evidence": "vibe-kit-v0.9-release-gate-evidence", "postpublication-acceptance": "vibe-kit-v0.9-postpublication-acceptance"},
+    },
+    4: {
+        "schema": 4, "version": "0.10.0", "tag": "v0.10.0", "title": "Vibe Kit v0.10.0",
+        "profile": "vibe-kit-v0.10.0-prerelease", "body_path": "docs/releases/0.10.0.md",
+        "direct": "vibe-kit-0.10.0.zip", "plugin": "vibe-kit-plugin-0.10.0.zip", "distribution": "vibe-kit-distribution-0.10.0.zip",
+        "smokes": ("public-direct-init-doctor", "public-plugin-bundled-plan-init-doctor", "public-upgrade-v0.3-to-v0.10", "public-upgrade-v0.5-to-v0.10", "public-upgrade-v0.6-to-v0.10", "public-upgrade-v0.7-to-v0.10", "public-upgrade-v0.8-to-v0.10", "public-upgrade-v0.9-to-v0.10"),
+        "states": {"AC-1": "passed", "AC-2": "passed", "AC-3": "passed", "AC-4": "passed", "AC-5": "passed", "AC-6": "passed", "AC-7": "not-runnable-before-publication", "AC-CLOSE.1": "not-runnable-before-publication"},
+        "requirements": {"AC-1": "none", "AC-2": "none", "AC-3": "none", "AC-4": "none", "AC-5": "none", "AC-6": "none", "AC-7": "live-read-back", "AC-CLOSE.1": "issue-closeout"},
+        "post_criteria": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5", "AC-6", "AC-7"],
+        "authorization_fields": ("authorization_source_ref", "bound_at"),
+        "issue_policy": {"mode": "after-public-verification", "issues": [8, 9, 10, 11, 12, 13], "allowed_operations": ["create-exact-evidence-comment", "close-issue"]},
+        "kinds": {"prepublication-qa": "vibe-kit-v0.10-prepublication-qa", "configured-checks": "vibe-kit-v0.10-configured-checks", "python-3.9": "vibe-kit-v0.10-python-3.9", "clean-build": "vibe-kit-v0.10-clean-build", "release-gate-evidence": "vibe-kit-v0.10-release-gate-evidence", "postpublication-acceptance": "vibe-kit-v0.10-postpublication-acceptance"},
+    },
+    5: {
+        "schema": 5, "version": "0.10.1", "tag": "v0.10.1", "title": "Vibe Kit v0.10.1",
+        "profile": "vibe-kit-v0.10.1-prerelease", "body_path": "docs/releases/0.10.1.md",
+        "direct": "vibe-kit-0.10.1.zip", "plugin": "vibe-kit-plugin-0.10.1.zip", "distribution": "vibe-kit-distribution-0.10.1.zip",
+        "smokes": ("public-direct-init-doctor", "public-plugin-bundled-plan-init-doctor", "public-upgrade-v0.3-to-v0.10.1", "public-upgrade-v0.5-to-v0.10.1", "public-upgrade-v0.6-to-v0.10.1", "public-upgrade-v0.7-to-v0.10.1", "public-upgrade-v0.8-to-v0.10.1", "public-upgrade-v0.9-to-v0.10.1", "public-upgrade-v0.10.0-to-v0.10.1"),
+        "states": {"AC-1": "passed", "AC-2": "passed", "AC-3": "passed", "AC-4": "passed", "AC-5": "passed", "AC-6": "not-runnable-before-publication"},
+        "requirements": {"AC-1": "none", "AC-2": "none", "AC-3": "none", "AC-4": "none", "AC-5": "none", "AC-6": "live-read-back"},
+        "post_criteria": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5", "AC-6"],
+        "authorization_fields": ("authorization_source_ref", "bound_at"),
+        "issue_policy": {"mode": "none", "issues": [], "allowed_operations": []},
+        "kinds": {"prepublication-qa": "vibe-kit-v0.10.1-prepublication-qa", "configured-checks": "vibe-kit-v0.10.1-configured-checks", "python-3.9": "vibe-kit-v0.10.1-python-3.9", "clean-build": "vibe-kit-v0.10.1-clean-build", "release-gate-evidence": "vibe-kit-v0.10.1-release-gate-evidence", "postpublication-acceptance": "vibe-kit-v0.10.1-postpublication-acceptance"},
     },
 }
 
@@ -9671,7 +10512,9 @@ def build_profile_closeout_intent(request: Dict[str, object], *, version: str, s
         raise VibeError("issue closeout repository identity is invalid")
     inputs = request.get("issues")
     if not isinstance(inputs, list) or [item.get("issue_number") for item in inputs if isinstance(item, dict)] != issue_numbers:
-        raise VibeError("issue closeout requires exactly issues 1 through 5")
+        raise VibeError(
+            "issue closeout requires exactly the ordered issue set this profile declares"
+        )
     identifier = profile_closeout_id(str(request["parent_publication_intent_sha256"]), version=version, schema=schema, issues=issue_numbers)
     issues = []
     bodies: Dict[str, str] = {}
@@ -9719,7 +10562,9 @@ def build_profile_closeout_intent(request: Dict[str, object], *, version: str, s
     if not isinstance(snapshot_issues, list) or [
         item.get("issue_number") for item in snapshot_issues if isinstance(item, dict)
     ] != issue_numbers:
-        raise VibeError("issue closeout snapshot requires exactly issues 1 through 5")
+        raise VibeError(
+            "issue closeout snapshot requires exactly the ordered issue set this profile declares"
+        )
     for snapshot_item in snapshot_issues:
         if not exact_keys(
             snapshot_item,
@@ -9782,7 +10627,9 @@ def build_profile_closeout_intent(request: Dict[str, object], *, version: str, s
                 "max_write_attempts": 2,
             })
     if request.get("operations") != expected_operations:
-        raise VibeError("issue closeout operations are not the exact ordered ten-operation graph")
+        raise VibeError(
+            f"issue closeout operations are not the exact ordered {2 * len(issue_numbers)}-operation graph"
+        )
     expected_scope = {
         "repository": "mintgao/vibe-kit",
         "issues": issue_numbers,
@@ -9814,12 +10661,12 @@ def validate_profile_closeout_authorization(
         "allowed_operations", "closeout_intent_sha256",
         "destructive_operations_allowed",
     )
-    if schema == 2:
+    if schema in (2, 3):
         fields += ("authorization_source_ref", "bound_at")
     if not exact_keys(value, fields) or not isinstance(value, dict):
         return ["closeout authorization fields are unknown or incomplete"]
     errors: List[str] = []
-    if schema == 2 and (not isinstance(value.get("authorization_source_ref"), str) or not value.get("authorization_source_ref") or contains_secret(value["authorization_source_ref"]) or not is_iso8601(value.get("bound_at"))):
+    if schema in (2, 3) and (not isinstance(value.get("authorization_source_ref"), str) or not value.get("authorization_source_ref") or contains_secret(value["authorization_source_ref"]) or not is_iso8601(value.get("bound_at"))):
         errors.append("closeout authorization source reference or binding time is invalid")
     if (
         not isinstance(value.get("closeout_authorization_id"), str)
@@ -9901,6 +10748,58 @@ def validate_v090_closeout_receipt(value: object, intent: Dict[str, object], aut
         if value.get("overall_state") == "confirmed-complete" and (not valid_positive_int(comment_id) or item.get("observed_post_state") != "closed" or item.get("read_back") is not True or item.get("error") is not None or item.get("comment_write_state") not in ("created", "read-matched", "confirmed-after-uncertain") or item.get("close_write_state") not in ("created", "read-matched", "confirmed-after-uncertain")):
             errors.append("complete closeout requires exact comments and closed issue read-back")
     return errors
+
+V100_CLOSEOUT_ISSUES = [8, 9, 10, 11, 12, 13]
+
+
+def validate_v100_closeout_parent(parent: Dict[str, object], publication: Dict[str, object], authorization: Dict[str, object], acceptance: Dict[str, object], validation: Dict[str, object]) -> List[str]:
+    profile = PUBLICATION_PROFILES[4]
+    errors = validate_profile_intent(parent, profile=profile)
+    errors.extend(validate_profile_receipt(publication, parent, profile=profile))
+    errors.extend(validate_profile_authorization(authorization, parent, profile=profile))
+    errors.extend(validate_profile_postpublication_acceptance(acceptance, parent, authorization, str(acceptance.get("source_tree_oid", "")), profile=profile))
+    if (publication.get("remote_write_state") != "confirmed-complete" or publication.get("verification_state") != "passed" or publication.get("error") is not None or acceptance.get("status") != "passed" or not valid_oid(acceptance.get("source_tree_oid"))):
+        errors.append("closeout requires completed public verification and passing acceptance")
+    if (validation.get("command") != "validate-publication" or validation.get("status") != "valid" or validation.get("profile") != profile["profile"] or validation.get("intent_sha256") != canonical_json_sha256(parent) or validation.get("authorization_id") != authorization.get("authorization_id") or validation.get("host_operation_id") != authorization.get("host_operation_id") or acceptance.get("validate_publication_result_sha256") != canonical_json_sha256(validation)):
+        errors.append("closeout validation receipt does not bind the accepted publication")
+    if (publication.get("authorization_id") != authorization.get("authorization_id") or publication.get("host_operation_id") != authorization.get("host_operation_id")):
+        errors.append("closeout parent authorization mismatch")
+    return errors
+
+
+def build_v100_closeout_intent(request: Dict[str, object], parent: Dict[str, object], publication: Dict[str, object], authorization: Dict[str, object], acceptance: Dict[str, object], validation: Dict[str, object]) -> Tuple[Dict[str, object], Dict[str, str]]:
+    errors = validate_v100_closeout_parent(parent, publication, authorization, acceptance, validation)
+    if request.get("publication_receipt_sha256") != canonical_json_sha256(publication) or request.get("verification_receipt_sha256") != canonical_json_sha256(acceptance):
+        errors.append("closeout parent receipt digest mismatch")
+    if errors:
+        raise VibeError("; ".join(errors))
+    return build_profile_closeout_intent(request, version="0.10.0", schema=3, issue_numbers=V100_CLOSEOUT_ISSUES, parent_digest=canonical_json_sha256(parent))
+
+
+def validate_v100_closeout_receipt(value: object, intent: Dict[str, object], authorization: Dict[str, object]) -> List[str]:
+    errors = validate_profile_closeout_authorization(authorization, intent, schema=3)
+    fields = ("schema_version", "kind", "closeout_id", "closeout_intent_sha256", "closeout_authorization_id", "overall_state", "items")
+    if not exact_keys(value, fields):
+        return errors + ["closeout receipt fields are unknown or incomplete"]
+    if (value.get("schema_version") != 3 or value.get("kind") != "vibe-kit-issue-closeout-receipt" or value.get("closeout_id") != intent.get("closeout_id") or value.get("closeout_intent_sha256") != canonical_json_sha256(intent) or value.get("closeout_authorization_id") != authorization.get("closeout_authorization_id") or value.get("overall_state") not in ("not-run", "confirmed-partial", "confirmed-complete", "uncertain", "conflict")):
+        errors.append("closeout receipt identity or state is invalid")
+    items = value.get("items")
+    if not isinstance(items, list) or [item.get("issue_number") for item in items if isinstance(item, dict)] != V100_CLOSEOUT_ISSUES:
+        return errors + ["closeout receipt requires exactly the ordered #8-#13 items"]
+    for item, expected in zip(items, intent.get("issues", [])):
+        if not exact_keys(item, ("issue_number", "expected_initial_state", "comment_body_sha256", "comment_id", "comment_url", "comment_write_state", "close_write_state", "observed_post_state", "read_back", "error")):
+            errors.append("closeout receipt item fields are invalid")
+            continue
+        number = item["issue_number"]
+        comment_id = item.get("comment_id")
+        if (item.get("expected_initial_state") != expected.get("observed_state") or item.get("comment_body_sha256") != expected.get("comment_body_sha256") or item.get("observed_post_state") not in (None, "open", "closed") or not isinstance(item.get("read_back"), bool) or item.get("comment_write_state") not in HISTORICAL_CLOSEOUT_OUTCOMES or item.get("close_write_state") not in HISTORICAL_CLOSEOUT_OUTCOMES or (item.get("error") is not None and not valid_publication_error(item["error"]))):
+            errors.append("closeout receipt item identity or state is invalid")
+        if (comment_id is None and item.get("comment_url") is not None) or (comment_id is not None and (not valid_positive_int(comment_id) or item.get("comment_url") != f"https://github.com/mintgao/vibe-kit/issues/{number}#issuecomment-{comment_id}")):
+            errors.append("closeout comment identity is invalid")
+        if value.get("overall_state") == "confirmed-complete" and (not valid_positive_int(comment_id) or item.get("observed_post_state") != "closed" or item.get("read_back") is not True or item.get("error") is not None or item.get("comment_write_state") not in ("created", "read-matched", "confirmed-after-uncertain") or item.get("close_write_state") not in ("created", "read-matched", "confirmed-after-uncertain")):
+            errors.append("complete closeout requires exact comments and closed issue read-back")
+    return errors
+
 
 def publication_repository() -> Dict[str, str]:
     return {
@@ -10197,7 +11096,7 @@ def validate_profile_authorization(value: object, intent: Dict[str, object], *, 
     errors: List[str] = []
     if any((not isinstance(value.get(key), str) or not value.get(key) or len(value[key]) > 256 for key in ('authorization_id', 'host_operation_id'))):
         errors.append('publication authorization identity is invalid')
-    if profile['schema'] == 3 and (not isinstance(value.get('authorization_source_ref'), str) or not value.get('authorization_source_ref') or contains_secret(value['authorization_source_ref']) or not is_iso8601(value.get('bound_at'))):
+    if profile['schema'] in (3, 4, 5) and (not isinstance(value.get('authorization_source_ref'), str) or not value.get('authorization_source_ref') or contains_secret(value['authorization_source_ref']) or not is_iso8601(value.get('bound_at'))):
         errors.append('authorization source reference or binding time is invalid')
     expected = {'repository': 'mintgao/vibe-kit', 'version': profile['version'], 'release_kind': 'prerelease', 'allowed_operations': list(V080_PUBLICATION_ALLOWED_OPERATIONS), 'publication_intent_sha256': canonical_json_sha256(intent)}
     if any((value.get(key) != expected[key] for key in expected)):
@@ -10331,7 +11230,7 @@ def validate_profile_intent(value: object, *, profile) -> List[str]:
                 errors.append('schema-2 publication asset identity is invalid')
         if intent.get('asset_set_sha256') != canonical_json_sha256(assets):
             errors.append('schema-2 publication asset-set digest is invalid')
-    if profile['schema'] == 3 and {item.get('name') for item in assets if isinstance(item, dict)} != set(expected_names_roles):
+    if profile['schema'] in (3, 4, 5) and {item.get('name') for item in assets if isinstance(item, dict)} != set(expected_names_roles):
         errors.append('publication requires each exact asset name once')
     gates = intent.get('local_gates')
     if not exact_keys(gates, ('release_gate_evidence_sha256',)) or not valid_sha256(gates.get('release_gate_evidence_sha256')):
@@ -10351,7 +11250,7 @@ def validate_profile_intent(value: object, *, profile) -> List[str]:
         if not exact_keys(operation, fields):
             errors.append('schema-2 publication operation fields are invalid')
             continue
-        if profile['schema'] == 3:
+        if profile['schema'] in (3, 4, 5):
             exact_keys_by_operation = (
                 "mintgao/vibe-kit:main", f"mintgao/vibe-kit:tag:{profile['tag']}",
                 f"mintgao/vibe-kit:release:{profile['tag']}", f"mintgao/vibe-kit:release:{profile['tag']}:assets",
@@ -10401,7 +11300,7 @@ def validate_profile_intent(value: object, *, profile) -> List[str]:
 def validate_publication_intent(value: object) -> List[str]:
     if isinstance(value, dict) and value.get("schema_version") == 1:
         return validate_publication_intent_v1(value)
-    if isinstance(value, dict) and value.get("schema_version") in (2, 3):
+    if isinstance(value, dict) and value.get("schema_version") in (2, 3, 4, 5):
         return validate_profile_intent(value, profile=PUBLICATION_PROFILES[value["schema_version"]])
     return ["publication intent schema/profile is unsupported"]
 
@@ -10453,7 +11352,7 @@ def publication_plan(
             candidate_status = validate_release(release_dir, "json")
         if candidate_status != 0:
             errors.append("publication candidate does not pass validate-release")
-        if schema in (2, 3):
+        if schema in (2, 3, 4, 5):
             if comparison_candidate is None:
                 errors.append("schema-2 publication planning requires --comparison-candidate")
             if release_gate_evidence is None:
@@ -10951,7 +11850,7 @@ def validate_publication_receipt_shape(
 ) -> List[str]:
     if isinstance(receipt, dict) and receipt.get("schema_version") == 1:
         return validate_publication_receipt_shape_v1(receipt)
-    if isinstance(receipt, dict) and receipt.get("schema_version") in (2, 3) and isinstance(intent, dict):
+    if isinstance(receipt, dict) and receipt.get("schema_version") in (2, 3, 4, 5) and isinstance(intent, dict):
         return validate_profile_receipt(receipt, intent, profile=PUBLICATION_PROFILES[receipt["schema_version"]])
     return ["publication receipt schema/profile is unsupported"]
 
@@ -11183,7 +12082,7 @@ def validate_publication(
         if authorization_path is not None:
             raise VibeError("historical schema-1 validation does not accept --authorization")
         return validate_publication_v1(intent_path, receipt_path, release_dir, output_format)
-    if schema in (2, 3):
+    if schema in (2, 3, 4, 5):
         return validate_publication_profile(
             intent_path, receipt_path, release_dir, authorization_path, output_format, profile=PUBLICATION_PROFILES[schema]
         )
@@ -12204,7 +13103,7 @@ def feedback_submit(
         )
     repository = feedback_repository(target, explicit_repo)
     title, body, labels, review_hash = feedback_payload(target, report, state, repository)
-    if not confirm or confirm != review_hash:
+    if not confirm or confirm.removeprefix("sha256:") != review_hash.removeprefix("sha256:"):
         raise VibeError(
             "feedback confirmation is missing or stale; run feedback review for this repository and confirm its exact review hash"
         )
@@ -12459,16 +13358,19 @@ def readiness_findings(target: Path, brief: str) -> List[Dict[str, str]]:
         governing = fields["Governing decision"]
         adr_based = outcome in ("covered-by-accepted-decision", "decision-accepted")
         if adr_based:
-            if not re.fullmatch(r"`docs/decisions/\d{4}-[a-z0-9-]+\.md`(?:, `docs/decisions/\d{4}-[a-z0-9-]+\.md`)*", governing):
+            adr_reference = r"`docs/decisions/(?:\d{4}|\d{8})-[a-z0-9-]+\.md`"
+            if not re.fullmatch(adr_reference + r"(?:, " + adr_reference + r")*", governing):
                 fail("readiness.adr-reference", "Governing decision")
             else:
                 for reference in governing.split(", "):
                     relative = reference[1:-1]
+                    name = Path(relative).name
+                    identifier = name[:8] if name[:8].isdigit() else name[:4]
                     adr = unfenced_markdown(evidence_file(target, relative).read_text(encoding="utf-8"))
                     end = next((i for i, line in enumerate(adr) if line.startswith("## ")), len(adr))
                     headings = [line for line in adr if line.startswith("# ")]
-                    statuses = [line for line in adr[:end] if line.startswith("- Status:")]
-                    if len(headings) != 1 or not headings[0].startswith("# " + Path(relative).name[:4] + ": ") or statuses != ["- Status: Accepted"]:
+                    statuses = [re.sub(r"^- ", "", line.strip()) for line in adr[:end] if re.fullmatch(r"(?:- )?Status: .*", line.strip())]
+                    if len(headings) != 1 or not headings[0].startswith("# " + identifier + ": ") or statuses != ["Status: Accepted"]:
                         fail("readiness.adr-not-accepted", relative)
             if fields["Decision owner"] == "none":
                 fail("readiness.decision-owner", "Decision owner")
@@ -12539,7 +13441,7 @@ def inspect_managed_agents(target: Path, word_policy: Optional[str], max_words: 
     return 0 if passed else 1
 
 
-def v090_closeout_command(args: argparse.Namespace) -> int:
+def issue_closeout_command(args: argparse.Namespace) -> int:
     packet = load_json_object_strict(Path(args.packet))
     required = ("request", "parent_intent", "publication_receipt", "publication_authorization", "acceptance_receipt", "validation_result")
     optional = ("closeout_authorization", "closeout_receipt")
@@ -12547,10 +13449,18 @@ def v090_closeout_command(args: argparse.Namespace) -> int:
         raise VibeError("closeout packet requires the exact six plan or eight validation file references")
     root = Path(args.packet).resolve().parent
     values = {key: load_json_object_strict(evidence_file(root, path)) for key, path in packet.items()}
-    intent, bodies = build_v090_closeout_intent(*(values[key] for key in required))
+    parent = values["parent_intent"]
+    parent_schema = parent.get("schema_version") if isinstance(parent, dict) else None
+    if parent_schema == 3:
+        build_intent, validate_receipt = build_v090_closeout_intent, validate_v090_closeout_receipt
+    elif parent_schema == 4:
+        build_intent, validate_receipt = build_v100_closeout_intent, validate_v100_closeout_receipt
+    else:
+        raise VibeError("issue closeout requires a schema-3 (v0.9.0) or schema-4 (v0.10.0) parent publication intent")
+    intent, bodies = build_intent(*(values[key] for key in required))
     errors = []
     if "closeout_receipt" in values:
-        errors = validate_v090_closeout_receipt(values["closeout_receipt"], intent, values["closeout_authorization"])
+        errors = validate_receipt(values["closeout_receipt"], intent, values["closeout_authorization"])
     result = {"schema_version": 1, "command": "issue-closeout", "status": "invalid" if errors else "valid", "intent": intent, "intent_sha256": canonical_json_sha256(intent), "comment_bodies": bodies, "errors": errors, "writes_performed": False, "network_used": False, "host_evidence_authenticated": False}
     print_json(result)
     return 1 if errors else 0
@@ -12564,11 +13474,24 @@ def build_parser() -> argparse.ArgumentParser:
         child = subparsers.add_parser(command)
         child.add_argument("target", nargs="?", default=".")
         child.add_argument("--name", help="Project name written during first installation")
+        child.add_argument(
+            "--host",
+            default="codex",
+            help=(
+                "Comma-separated host selection for the installed payload "
+                "(declared hosts: codex, hermes; default codex)."
+            ),
+        )
         add_format_argument(child)
         add_source_arguments(child)
 
     upgrade_parser = subparsers.add_parser("upgrade")
     upgrade_parser.add_argument("target", nargs="?", default=".")
+    upgrade_parser.add_argument(
+        "--receipt",
+        type=Path,
+        help="Write the exact result envelope as a byte-stable root-relative receipt artifact; JSON output is implied.",
+    )
     add_format_argument(upgrade_parser)
     add_source_arguments(upgrade_parser)
 
@@ -12594,11 +13517,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("target", nargs="?", default=".")
+    doctor_parser.add_argument(
+        "--receipt",
+        type=Path,
+        help="Write the exact result envelope as a byte-stable root-relative receipt artifact; JSON output is implied.",
+    )
     add_format_argument(doctor_parser)
 
     takeover_parser = subparsers.add_parser(
         "validate-takeover",
         description="Validate one host-owned takeover result from standard input.",
+    )
+    takeover_parser.add_argument(
+        "--receipt",
+        type=Path,
+        help="Write the exact result envelope as a byte-stable root-relative receipt artifact; JSON output is implied.",
+    )
+    takeover_parser.add_argument(
+        "--manual-transfer",
+        type=Path,
+        help="Also validate a minimal manual-transfer payload file against this project.",
     )
     add_format_argument(takeover_parser)
 
@@ -12607,6 +13545,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     plan_parser.add_argument("operation", choices=("init", "adopt", "upgrade"))
     plan_parser.add_argument("target", nargs="?", default=".")
+    plan_parser.add_argument(
+        "--host",
+        default="codex",
+        help=(
+            "Comma-separated host selection for init or adopt plans "
+            "(declared hosts: codex, hermes)."
+        ),
+    )
+    plan_parser.add_argument(
+        "--receipt",
+        type=Path,
+        help="Write the exact result envelope as a byte-stable root-relative receipt artifact; JSON output is implied.",
+    )
     add_format_argument(plan_parser)
     add_source_arguments(plan_parser)
 
@@ -12661,6 +13612,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Run only one configured check; repeat to select more than one.",
     )
+    verify_parser.add_argument(
+        "--receipt",
+        type=Path,
+        help="Write the exact result envelope as a byte-stable root-relative receipt artifact; JSON output is implied.",
+    )
     add_format_argument(verify_parser)
 
     item_parser = subparsers.add_parser("work-item")
@@ -12700,7 +13656,10 @@ def build_parser() -> argparse.ArgumentParser:
     submit_parser.add_argument("report_id")
     submit_parser.add_argument("--target", default=".")
     submit_parser.add_argument("--repo")
-    submit_parser.add_argument("--confirm")
+    submit_parser.add_argument(
+        "--confirm",
+        help="the exact review hash printed by the latest feedback review or revise, in sha256:<hex> form (a bare hex digest is accepted); it goes stale after any revise and must be re-read",
+    )
     dismiss_parser = feedback_subparsers.add_parser("dismiss")
     dismiss_parser.add_argument("report_id")
     dismiss_parser.add_argument("--target", default=".")
@@ -12721,7 +13680,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.source_type,
                 args.source_ref,
                 args.artifact_sha256,
+                args.host,
             )
+        receipt_option = getattr(args, "receipt", None)
+        if receipt_option is not None:
+            if getattr(args, "output_format", "json") != "json":
+                args.output_format = "json"
+            receipt_root = Path(getattr(args, "target", None) or ".").resolve()
+            if args.command == "validate-takeover":
+                receipt_root = source_root()
+            RECEIPT_CONTEXT[0] = (Path(receipt_option), receipt_root)
         if args.command == "upgrade":
             return upgrade(
                 Path(args.target),
@@ -12740,6 +13708,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 args.source_type,
                 args.source_ref,
                 args.artifact_sha256,
+                args.host,
             )
         if args.command == "package":
             return package_release(args.output, args.status)
@@ -12765,9 +13734,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "doctor":
             return doctor(Path(args.target), args.output_format)
         if args.command == "validate-takeover":
-            return validate_takeover(source_root(), args.output_format)
+            return validate_takeover(
+                source_root(), args.output_format, args.manual_transfer
+            )
         if args.command == "issue-closeout":
-            return v090_closeout_command(args)
+            return issue_closeout_command(args)
         if args.command == "validate-readiness":
             return validate_readiness(Path(args.target), args.brief, args.output_format)
         if args.command == "inspect-managed-agents":
