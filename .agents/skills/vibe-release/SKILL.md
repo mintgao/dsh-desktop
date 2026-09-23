@@ -99,8 +99,8 @@ Do not claim platform immutability, publisher signing, provenance, final product
 acceptance or measured token reduction without corresponding evidence.
 
 
-## v0.9.0 exact profile and homepage gate
+## v0.10.1 exact profile and homepage gate
 
-ADR0014 governs schema-3 `vibe-kit-v0.9.0-prerelease`: six publication operations, five exact assets and a separate schema-2 #6/#7 closeout only after validated public verification and passing postpublication acceptance. `publication-plan` and `validate-publication` select the closed profile from its exact schema. Existing authorization is bound to the frozen intent through `authorization_source_ref` and `bound_at`; never invent a later user approval. The read-only `issue-closeout --packet <file> --format json` validates a bounded set of relative evidence-file references, exact comments and separately authorized receipt. No command performs network writes.
+ADR0021 governs schema-5 `vibe-kit-v0.10.1-prerelease`: six publication operations, five exact assets, issue policy `none` and no closeout — the schema-3 closeout graph stays bound to the historical v0.10.0 parent. `publication-plan` and `validate-publication` select the closed profile from its exact schema; the historical schema-1, schema-2, schema-3 and schema-4 entry points keep their exact semantics, and a v0.10.1 candidate never passes them. Existing authorization is bound to the frozen intent through `authorization_source_ref` and `bound_at`; never invent a later user approval. The read-only `issue-closeout --packet <file> --format json` validates a bounded set of relative evidence-file references, exact comments and separately authorized receipt, dispatching on the parent publication intent's schema. No command performs network writes.
 
 Before final release QA, review both README.md and README.zh-CN.md version, links, installation commands, capabilities and limitations. Synchronize changed facts and record reasons for unchanged sections in the implementation report. Publication completion facts are a later evidence commit without tag movement.

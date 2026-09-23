@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "framework_version": "0.9.0",
+  "framework_version": "0.10.1",
   "managed_files": {
     ".agents/skills/vibe-debug-flow/SKILL.md": "6cd05c0cb8a49411821b38d6cfd580a3d93094430a7bf22fa2feb7b2df6b8228",
     ".agents/skills/vibe-design-flow/SKILL.md": "8342557c05d4d26764a029f44af9bd71d8b15ce78b79ff4c0e528b75a8fe6153",
@@ -9,7 +9,7 @@
     ".agents/skills/vibe-feedback-flow/agents/openai.yaml": "94a66f97a34e3af32054520049cd67cd9c12f1b70d2d2e011c309ac174afa0a6",
     ".agents/skills/vibe-implementation-flow/SKILL.md": "63cddcf1ecb1dca6e237ce4c5709ae16c206e6c278bf814788cdab0789e13a26",
     ".agents/skills/vibe-project-onboarding/SKILL.md": "792490a1797fee86284504eda81fb02e26b42360fd0e727482838daf87d89035",
-    ".agents/skills/vibe-release/SKILL.md": "2a0542a2e2874dc9fae6a314d903c4aa7067d0e819289689262439c67db64990",
+    ".agents/skills/vibe-release/SKILL.md": "9ddfd91ee7adad7feb6f2a6c7944103b28af6eba2220d8b91e37882767cfb1fb",
     ".agents/skills/vibe-verification-flow/SKILL.md": "a77bf2735b8b0b752601b286af9c519e8c9e84159cd6cc271211e2f1e4e3edd2",
     ".codex/agents/vibe-investigator.toml": "f93ff55d3bd064543e25b4e5641b756fab2903674638474edc0bcb4545a2971b",
     ".codex/agents/vibe-pm.toml": "63b297ef0b52df338e6de47052daae74cb7433a129cfd3c4888992f11d64567c",
@@ -18,33 +18,36 @@
     ".codex/agents/vibe-tech-lead.toml": "34bf1094cf16a762b3f7146dae69a15be6b4b7db14eaf31c8d3042d1298f9e82",
     ".codex/agents/vibe-ux.toml": "a88e0c14897cd46154bb3782b2f9b777a0e9ec22f5bd920d5c7d87d67def5266",
     ".vibe/core/feedback.json": "1a502b7726bf97c10fe83cb3b40177f1fb7af49edecc288e0edd249336a3c29d",
-    ".vibe/core/operating-model.md": "7b7f0a04714e2cd564340cd11145a4fbba020c804f1a4dd4179615067522b70a",
-    ".vibe/core/protocol.json": "7a72b584f1c3c90aae1fd4a7e88254675c586712b411ffcd354845483a89d3d6",
-    ".vibe/core/quality-gates.md": "dfcd0eed91f343e2857fd7e48f202bea7aadb14a1010ffcc65818ca094f79c1c",
-    ".vibe/core/technical-decision-readiness.md": "da3a51e83596bf846741fda217b55f5e49f948593d73dab9ecaff98e6293be90",
+    ".vibe/core/operating-model.md": "7d293c241678e41e5c3476cc49539f5c439267fcb42c1745050a8c6cecfcc2f1",
+    ".vibe/core/protocol.json": "3eeba2eb1d1a6607f9af1d52ff082f11a3785be648ac4778cfdab475b6b02d44",
+    ".vibe/core/quality-gates.md": "817e03b3744532ac8bb5f03fa99c9583bc4b34e0c8c0d7d2e9c9774cd12727c5",
+    ".vibe/core/technical-decision-readiness.md": "a9a82e9cd2dc3ce63612b74a5e10fc36266c5e50ff69fc028f47e7148325f7be",
     ".vibe/core/templates/work-item-brief.md": "35ffe64b8c7b9355385e1ebcb469700bb32a861924f805f93d90c135d7847c42",
     ".vibe/core/templates/work-item-verification.md": "f6b0b9f58aeb911180ffaa366e5c976c48348df616d3adb8ada882b111a530ec",
-    ".vibe/core/version": "9d8c94f1ad3ea96b1e2ac4914fda4cb93c76b4a3e0d8cc6dd8976d6c0b227d15",
-    "AGENT_INSTALL.md": "216dda1f5a761ca7b3908e6046ba8e0b573eab6dc599ca2c9aef1c1bc561114e",
-    "agent-install.json": "c6c849f80fc1f96c1dbb508d8b5c6d66a5d6f8256e83f8e5a3cb5b7dc9384627",
-    "bin/vibe": "4882ca4a537d0f98a5c1dc5a54705b2f5f77d51614f4a7e104c6c9aadb95a138"
+    ".vibe/core/version": "f4d439e0b523208a09d13862c16820cc3028fd94417310ce1d53a31d14d6a2c4",
+    "AGENT_INSTALL.md": "3ec986e650853dade777e26f27cb4363c22d3fe8d2fdca5884e9f3536d1f670b",
+    "agent-install.json": "3e5b899e20c3cd4d2f5b1e5c856cf2c8b9e517ac44efe7b179768153902acebf",
+    "bin/vibe": "4d6f20958ad0ff423c31c9d99f498db9f322b9469fcd50a8d273943011da2ddf"
   },
-  "agents_block_hash": "2d60860700a8ed2bda709259e63e5e7834ab5c638849c3d2564ff0b529d0447e",
+  "agents_block_hash": "05b27773496d4259063fd1eef987f3ccd5624b9fa7b3ad983f5ac339fa12bfef",
   "source": {
     "type": "github-release",
-    "ref": "v0.9.0",
-    "artifact_sha256": "fec6ef72bab279edf15c4f5c39d5943f9c4204ae8238c0144a65bebdecc7455a",
-    "payload_tree_sha256": "0251f492a32334507a50411ec7460465350e36098397694da453c9a1aa89f5f3"
+    "ref": "v0.10.1",
+    "artifact_sha256": "ece6fbcc78338dbf7fcbe45cf0149a3854d1227b01ed99457544bd63e4244af7",
+    "payload_tree_sha256": "b828663d3d056b9c3122fed8d686089e134fb758accd23f8e80b4302332d2b88"
   },
+  "hosts": [
+    "codex"
+  ],
   "target_fingerprint": {
-    "kit_version": "0.9.0",
+    "kit_version": "0.10.1",
     "core_protocol": 7,
-    "agent_install_schema": 3,
-    "agent_install_protocol": 3,
+    "agent_install_schema": 4,
+    "agent_install_protocol": 4,
     "adapter_name": "codex",
     "adapter_protocol": 7,
     "manifest_sha256": null,
-    "activation_set_sha256": "ba3491c13759649f917938bee0259a43906fd0a63aad653dbf5e21f01c1c081a"
+    "activation_set_sha256": "a4f4ff79b85e63c39c8963c35da7fcc747b1329468bb30665809cd2deb0b8549"
   },
   "activation": {
     "algorithm": "sha256-canonical-json-fingerprint-and-normalized-path-hashes-v2",
@@ -85,7 +88,7 @@
       ".agents/skills/vibe-feedback-flow/agents/openai.yaml": "94a66f97a34e3af32054520049cd67cd9c12f1b70d2d2e011c309ac174afa0a6",
       ".agents/skills/vibe-implementation-flow/SKILL.md": "63cddcf1ecb1dca6e237ce4c5709ae16c206e6c278bf814788cdab0789e13a26",
       ".agents/skills/vibe-project-onboarding/SKILL.md": "792490a1797fee86284504eda81fb02e26b42360fd0e727482838daf87d89035",
-      ".agents/skills/vibe-release/SKILL.md": "2a0542a2e2874dc9fae6a314d903c4aa7067d0e819289689262439c67db64990",
+      ".agents/skills/vibe-release/SKILL.md": "9ddfd91ee7adad7feb6f2a6c7944103b28af6eba2220d8b91e37882767cfb1fb",
       ".agents/skills/vibe-verification-flow/SKILL.md": "a77bf2735b8b0b752601b286af9c519e8c9e84159cd6cc271211e2f1e4e3edd2",
       ".codex/agents/vibe-investigator.toml": "f93ff55d3bd064543e25b4e5641b756fab2903674638474edc0bcb4545a2971b",
       ".codex/agents/vibe-pm.toml": "63b297ef0b52df338e6de47052daae74cb7433a129cfd3c4888992f11d64567c",
@@ -94,19 +97,19 @@
       ".codex/agents/vibe-tech-lead.toml": "34bf1094cf16a762b3f7146dae69a15be6b4b7db14eaf31c8d3042d1298f9e82",
       ".codex/agents/vibe-ux.toml": "a88e0c14897cd46154bb3782b2f9b777a0e9ec22f5bd920d5c7d87d67def5266",
       ".vibe/core/feedback.json": "1a502b7726bf97c10fe83cb3b40177f1fb7af49edecc288e0edd249336a3c29d",
-      ".vibe/core/operating-model.md": "7b7f0a04714e2cd564340cd11145a4fbba020c804f1a4dd4179615067522b70a",
-      ".vibe/core/protocol.json": "7a72b584f1c3c90aae1fd4a7e88254675c586712b411ffcd354845483a89d3d6",
-      ".vibe/core/quality-gates.md": "dfcd0eed91f343e2857fd7e48f202bea7aadb14a1010ffcc65818ca094f79c1c",
-      ".vibe/core/technical-decision-readiness.md": "da3a51e83596bf846741fda217b55f5e49f948593d73dab9ecaff98e6293be90",
+      ".vibe/core/operating-model.md": "7d293c241678e41e5c3476cc49539f5c439267fcb42c1745050a8c6cecfcc2f1",
+      ".vibe/core/protocol.json": "3eeba2eb1d1a6607f9af1d52ff082f11a3785be648ac4778cfdab475b6b02d44",
+      ".vibe/core/quality-gates.md": "817e03b3744532ac8bb5f03fa99c9583bc4b34e0c8c0d7d2e9c9774cd12727c5",
+      ".vibe/core/technical-decision-readiness.md": "a9a82e9cd2dc3ce63612b74a5e10fc36266c5e50ff69fc028f47e7148325f7be",
       ".vibe/core/templates/work-item-brief.md": "35ffe64b8c7b9355385e1ebcb469700bb32a861924f805f93d90c135d7847c42",
       ".vibe/core/templates/work-item-verification.md": "f6b0b9f58aeb911180ffaa366e5c976c48348df616d3adb8ada882b111a530ec",
-      ".vibe/core/version": "9d8c94f1ad3ea96b1e2ac4914fda4cb93c76b4a3e0d8cc6dd8976d6c0b227d15",
-      "AGENTS.md#managed-block": "2d60860700a8ed2bda709259e63e5e7834ab5c638849c3d2564ff0b529d0447e",
-      "AGENT_INSTALL.md": "216dda1f5a761ca7b3908e6046ba8e0b573eab6dc599ca2c9aef1c1bc561114e",
-      "agent-install.json": "5866bbfd4d7cab7931d6b6c11f6e67683fd55c500ce7be2b1eef5f1d71c18a3e",
-      "bin/vibe": "4882ca4a537d0f98a5c1dc5a54705b2f5f77d51614f4a7e104c6c9aadb95a138"
+      ".vibe/core/version": "f4d439e0b523208a09d13862c16820cc3028fd94417310ce1d53a31d14d6a2c4",
+      "AGENTS.md#managed-block": "05b27773496d4259063fd1eef987f3ccd5624b9fa7b3ad983f5ac339fa12bfef",
+      "AGENT_INSTALL.md": "3ec986e650853dade777e26f27cb4363c22d3fe8d2fdca5884e9f3536d1f670b",
+      "agent-install.json": "841710f9b44f62e009fd4c2a631fd4afeb5cdf765341f2cbbfa96c048bc56672",
+      "bin/vibe": "4d6f20958ad0ff423c31c9d99f498db9f322b9469fcd50a8d273943011da2ddf"
     },
-    "activation_set_sha256": "ba3491c13759649f917938bee0259a43906fd0a63aad653dbf5e21f01c1c081a",
+    "activation_set_sha256": "a4f4ff79b85e63c39c8963c35da7fcc747b1329468bb30665809cd2deb0b8549",
     "runtime_discovery_roots": [
       "AGENT_INSTALL.md",
       "agent-install.json",
