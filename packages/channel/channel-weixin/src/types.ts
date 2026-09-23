@@ -49,3 +49,17 @@ export interface WeixinLoginGrant {
   /** Platform identity of the user who completed the scan. */
   readonly userId: string
 }
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * One login sequence reported a new state: the code being waited on, the
+     * scan the platform observed, the confirmation that stored an account, or
+     * the failure that ended an attempt. The settings surface the platform's
+     * own controller drives is the only subscriber.
+     * @param state - the login sequence's observable state.
+     * @mode emit
+     */
+    'channel-weixin/login'(state: WeixinLoginState): void
+  }
+}

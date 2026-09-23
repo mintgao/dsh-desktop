@@ -375,12 +375,9 @@ Source: [`packages/channel/channel-session/src/index.ts:79`](../packages/channel
 Requires: `channels` · `credentials` · `channelSession`
 
 ```ts config-catalog
-/**
- * Deployment choices of the WeChat provider. Every bound is stated by the
- * composition; the API base address stays a protocol constant.
- */
+/** Hard bounds the composition states for every account. */
 export interface Config {
-  /** Long-poll timeout in milliseconds; the platform may suggest another one. */
+  /** Long-poll timeout in milliseconds; the platform may suggest another one, within this bound. */
   readonly pollTimeoutMs: number
   /** Total attempts one poll cycle gets, including the first. */
   readonly pollRetryAttempts: number
@@ -396,12 +393,12 @@ export interface Config {
   readonly breakerThreshold: number
   /** Largest outbound chunk within the platform's length limit, in characters. */
   readonly chunkLength: number
-  /** Directory of the token-lock file; the Mint bundle points it at the desktop data directory. */
+  /** Directory of the token-lock files; the Mint bundle points it at the desktop data directory. */
   readonly lockDirectory: string
 }
 ```
 
-Source: [`packages/channel/channel-weixin/src/index.ts:59`](../packages/channel/channel-weixin/src/index.ts)
+Source: [`packages/channel/channel-weixin/src/config.ts:9`](../packages/channel/channel-weixin/src/config.ts)
 
 <a id="deepseek-aidsh-client-connection"></a>
 

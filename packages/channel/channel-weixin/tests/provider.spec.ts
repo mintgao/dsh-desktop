@@ -1,6 +1,6 @@
 /**
- * The WeChat provider: attaching from the stored login, the token lock, the
- * poll wiring, the QR login surface, the send path, and every reported failure.
+ * One WeChat account's provider: attaching from the account's stored login, the
+ * token lock, the poll wiring, the send path, and every reported failure.
  */
 
 import { chmod, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
@@ -9,15 +9,27 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChannelConversationId } from '@deepseek-ai/dsh-channel'
 import type { ChannelInboundMessage, ChannelProviderControl } from '@deepseek-ai/dsh-channel'
-import type { CredentialProvider } from '@deepseek-ai/dsh-credentials'
-import { WeixinChannelProvider } from '../src/index.ts'
-import type { Config } from '../src/index.ts'
+import { accountSlug, lockFileNameForSlug } from '../src/accounts.ts'
+import type { Config } from '../src/config.ts'
 import { acquireTokenLock } from '../src/lock.ts'
+import {
+  WEIXIN_STALE_AT_START_DIAGNOSTIC,
+  WEIXIN_TAKEN_AWAY_DIAGNOSTIC,
+  WEIXIN_UNREADABLE_DIAGNOSTIC,
+  WeixinAccountProvider,
+} from '../src/provider.ts'
+import type { WeixinProviderAccount } from '../src/provider.ts'
 import { WeixinApiError } from '../src/transport.ts'
-import type { WeixinQrChallenge, WeixinQrStatus, WeixinTransport, WeixinUpdateBatch } from '../src/transport.ts'
+import type { WeixinTransport, WeixinUpdateBatch } from '../src/transport.ts'
 
 /** The login product one confirmed scan yields. */
 const GRANT = { accountId: 'bot@im.bot', token: 'token-1', baseUrl: 'https://shard.example', userId: 'user-1' }
+
+/** The one account these tests serve: the scanning identity names its slug and its lock. */
+const ACCOUNT: WeixinProviderAccount = { slug: accountSlug(GRANT.userId), identity: GRANT.userId, grant: GRANT }
+
+/** The token-lock file this account's provider contends for. */
+const LOCK_FILE = lockFileNameForSlug(ACCOUNT.slug)
 
 /** One publishable raw update. */
 function update(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -59,32 +71,25 @@ async function tempRoot(): Promise<string> {
   return root
 }
 
-/** One scripted transport: the batches and QR statuses a test feeds it. */
+/** One scripted transport: the batches a test feeds it and the sends it records. */
 function scriptedTransport(): {
   readonly transport: WeixinTransport
   readonly polls: Array<{ cursor: string; timeoutMs: number }>
   readonly sends: Array<{ conversationId: string; text: string; contextToken: string | undefined }>
   readonly batches: Array<WeixinUpdateBatch | Error>
-  readonly statuses: Array<WeixinQrStatus | Error>
-  readonly challenge: { code: string; url: string }
   readonly deliver: (batch: WeixinUpdateBatch) => void
   readonly fail: (error: Error) => void
+  readonly failSend: (error: Error | undefined) => void
 } {
   const polls: Array<{ cursor: string; timeoutMs: number }> = []
   const sends: Array<{ conversationId: string; text: string; contextToken: string | undefined }> = []
   const batches: Array<WeixinUpdateBatch | Error> = []
-  const statuses: Array<WeixinQrStatus | Error> = []
   const waiters: Array<() => void> = []
-  const challenge = { code: 'code-1', url: 'https://liteapp.example/1' }
+  let sendError: Error | undefined
   const wake = (): void => { waiters.shift()?.() }
   const transport: WeixinTransport = {
-    async fetchQr(): Promise<WeixinQrChallenge> { return challenge },
-    async qrStatus() {
-      const next = statuses.shift()
-      if (next === undefined) throw new Error('the QR script is exhausted')
-      if (next instanceof Error) throw next
-      return next
-    },
+    async fetchQr() { throw new Error('unreachable') },
+    async qrStatus() { throw new Error('unreachable') },
     async getUpdates(request) {
       polls.push({ cursor: request.cursor, timeoutMs: request.timeoutMs })
       for (;;) {
@@ -103,6 +108,7 @@ function scriptedTransport(): {
       }
     },
     async sendMessage(request) {
+      if (sendError !== undefined) throw sendError
       sends.push({ conversationId: request.conversationId, text: request.text, contextToken: request.contextToken })
     },
   }
@@ -111,43 +117,22 @@ function scriptedTransport(): {
     polls,
     sends,
     batches,
-    statuses,
-    challenge,
     deliver: (batch) => { batches.push(batch); wake() },
     fail: (error) => { batches.push(error); wake() },
+    failSend: (error) => { sendError = error },
   }
-}
-
-/** A credentials stand-in over one in-memory record. */
-function fakeCredentials(record: { kind: string; payload: unknown } | undefined): {
-  readonly service: CredentialProvider
-  readonly written: Array<{ kind: string; payload: unknown }>
-} {
-  const written: Array<{ kind: string; payload: unknown }> = []
-  let current = record
-  const service = {
-    async readRecord() { return current },
-    async modifyRecord(_key: unknown, mutate: (existing: unknown) => Promise<{ kind: string; payload: unknown }>) {
-      const next = await mutate(current)
-      written.push(next)
-      current = next
-      return next
-    },
-  } as unknown as CredentialProvider
-  return { service, written }
 }
 
 /** One provider over a scripted transport, with the observations a test asserts against. */
 function build(options: {
   readonly lockDirectory: string
-  readonly record?: { kind: string; payload: unknown } | undefined
+  readonly account?: WeixinProviderAccount
   readonly cursors?: readonly string[]
   readonly config?: Partial<Config>
 }): {
-  readonly provider: WeixinChannelProvider
+  readonly provider: WeixinAccountProvider
   readonly scripted: ReturnType<typeof scriptedTransport>
   readonly warns: string[]
-  readonly written: Array<{ kind: string; payload: unknown }>
   readonly published: ChannelInboundMessage[]
   readonly changed: () => number
   readonly attach: () => void
@@ -155,8 +140,7 @@ function build(options: {
 } {
   const scripted = scriptedTransport()
   const warns: string[] = []
-  const credentials = fakeCredentials(options.record)
-  const provider = new WeixinChannelProvider({
+  const provider = new WeixinAccountProvider({
     pollTimeoutMs: 30,
     pollRetryAttempts: 1,
     pollBackoffMs: 1,
@@ -167,8 +151,7 @@ function build(options: {
     chunkLength: 10,
     lockDirectory: options.lockDirectory,
     ...options.config,
-  }, {
-    credentials: credentials.service,
+  }, options.account ?? ACCOUNT, {
     resumeCursors: () => options.cursors ?? [],
     warn: (message) => { warns.push(message) },
     transport: scripted.transport,
@@ -186,7 +169,6 @@ function build(options: {
     provider,
     scripted,
     warns,
-    written: credentials.written,
     published,
     changed: () => changes,
     attach: () => { provider.attach(control) },
@@ -194,27 +176,39 @@ function build(options: {
   }
 }
 
-describe('WeixinChannelProvider', () => {
-  it('attaches without a stored login and stays idle without an announcement', async () => {
-    const test = build({ lockDirectory: await tempRoot() })
+describe('WeixinAccountProvider', () => {
+  it('registers an account without a stored login as unavailable and never polls', async () => {
+    const lockDirectory = await tempRoot()
+    const test = build({ lockDirectory, account: { slug: ACCOUNT.slug } })
+    expect(test.provider.id).toBe(`weixin:${ACCOUNT.slug}`)
+    expect(test.provider.displayName).toBe(ACCOUNT.slug)
+    expect(test.provider.accountView).toEqual({ slug: ACCOUNT.slug })
+    expect(test.provider.state).toEqual({ status: 'unavailable', diagnostic: WEIXIN_UNREADABLE_DIAGNOSTIC })
     test.attach()
     await settle()
-    expect(test.provider.state).toEqual({ status: 'idle' })
+    expect(test.provider.state).toEqual({ status: 'unavailable', diagnostic: WEIXIN_UNREADABLE_DIAGNOSTIC })
     expect(test.changed()).toBe(0)
+    expect(test.warns).toEqual([])
     expect(test.scripted.polls).toEqual([])
+    test.abort(new Error('disposed'))
+    await test.provider.quiesce()
+    expect(await readdir(lockDirectory)).toEqual([])
   })
 
   it('connects from a stored login, publishes through the control, and sends with the reply context', async () => {
     const lockDirectory = await tempRoot()
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
-    test.scripted.batches.push({ updates: [update()], cursor: 'cursor-2' })
+    const test = build({ lockDirectory })
+    expect(test.provider.id).toBe('weixin:user-1')
+    expect(test.provider.displayName).toBe('bot@im.bot')
+    expect(test.provider.accountView).toBe(ACCOUNT)
+    test.scripted.deliver({ updates: [update()], cursor: 'cursor-2' })
     test.attach()
     await until(() => { expect(test.provider.state).toEqual({ status: 'connected' }) })
     expect(test.changed()).toBe(2)
     expect(test.scripted.polls[0]).toEqual({ cursor: '', timeoutMs: 30 })
     expect(test.published).toHaveLength(1)
     expect(test.published[0]).toMatchObject({
-      channel: 'weixin',
+      channel: `weixin:${ACCOUNT.slug}`,
       conversationId: 'sender-1',
       sender: 'sender-1',
       messageId: 'm-1',
@@ -222,43 +216,49 @@ describe('WeixinChannelProvider', () => {
       event: { kind: 'weixin', messageType: 'text' },
     })
     expect(Number.isFinite(test.published[0]?.receivedAt)).toBe(true)
-    await until(async () => { expect(await readdir(lockDirectory)).toHaveLength(1) })
+    await until(async () => { expect(await readdir(lockDirectory)).toEqual([LOCK_FILE]) })
 
     const receipt = await test.provider.send(ChannelConversationId('sender-1'), { text: 'a reply' }, new AbortController().signal)
     expect(test.scripted.sends).toEqual([{ conversationId: 'sender-1', text: 'a reply', contextToken: 'ctx-1' }])
     expect(receipt.platformMessageId).toMatch(/^dsh-weixin-/)
 
     test.abort(new Error('disposed'))
-    await settle()
+    await test.provider.quiesce()
     expect(await readdir(lockDirectory)).toHaveLength(0)
   })
 
   it('splits a reply that exceeds the configured chunk length', async () => {
-    const test = build({ lockDirectory: await tempRoot(), record: { kind: 'grant', payload: GRANT } })
-    test.scripted.batches.push({ updates: [update()] })
+    const test = build({ lockDirectory: await tempRoot() })
+    test.scripted.deliver({ updates: [update()] })
     test.attach()
     await settle()
     await test.provider.send(ChannelConversationId('sender-1'), { text: 'one two three four' }, new AbortController().signal)
     expect(test.scripted.sends.map(send => send.text)).toEqual(['one two', 'three four'])
     test.abort(new Error('disposed'))
-    await settle()
+    await test.provider.quiesce()
   })
 
-  it('refuses to send before a login exists', async () => {
-    const test = build({ lockDirectory: await tempRoot() })
+  it('refuses to send without a readable login', async () => {
+    const test = build({ lockDirectory: await tempRoot(), account: { slug: ACCOUNT.slug } })
     await expect(test.provider.send(ChannelConversationId('sender-1'), { text: 'hello' }, new AbortController().signal))
-      .rejects.toThrow('the WeChat channel has no login; connect it first')
+      .rejects.toThrow('this WeChat account has no readable login; connect it again')
   })
 
   it('reports unavailable when another client holds the token', async () => {
     const lockDirectory = await tempRoot()
-    await acquireTokenLock({ directory: lockDirectory, holderId: 'holder-a', staleMs: 60_000 })
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
+    await acquireTokenLock({
+      directory: lockDirectory,
+      fileName: LOCK_FILE,
+      holderId: 'holder-a',
+      staleMs: 60_000,
+      now: () => Date.now() + 60_000,
+    })
+    const test = build({ lockDirectory })
     test.attach()
     await until(() => {
       expect(test.provider.state).toEqual({
         status: 'unavailable',
-        diagnostic: "another client holds this bot's token (holder holder-a)",
+        diagnostic: "another client holds this account's token (holder holder-a)",
       })
     })
     expect(test.scripted.polls).toEqual([])
@@ -266,45 +266,59 @@ describe('WeixinChannelProvider', () => {
 
   it('warns when it overrides a stale token lock', async () => {
     const lockDirectory = await tempRoot()
-    await acquireTokenLock({ directory: lockDirectory, holderId: 'holder-a', staleMs: 60_000, now: () => 0 })
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
+    await acquireTokenLock({ directory: lockDirectory, fileName: LOCK_FILE, holderId: 'holder-a', staleMs: 60_000, now: () => 0 })
+    const test = build({ lockDirectory })
     test.attach()
     await until(() => { expect(test.warns).toEqual(['channel-weixin overrode the stale token lock of holder-a']) })
     expect(test.provider.state).toEqual({ status: 'connecting' })
     test.abort(new Error('disposed'))
-    await settle()
+    await test.provider.quiesce()
   })
 
   it('dedupes a repeated connecting report and leaves a superseded lock alone', async () => {
     const lockDirectory = await tempRoot()
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
+    const test = build({ lockDirectory })
     test.attach()
     await until(() => { expect(test.provider.state).toEqual({ status: 'connecting' }) })
     expect(test.changed()).toBe(1)
-    await until(async () => { expect(await readdir(lockDirectory)).toEqual(['weixin-token.lock']) })
-    await writeFile(join(lockDirectory, 'weixin-token.lock'), JSON.stringify({ holder: 'holder-b', heartbeatAt: 0 }))
+    await until(async () => { expect(await readdir(lockDirectory)).toEqual([LOCK_FILE]) })
+    await writeFile(join(lockDirectory, LOCK_FILE), JSON.stringify({ holder: 'holder-b', heartbeatAt: 0 }))
     test.attach()
     await settle()
     expect(test.changed()).toBe(1)
     expect(test.warns).toEqual(['channel-weixin overrode the stale token lock of holder-b'])
     test.abort(new Error('disposed'))
+    await test.provider.quiesce()
+  })
+
+  it('reports unavailable when the session was taken away after a completed cycle', async () => {
+    const lockDirectory = await tempRoot()
+    const test = build({ lockDirectory })
+    test.scripted.deliver({ updates: [update()] })
+    test.attach()
+    await until(() => { expect(test.provider.state).toEqual({ status: 'connected' }) })
+    test.scripted.fail(new WeixinApiError('stale', { ret: -14 }))
+    await until(() => {
+      expect(test.provider.state).toEqual({ status: 'unavailable', diagnostic: WEIXIN_TAKEN_AWAY_DIAGNOSTIC })
+    })
     await until(async () => { expect(await readdir(lockDirectory)).toHaveLength(0) })
   })
 
-  it('reports unavailable when the session expired', async () => {
+  it('reports unavailable when the stored session was already unusable at start', async () => {
     const lockDirectory = await tempRoot()
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
-    test.scripted.batches.push(new WeixinApiError('stale', { ret: -14 }))
+    const test = build({ lockDirectory })
+    test.scripted.fail(new WeixinApiError('stale', { ret: -14 }))
     test.attach()
     await until(() => {
-      expect(test.provider.state).toEqual({ status: 'unavailable', diagnostic: 'the WeChat session expired; scan a new QR code' })
+      expect(test.provider.state).toEqual({ status: 'unavailable', diagnostic: WEIXIN_STALE_AT_START_DIAGNOSTIC })
     })
     await until(async () => { expect(await readdir(lockDirectory)).toHaveLength(0) })
   })
 
   it('reports unavailable when the breaker opens after repeated failures', async () => {
-    const test = build({ lockDirectory: await tempRoot(), record: { kind: 'grant', payload: GRANT } })
-    test.scripted.batches.push(new Error('down'), new Error('down'))
+    const test = build({ lockDirectory: await tempRoot() })
+    test.scripted.fail(new Error('down'))
+    test.scripted.fail(new Error('down'))
     test.attach()
     await until(() => {
       expect(test.provider.state).toEqual({
@@ -315,55 +329,28 @@ describe('WeixinChannelProvider', () => {
     expect(test.warns).toEqual(['channel-weixin poll failed (1/2): down'])
   })
 
-  it('treats an unreadable stored record as no login', async () => {
-    const lockDirectory = await tempRoot()
-    const payloads: unknown[] = [
-      null,
-      { accountId: '', token: 'token-1', baseUrl: 'https://shard.example', userId: 'user-1' },
-      { accountId: 'bot@im.bot', token: 5, baseUrl: 'https://shard.example', userId: 'user-1' },
-      { accountId: 'bot@im.bot', token: '', baseUrl: 'https://shard.example', userId: 'user-1' },
-      { accountId: 'bot@im.bot', token: 'token-1', baseUrl: '', userId: 'user-1' },
-      { accountId: 'bot@im.bot', token: 'token-1', baseUrl: 'https://shard.example', userId: 5 },
-    ]
-    for (const payload of payloads) {
-      const test = build({ lockDirectory, record: { kind: 'grant', payload } })
-      test.attach()
-      await until(() => {
-        expect(test.warns).toEqual(['channel-weixin: the stored login record is not readable; a new scan is required'])
-      })
-      expect(test.provider.state).toEqual({ status: 'idle' })
-    }
-    const other = build({ lockDirectory, record: { kind: 'api-key', payload: GRANT } })
-    other.attach()
-    await settle()
-    expect(other.warns).toEqual([])
-    expect(other.provider.state).toEqual({ status: 'idle' })
-  })
-
   it('resumes from the earliest recorded cursor', async () => {
     const test = build({
       lockDirectory: await tempRoot(),
-      record: { kind: 'grant', payload: GRANT },
       cursors: ['cursor-b', 'cursor-a'],
     })
     test.attach()
     await until(() => { expect(test.scripted.polls[0]).toEqual({ cursor: 'cursor-a', timeoutMs: 30 }) })
     test.abort(new Error('disposed'))
-    await settle()
+    await test.provider.quiesce()
 
     const ascending = build({
       lockDirectory: await tempRoot(),
-      record: { kind: 'grant', payload: GRANT },
       cursors: ['cursor-a', 'cursor-b'],
     })
     ascending.attach()
     await until(() => { expect(ascending.scripted.polls[0]).toEqual({ cursor: 'cursor-a', timeoutMs: 30 }) })
     ascending.abort(new Error('disposed'))
-    await settle()
+    await ascending.provider.quiesce()
   })
 
   it('builds its own transport when none is injected', async () => {
-    const provider = new WeixinChannelProvider({
+    const provider = new WeixinAccountProvider({
       pollTimeoutMs: 30,
       pollRetryAttempts: 1,
       pollBackoffMs: 1,
@@ -373,8 +360,7 @@ describe('WeixinChannelProvider', () => {
       breakerThreshold: 2,
       chunkLength: 10,
       lockDirectory: await tempRoot(),
-    }, {
-      credentials: fakeCredentials(undefined).service,
+    }, { slug: ACCOUNT.slug }, {
       resumeCursors: () => [],
       warn: () => {},
     })
@@ -385,15 +371,17 @@ describe('WeixinChannelProvider', () => {
       changed: () => {},
     } as unknown as ChannelProviderControl)
     await settle()
-    expect(provider.state).toEqual({ status: 'idle' })
+    expect(provider.state).toEqual({ status: 'unavailable', diagnostic: WEIXIN_UNREADABLE_DIAGNOSTIC })
+    controller.abort(new Error('disposed'))
+    await provider.quiesce()
   })
 
   it('reports a lock taken over mid-run through the connection diagnostic', async () => {
     const lockDirectory = await tempRoot()
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
+    const test = build({ lockDirectory })
     test.attach()
     await until(() => { expect(test.scripted.polls.length).toBeGreaterThan(0) })
-    await writeFile(join(lockDirectory, 'weixin-token.lock'), JSON.stringify({ holder: 'holder-b', heartbeatAt: Date.now() }))
+    await writeFile(join(lockDirectory, LOCK_FILE), JSON.stringify({ holder: 'holder-b', heartbeatAt: Date.now() }))
     test.scripted.deliver({ updates: [] })
     await until(() => {
       expect(test.provider.state).toEqual({
@@ -402,16 +390,16 @@ describe('WeixinChannelProvider', () => {
       })
     })
     await settle()
-    expect(await readdir(lockDirectory)).toEqual(['weixin-token.lock'])
+    expect(await readdir(lockDirectory)).toEqual([LOCK_FILE])
   })
 
   it('stays silent when a lock takeover lands on a disposed connection', async () => {
     const lockDirectory = await tempRoot()
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
+    const test = build({ lockDirectory })
     test.attach()
     await until(() => { expect(test.scripted.polls.length).toBeGreaterThan(0) })
     const padding = 'x'.repeat(5_000_000)
-    await writeFile(join(lockDirectory, 'weixin-token.lock'), JSON.stringify({ holder: 'holder-b', heartbeatAt: Date.now(), padding }))
+    await writeFile(join(lockDirectory, LOCK_FILE), JSON.stringify({ holder: 'holder-b', heartbeatAt: Date.now(), padding }))
     test.scripted.deliver({ updates: [] })
     await new Promise((resolve) => { setTimeout(resolve, 0) })
     test.abort(new Error('disposed during the heartbeat'))
@@ -421,46 +409,9 @@ describe('WeixinChannelProvider', () => {
     expect(test.provider.state).toEqual({ status: 'connected' })
   })
 
-  it('runs the QR login, stores the grant, and reconnects', async () => {
-    const lockDirectory = await tempRoot()
-    const test = build({ lockDirectory })
-    test.attach()
-    await settle()
-    test.scripted.statuses.push({ status: 'confirmed', grant: GRANT })
-    await expect(test.provider.beginLogin()).resolves.toEqual({ phase: 'waiting', qrUrl: 'https://liteapp.example/1' })
-    await until(() => { expect(test.written).toEqual([{ kind: 'grant', payload: GRANT }]) })
-    expect(test.provider.login).toEqual({ phase: 'confirmed' })
-    await until(() => { expect(test.scripted.polls[0]).toEqual({ cursor: '', timeoutMs: 30 }) })
-    expect(test.provider.state).toEqual({ status: 'connecting' })
-    test.abort(new Error('disposed'))
-    await settle()
-  })
-
-  it('cancels a login in flight without storing a grant', async () => {
-    const test = build({ lockDirectory: await tempRoot() })
-    test.scripted.statuses.push({ status: 'wait' })
-    await test.provider.beginLogin()
-    test.provider.cancelLogin()
-    expect(test.provider.login).toEqual({ phase: 'idle' })
-    await settle()
-    expect(test.written).toEqual([])
-    expect(test.warns).toEqual([])
-  })
-
-  it('warns when a login fails and leaves no grant', async () => {
-    const test = build({ lockDirectory: await tempRoot() })
-    test.scripted.statuses.push({ status: 'expired' }, { status: 'expired' }, { status: 'expired' }, { status: 'expired' })
-    await test.provider.beginLogin()
-    await until(() => {
-      expect(test.warns).toEqual(['channel-weixin login failed: the QR code expired 4 times without a scan'])
-    })
-    expect(test.written).toEqual([])
-    expect(test.provider.login).toEqual({ phase: 'failed', diagnostic: 'the QR code expired 4 times without a scan' })
-  })
-
   it('reports a lock acquisition failure as the connection diagnostic', async () => {
     const root = await tempRoot()
-    const test = build({ lockDirectory: join(root, 'locks'), record: { kind: 'grant', payload: GRANT }, config: { pollTimeoutMs: 30 } })
+    const test = build({ lockDirectory: join(root, 'locks'), config: { pollTimeoutMs: 30 } })
     await chmod(root, 0o500)
     test.attach()
     await until(() => { expect(test.provider.state.status).toBe('unavailable') })
@@ -469,7 +420,7 @@ describe('WeixinChannelProvider', () => {
 
   it('warns when the token lock cannot be released', async () => {
     const lockDirectory = await tempRoot()
-    const test = build({ lockDirectory, record: { kind: 'grant', payload: GRANT } })
+    const test = build({ lockDirectory })
     test.attach()
     await until(() => { expect(test.scripted.polls.length).toBeGreaterThan(0) })
     await chmod(lockDirectory, 0o500)
@@ -480,28 +431,11 @@ describe('WeixinChannelProvider', () => {
     await chmod(lockDirectory, 0o700)
   })
 
-  it('finishes a login without an attached control without starting a poll', async () => {
-    const test = build({ lockDirectory: await tempRoot() })
-    test.scripted.statuses.push({ status: 'confirmed', grant: GRANT })
-    await test.provider.beginLogin()
-    await settle()
-    expect(test.written).toEqual([{ kind: 'grant', payload: GRANT }])
-    expect(test.provider.login).toEqual({ phase: 'confirmed' })
-    expect(test.scripted.polls).toEqual([])
-  })
-
-  it('returns before connecting when the signal aborts during the login read', async () => {
+  it('returns before connecting when the signal is already aborted', async () => {
     const controller = new AbortController()
     const scripted = scriptedTransport()
     const warns: string[] = []
-    const credentials = {
-      async readRecord() {
-        controller.abort(new Error('disposed during the login read'))
-        return { kind: 'grant', payload: GRANT }
-      },
-      async modifyRecord() { throw new Error('unreachable') },
-    } as unknown as CredentialProvider
-    const provider = new WeixinChannelProvider({
+    const provider = new WeixinAccountProvider({
       pollTimeoutMs: 30,
       pollRetryAttempts: 1,
       pollBackoffMs: 1,
@@ -511,13 +445,13 @@ describe('WeixinChannelProvider', () => {
       breakerThreshold: 2,
       chunkLength: 10,
       lockDirectory: await tempRoot(),
-    }, {
-      credentials,
+    }, ACCOUNT, {
       resumeCursors: () => [],
       warn: (message) => { warns.push(message) },
       transport: scripted.transport,
       delay: async () => {},
     })
+    controller.abort(new Error('disposed before the start'))
     provider.attach({
       signal: controller.signal,
       publish: () => {},
@@ -530,19 +464,12 @@ describe('WeixinChannelProvider', () => {
   })
 
   it('returns silently when the connection start is aborted mid-flight', async () => {
-    const controller = new AbortController()
+    const lockDirectory = await tempRoot()
+    await acquireTokenLock({ directory: lockDirectory, fileName: LOCK_FILE, holderId: 'holder-a', staleMs: 60_000, now: () => 0 })
     const scripted = scriptedTransport()
+    const controller = new AbortController()
     const warns: string[] = []
-    const credentials = {
-      async readRecord() {
-        await new Promise((_resolve, reject) => {
-          controller.signal.addEventListener('abort', () => { reject(new Error('the credential read was aborted')) }, { once: true })
-        })
-        throw new Error('unreachable')
-      },
-      async modifyRecord() { throw new Error('unreachable') },
-    } as unknown as CredentialProvider
-    const provider = new WeixinChannelProvider({
+    const provider = new WeixinAccountProvider({
       pollTimeoutMs: 30,
       pollRetryAttempts: 1,
       pollBackoffMs: 1,
@@ -551,23 +478,74 @@ describe('WeixinChannelProvider', () => {
       throttleDelayMs: 1,
       breakerThreshold: 2,
       chunkLength: 10,
-      lockDirectory: await tempRoot(),
-    }, {
-      credentials,
+      lockDirectory,
+    }, ACCOUNT, {
       resumeCursors: () => [],
-      warn: (message) => { warns.push(message) },
+      warn: (message) => {
+        warns.push(message)
+        controller.abort(new Error('disposed during the start'))
+        throw new Error('the warn sink gave up')
+      },
       transport: scripted.transport,
       delay: async () => {},
     })
-    const control = {
+    provider.attach({
       signal: controller.signal,
       publish: () => {},
       changed: () => {},
-    } as unknown as ChannelProviderControl
-    provider.attach(control)
-    controller.abort(new Error('disposed at once'))
+    } as unknown as ChannelProviderControl)
     await settle()
-    expect(warns).toEqual([])
-    expect(provider.state).toEqual({ status: 'idle' })
+    expect(warns).toEqual(['channel-weixin overrode the stale token lock of holder-a'])
+    expect(scripted.polls).toEqual([])
+    expect(provider.state).toEqual({ status: 'connecting' })
+    await provider.quiesce()
+    expect(await readdir(lockDirectory)).toEqual([])
+  })
+
+  it('reports an eviction and rethrows when a send meets the expired session', async () => {
+    const test = build({ lockDirectory: await tempRoot(), config: { sendRetryAttempts: 1 } })
+    test.scripted.failSend(new WeixinApiError('stale', { ret: -14 }))
+    await expect(test.provider.send(ChannelConversationId('sender-1'), { text: 'a reply' }, new AbortController().signal))
+      .rejects.toThrow('stale')
+    expect(test.provider.state).toEqual({ status: 'unavailable', diagnostic: WEIXIN_STALE_AT_START_DIAGNOSTIC })
+  })
+
+  it('replaces an unavailable report with the eviction diagnostic when a send meets the expired session', async () => {
+    const lockDirectory = await tempRoot()
+    await acquireTokenLock({
+      directory: lockDirectory,
+      fileName: LOCK_FILE,
+      holderId: 'holder-a',
+      staleMs: 60_000,
+      now: () => Date.now() + 60_000,
+    })
+    const test = build({ lockDirectory, config: { sendRetryAttempts: 1 } })
+    test.scripted.failSend(new WeixinApiError('stale', { ret: -14 }))
+    test.attach()
+    await until(() => {
+      expect(test.provider.state).toEqual({
+        status: 'unavailable',
+        diagnostic: "another client holds this account's token (holder holder-a)",
+      })
+    })
+    expect(test.changed()).toBe(2)
+    await expect(test.provider.send(ChannelConversationId('sender-1'), { text: 'a reply' }, new AbortController().signal))
+      .rejects.toThrow('stale')
+    await settle()
+    expect(test.provider.state).toEqual({ status: 'unavailable', diagnostic: WEIXIN_STALE_AT_START_DIAGNOSTIC })
+    expect(test.changed()).toBe(3)
+    test.abort(new Error('disposed'))
+    await test.provider.quiesce()
+  })
+
+  it('leaves the state alone when a send fails for another reason', async () => {
+    const test = build({ lockDirectory: await tempRoot(), config: { sendRetryAttempts: 1 } })
+    test.scripted.failSend(new Error('down'))
+    await expect(test.provider.send(ChannelConversationId('sender-1'), { text: 'a reply' }, new AbortController().signal))
+      .rejects.toThrow('down')
+    test.scripted.failSend(new WeixinApiError('rejected'))
+    await expect(test.provider.send(ChannelConversationId('sender-1'), { text: 'a reply' }, new AbortController().signal))
+      .rejects.toThrow('rejected')
+    expect(test.provider.state).toEqual({ status: 'idle' })
   })
 })

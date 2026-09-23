@@ -101,7 +101,11 @@ export class WeixinPollLoop {
         continue
       }
       consecutiveFailures = 0
-      if (batch.longPollTimeoutMs !== undefined && batch.longPollTimeoutMs > 0) timeoutMs = batch.longPollTimeoutMs
+      if (batch.longPollTimeoutMs !== undefined && batch.longPollTimeoutMs > 0) {
+        // A suggestion beyond the configured bound is not adopted: the bound is
+        // what the lock's stale threshold is computed from.
+        timeoutMs = Math.min(batch.longPollTimeoutMs, this.request.timeoutMs)
+      }
       for (const update of batch.updates) {
         const message = normalizeInboundMessage({
           channel: this.request.channel,
