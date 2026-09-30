@@ -27,7 +27,7 @@ jobs:
           node --import tsx scripts/desktop-delivery/cli.ts discover --config .github/desktop-delivery/mint.json --lock .github/desktop-delivery/source-lock.json --out "$RUNNER_TEMP/discovery.json" --summary "$RUNNER_TEMP/discovery.md" || test -f "$RUNNER_TEMP/discovery.json"
           node --import tsx scripts/desktop-delivery/cli.ts notification-plan --config .github/desktop-delivery/mint.json --fixture "$RUNNER_TEMP/discovery.json" --lock .github/desktop-delivery/source-lock.json --expected-commit "$GITHUB_SHA" --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --out "$RUNNER_TEMP/notification.json"
           cat "$RUNNER_TEMP/discovery.md" >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: discovery-notification-plan
           path: ${{ runner.temp }}/notification.json
