@@ -2,6 +2,8 @@
 
 English | [中文](handoff.zh.md)
 
+The project is in maintenance mode; read the [maintenance handover](maintenance.md) before resuming development.
+
 ## Authoritative state
 
 Use the protected `main` branch of [mintgao/dsh-desktop](https://github.com/mintgao/dsh-desktop), not a temporary build directory or an unfinished recovery checkout. The [homepage](../../README.md#desktop-updates) names the latest published version; the immutable release tag, manifest and download digests identify the installable artifact. A branch or successful local build is not a published release.

@@ -2,6 +2,12 @@
 
 [English](README.md) | 中文
 
+## 维护状态：暂停开发与更新
+
+由于官方已发布 DeepSeek Harness 桌面客户端，开发者决定暂停 DSH Desktop Mint 的主动开发。本非官方客户端进入维护状态：暂不开发新功能、不再常规跟进上游更新，也不安排定期发布；后续是否提供维护版本及其时间均不作承诺。
+
+项目源码、已发布安装包和开发记录继续保留，供使用者查阅与参考。官方客户端请关注[官方项目](https://github.com/deepseek-ai/deepseek-harness)，保留资料与项目状态详见[维护交接](docs/context/maintenance.zh.md)。已有 Mint 安装仍可继续使用，但不保证与未来服务或系统版本兼容。
+
 <p align="center">
   <img src="apps/desktop-mint/build/icon.png" alt="DSH Desktop Mint 标志" width="160" height="160">
 </p>
@@ -18,7 +24,7 @@ Mint 将 DSH 运行时和 Web 客户端打包为 Mac 应用，提供独立图标
 
 ## 项目状态
 
-项目处于预览阶段。更新前，请查看对应版本说明中的硬件支持、安装要求和使用限制。
+保留的应用仍为预览版，主动开发和常规更新已暂停。更新前，请查看对应版本说明中的硬件支持、安装要求和使用限制。
 
 | 项目 | 当前公开预览版 |
 | --- | --- |

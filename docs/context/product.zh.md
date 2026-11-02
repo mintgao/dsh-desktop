@@ -2,6 +2,8 @@
 
 [English](product.md) | 中文
 
+主动开发和常规更新已暂停，当前范围由[维护交接](maintenance.zh.md)规定。
+
 ## 产品用途
 
 本二次开发项目交付 DSH Desktop Mint：基于 DeepSeek Harness 的桌面客户端，以及让桌面用户发现、获取和应用 DSH 更新的方式。[二次开发规范](downstream-policy.zh.md) 约束当前与未来的新增能力、插件职责、外部复用及经过测试的兼容性。

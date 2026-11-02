@@ -2,6 +2,8 @@
 
 English | [中文](product.zh.md)
 
+Active development and routine updates are paused; the [maintenance handover](maintenance.md) defines current scope.
+
 ## Product purpose
 
 This downstream project delivers DSH Desktop Mint: a desktop client over DeepSeek Harness and a way for desktop users to discover, obtain, and apply DSH updates. The [downstream development policy](downstream-policy.md) governs current and future additions, plugin ownership, external reuse, and tested compatibility.

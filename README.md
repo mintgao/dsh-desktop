@@ -2,6 +2,12 @@
 
 English | [中文](README.zh.md)
 
+## Maintenance mode — development paused
+
+The official DeepSeek Harness desktop client is available, so the developer is pausing active development of DSH Desktop Mint. This unofficial client is in maintenance mode: no new features, routine upstream updates, or regular releases are planned. There is no commitment to a maintenance release schedule.
+
+Source code, published downloads, and development records remain available for reference. See the [official project](https://github.com/deepseek-ai/deepseek-harness) for the official client, and the [maintenance handover](docs/context/maintenance.md) for retained materials and project status. Existing Mint installations remain available to use, but compatibility with future services or systems is not guaranteed.
+
 <p align="center">
   <img src="apps/desktop-mint/build/icon.png" alt="DSH Desktop Mint logo" width="160" height="160">
 </p>
@@ -18,7 +24,7 @@ This is an unofficial distribution based on [DeepSeek Harness](https://github.co
 
 ## Project status
 
-The project is in preview. Check each release's notes for supported hardware, installation requirements, and limitations before updating.
+The retained application is a preview build; active development and routine updates are paused. Check each release's notes for supported hardware, installation requirements, and limitations before updating.
 
 | Item | Current public preview |
 | --- | --- |
