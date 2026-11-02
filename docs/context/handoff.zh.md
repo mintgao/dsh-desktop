@@ -2,6 +2,8 @@
 
 [English](handoff.md) | 中文
 
+项目处于维护状态，恢复开发前请阅读[维护交接](maintenance.zh.md)。
+
 ## 权威状态
 
 使用 [mintgao/dsh-desktop](https://github.com/mintgao/dsh-desktop) 受保护的 `main` 分支，不以临时构建目录或未完成的恢复目录作为起点。[主页](../../README.zh.md#desktop-updates)说明最新公开版本；不可变的发布标签、清单和下载摘要标识可安装产物。分支或本地构建成功不等于公开发布。
