@@ -35,6 +35,13 @@ export interface ChannelInboundMessage<K extends string = string> {
   readonly text: string
   /** Host receipt time in Unix epoch milliseconds. */
   readonly receivedAt: number
+  /**
+   * Provider's resume position for this message, when the provider has one:
+   * the cursor a crash should resume the poll from for this message to be
+   * redelivered rather than lost. The Consumer persists it into the
+   * conversation binding when it admits the message.
+   */
+  readonly providerCursor?: string
   /** Provider-normalized lossless JSON. */
   readonly event: ChannelEventOf<K>
 }

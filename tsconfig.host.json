@@ -283,6 +283,7 @@
     { "path": "./packages/compaction/compaction-tool-result-pruner" },
     { "path": "./packages/channel/channel" },
     { "path": "./packages/channel/channel-session" },
+    { "path": "./packages/channel/channel-weixin" },
     { "path": "./packages/session/session-admission" },
     { "path": "./packages/web/web" },
     { "path": "./packages/web/web-search-exa" },

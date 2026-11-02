@@ -368,7 +368,42 @@ export interface Config {
 }
 ```
 
-来源：[`packages/channel/channel-session/src/index.ts:78`](../packages/channel/channel-session/src/index.ts)
+来源：[`packages/channel/channel-session/src/index.ts:79`](../packages/channel/channel-session/src/index.ts)
+
+<a id="deepseek-aidsh-channel-weixin"></a>
+
+## `@deepseek-ai/dsh-channel-weixin`
+
+需要：`channels` · `credentials` · `channelSession`
+
+```ts config-catalog
+/**
+ * Deployment choices of the WeChat provider. Every bound is stated by the
+ * composition; the API base address stays a protocol constant.
+ */
+export interface Config {
+  /** Long-poll timeout in milliseconds; the platform may suggest another one. */
+  readonly pollTimeoutMs: number
+  /** Total attempts one poll cycle gets, including the first. */
+  readonly pollRetryAttempts: number
+  /** Wait between two poll attempts, and between two failed cycles, in milliseconds. */
+  readonly pollBackoffMs: number
+  /** Total attempts one outbound chunk gets, including the first. */
+  readonly sendRetryAttempts: number
+  /** Wait between two outbound attempts, in milliseconds. */
+  readonly sendBackoffMs: number
+  /** Wait a frequency-limited send observes before its retry, in milliseconds. */
+  readonly throttleDelayMs: number
+  /** Consecutive failed poll cycles that open the circuit breaker. */
+  readonly breakerThreshold: number
+  /** Largest outbound chunk within the platform's length limit, in characters. */
+  readonly chunkLength: number
+  /** Directory of the token-lock file; the Mint bundle points it at the desktop data directory. */
+  readonly lockDirectory: string
+}
+```
+
+来源：[`packages/channel/channel-weixin/src/index.ts:59`](../packages/channel/channel-weixin/src/index.ts)
 
 <a id="deepseek-aidsh-client-connection"></a>
 

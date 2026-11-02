@@ -641,6 +641,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'channel', description: 'registered provider that owns the conversation.' }, { name: 'conversationId', description: 'platform-owned conversation identity.' }],
         returns: 'the record, or `undefined` when the conversation was never set up.',
       },
+      {
+        signature: 'resumeCursors(channel: ChannelId): readonly string[]',
+        description: 'The resume positions one channel\'s conversations recorded, for the provider that owns the poll. A token-level platform stream feeds every conversation, so the provider reconciles these into the position it resumes from — the earliest recorded cursor, whose replays `lastAdmittedMessageId` suppresses.',
+        parameters: [{ name: 'channel', description: 'registered provider whose recorded cursors are wanted.' }],
+        returns: 'every cursor the channel\'s bindings carry, in no particular order.',
+      },
     ],
   },
   {
@@ -3886,7 +3892,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ChannelInboundMessage',
-    declaration: 'export interface ChannelInboundMessage<K extends string = string> {\n    readonly channel: ChannelId;\n    readonly conversationId: ChannelConversationId;\n    readonly sender: ChannelUserId;\n    readonly messageId: ChannelMessageId;\n    readonly text: string;\n    readonly receivedAt: number;\n    readonly event: ChannelEventOf<K>;\n}',
+    declaration: 'export interface ChannelInboundMessage<K extends string = string> {\n    readonly channel: ChannelId;\n    readonly conversationId: ChannelConversationId;\n    readonly sender: ChannelUserId;\n    readonly messageId: ChannelMessageId;\n    readonly text: string;\n    readonly receivedAt: number;\n    readonly providerCursor?: string;\n    readonly event: ChannelEventOf<K>;\n}',
   },
   {
     name: 'ChannelMessageId',

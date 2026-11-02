@@ -1,0 +1,13 @@
+- name: fixture-dependencies
+- name: '@deepseek-ai/dsh-channel'
+- name: '@deepseek-ai/dsh-channel-weixin'
+  config:
+    pollTimeoutMs: 1000
+    pollRetryAttempts: 1
+    pollBackoffMs: 1
+    sendRetryAttempts: 2
+    sendBackoffMs: 1
+    throttleDelayMs: 1
+    breakerThreshold: 3
+    chunkLength: 6
+    lockDirectory: '{{lockRoot}}'

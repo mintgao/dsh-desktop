@@ -16,7 +16,7 @@ import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-presets'
 import { boundContextSummary, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-permission-presets'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import { admitSession } from '@deepseek-ai/dsh-session-admission'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
@@ -31,6 +31,7 @@ import {
   withAdmittedMessage,
 } from './binding.ts'
 import type { ChannelBindingSetup } from './binding.ts'
+import type { AdmittedMessage } from './binding.ts'
 import { deliverReply, turnReplyText } from './outbound.ts'
 import {
   CHANNEL_DISPLAY_OPTIONS_OFF,
@@ -160,6 +161,31 @@ export class ChannelSession extends Service {
     return readChannelBinding(this.bindings, channelBindingKey(channel, conversationId))
   }
 
+  /**
+   * The resume positions one channel's conversations recorded, for the provider
+   * that owns the poll. A token-level platform stream feeds every conversation,
+   * so the provider reconciles these into the position it resumes from — the
+   * earliest recorded cursor, whose replays `lastAdmittedMessageId` suppresses.
+   * @param channel - registered provider whose recorded cursors are wanted.
+   * @returns every cursor the channel's bindings carry, in no particular order.
+   */
+  resumeCursors(channel: ChannelId): readonly string[] {
+    const cursors: string[] = []
+    for (const [, record] of this.bindings.entries()) {
+      if (record.channel === channel && record.providerCursor !== undefined) cursors.push(record.providerCursor)
+    }
+    return cursors
+  }
+
+  /** The admitted-message values one inbound message contributes to its conversation's binding. */
+  private admittedBy(message: ChannelInboundMessage, sessionId: SessionId): AdmittedMessage {
+    return {
+      sessionId,
+      messageId: message.messageId,
+      ...message.providerCursor === undefined ? {} : { providerCursor: message.providerCursor },
+    }
+  }
+
   /** Apply the deployment defaults to the values a client omitted. */
   private resolveSetup(request: ConversationSetupRequest): ChannelBindingSetup {
     return {
@@ -250,10 +276,7 @@ export class ChannelSession extends Service {
       content: [{ type: 'text', text: message.text }],
       source: this.provenance(message),
     }))
-    await this.bindings.update(key, record => withAdmittedMessage(record, {
-      sessionId: bound.session.id,
-      messageId: message.messageId,
-    }))
+    await this.bindings.update(key, record => withAdmittedMessage(record, this.admittedBy(message, bound.session.id)))
   }
 
   /**
@@ -278,10 +301,7 @@ export class ChannelSession extends Service {
       errorSubject: 'channel Session request',
       signal: this.lifecycle.signal,
     }, async (sessionId) => {
-      await this.bindings.update(key, record => withAdmittedMessage(record, {
-        sessionId,
-        messageId: message.messageId,
-      }))
+      await this.bindings.update(key, record => withAdmittedMessage(record, this.admittedBy(message, sessionId)))
     })
   }
 

@@ -26,6 +26,7 @@ The Channel family connects a DSH Session to an instant-messaging platform so a 
 |---|---|---|
 | [`channel/`](channel/README.md) | Provider registry, branded identities, inbound provenance | `ctx.channels` |
 | [`channel-session/`](channel-session/README.md) | Conversation bindings, sender authorization, inbound admission, outbound delivery | `ctx.channelSession` |
+| [`channel-weixin/`](channel-weixin/README.md) | WeChat provider: QR login, the token lock, the cursor long poll, chunked replies | — |
 
 <a id="related-documentation"></a>
 ## Related documentation

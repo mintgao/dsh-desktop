@@ -485,3 +485,55 @@ describe('outbound delivery from a settled turn', () => {
     expect(test.provider.sent).toEqual([])
   })
 })
+
+describe('provider cursors', () => {
+  it('records an admitted message cursor and offers the channel cursors back for resuming', async () => {
+    const test = await harness()
+    await test.session.setupConversation({
+      channel: ChannelId('weixin'),
+      conversationId: ChannelConversationId('conversation-2'),
+      title: 'Other chat',
+      authorizedSenderIds: [ChannelUserId('sender-1')],
+    })
+    await test.session.setupConversation({
+      channel: ChannelId('other'),
+      conversationId: ChannelConversationId('conversation-3'),
+      title: 'Other channel',
+      authorizedSenderIds: [ChannelUserId('sender-1')],
+    })
+
+    test.registry.publish(message({ providerCursor: 'cursor-1' }))
+    await vi.waitFor(() => {
+      expect(test.session.bindingFor(ChannelId('weixin'), ChannelConversationId('conversation-1'))?.lastAdmittedMessageId)
+        .toBe('message-1')
+    })
+    test.registry.publish(message({
+      conversationId: ChannelConversationId('conversation-2'),
+      messageId: ChannelMessageId('message-2'),
+      providerCursor: 'cursor-2',
+    }))
+    await vi.waitFor(() => {
+      expect(test.session.bindingFor(ChannelId('weixin'), ChannelConversationId('conversation-2'))?.lastAdmittedMessageId)
+        .toBe('message-2')
+    })
+
+    expect(test.session.bindingFor(ChannelId('weixin'), ChannelConversationId('conversation-1'))?.providerCursor)
+      .toBe('cursor-1')
+    expect([...test.session.resumeCursors(ChannelId('weixin'))].sort()).toEqual(['cursor-1', 'cursor-2'])
+    expect(test.session.resumeCursors(ChannelId('other'))).toEqual([])
+  })
+
+  it('leaves the cursor unset when the message carries none', async () => {
+    const test = await harness()
+
+    test.registry.publish(message())
+    await vi.waitFor(() => {
+      expect(test.session.bindingFor(ChannelId('weixin'), ChannelConversationId('conversation-1'))?.lastAdmittedMessageId)
+        .toBe('message-1')
+    })
+
+    expect(test.session.bindingFor(ChannelId('weixin'), ChannelConversationId('conversation-1'))?.providerCursor)
+      .toBeUndefined()
+    expect(test.session.resumeCursors(ChannelId('weixin'))).toEqual([])
+  })
+})

@@ -94,6 +94,8 @@
       "@deepseek-ai/dsh-channel/brand": ["./packages/channel/channel/src/brand.ts"],
       "@deepseek-ai/dsh-channel/types": ["./packages/channel/channel/src/types.ts"],
       "@deepseek-ai/dsh-channel-session": ["./packages/channel/channel-session/src"],
+      "@deepseek-ai/dsh-channel-weixin": ["./packages/channel/channel-weixin/src"],
+      "@deepseek-ai/dsh-channel-weixin/types": ["./packages/channel/channel-weixin/src/types.ts"],
       "@deepseek-ai/dsh-session-admission": ["./packages/session/session-admission/src"],
       "@deepseek-ai/dsh-session-admission/types": ["./packages/session/session-admission/src/types.ts"],
       "@deepseek-ai/dsh-goal/types": ["./packages/goal/goal/src/types.ts"],
